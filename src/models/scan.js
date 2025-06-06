@@ -1,147 +1,51 @@
 const mongoose = require('mongoose');
-const logger = require('../utils/logger');
 
 const scanSchema = new mongoose.Schema({
+  // Original DuxSoup fields
   id: { type: String, required: true, unique: true },
-  ScanTime: { type: Date, required: true },
-  Profile: { type: String, required: true },
-  'First Name': { type: String, required: true },
-  'Last Name': { type: String, required: true },
+  scanTime: { type: Date, required: true },
+  profile: { type: String, required: true },
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
   
-  // Normalized arrays
+  // Optional profile fields
+  headline: String,
+  location: String,
+  connections: String,
+  industry: String,
+  summary: String,
+  
+  // Position data (normalized from Position-0-*, Position-1-*, etc.)
   positions: [{
     company: String,
     title: String,
     startDate: String,
     endDate: String,
     duration: String,
-    location: String,
-    description: String,
-    // Additional position fields can be added here
+    location: String
   }],
   
-  schools: [{
+  // Education data (normalized from School-0-*, School-1-*, etc.)
+  education: [{
     school: String,
     degree: String,
-    field: String,
     startYear: String,
-    endYear: String,
-    activities: String,
-    // Additional school fields can be added here
+    endYear: String
   }],
   
-  skills: [String] // Array of skill strings
-}, { 
-  strict: false, // Allow flexible fields
-  timestamps: true 
+  // Skills (normalized from Skill-0, Skill-1, etc.)
+  skills: [String],
+  
+  // Metadata
+  processedAt: { type: Date, default: Date.now },
+  source: { type: String, default: 'duxsoup' }
+}, {
+  timestamps: true
 });
 
-// Pre-save hook to normalize data
-scanSchema.pre('save', function(next) {
-  try {
-    logger.debug('Processing Scan data normalization', { id: this.id });
-    
-    // Extract positions (up to 36 data points)
-    const positions = [];
-    const positionFields = {};
-    
-    // Group position fields by index
-    Object.keys(this.toObject()).forEach(key => {
-      const positionMatch = key.match(/^Position-(\d+)-(.+)$/);
-      if (positionMatch) {
-        const index = parseInt(positionMatch[1]);
-        const field = positionMatch[2];
-        
-        if (!positionFields[index]) {
-          positionFields[index] = {};
-        }
-        
-        positionFields[index][field.toLowerCase().replace(/\s+/g, '')] = this[key];
-        this[key] = undefined; // Remove raw field
-      }
-    });
-    
-    // Convert to positions array
-    Object.keys(positionFields).forEach(index => {
-      const pos = positionFields[index];
-      positions.push({
-        company: pos.company,
-        title: pos.title,
-        startDate: pos.startdate || pos.start,
-        endDate: pos.enddate || pos.end,
-        duration: pos.duration,
-        location: pos.location,
-        description: pos.description
-      });
-    });
-    
-    if (positions.length > 0) {
-      this.positions = positions;
-    }
-    
-    // Extract schools (up to 20 data points)
-    const schools = [];
-    const schoolFields = {};
-    
-    Object.keys(this.toObject()).forEach(key => {
-      const schoolMatch = key.match(/^School-(\d+)-(.+)$/);
-      if (schoolMatch) {
-        const index = parseInt(schoolMatch[1]);
-        const field = schoolMatch[2];
-        
-        if (!schoolFields[index]) {
-          schoolFields[index] = {};
-        }
-        
-        schoolFields[index][field.toLowerCase().replace(/\s+/g, '')] = this[key];
-        this[key] = undefined; // Remove raw field
-      }
-    });
-    
-    // Convert to schools array
-    Object.keys(schoolFields).forEach(index => {
-      const school = schoolFields[index];
-      schools.push({
-        school: school.school || school.name,
-        degree: school.degree,
-        field: school.field || school.fieldofstudy,
-        startYear: school.startyear || school.start,
-        endYear: school.endyear || school.end,
-        activities: school.activities
-      });
-    });
-    
-    if (schools.length > 0) {
-      this.schools = schools;
-    }
-    
-    // Extract skills (up to 20 data points)
-    const skills = [];
-    
-    Object.keys(this.toObject()).forEach(key => {
-      const skillMatch = key.match(/^Skill-(\d+)$/);
-      if (skillMatch && this[key]) {
-        skills.push(this[key]);
-        this[key] = undefined; // Remove raw field
-      }
-    });
-    
-    if (skills.length > 0) {
-      this.skills = skills;
-    }
-    
-    logger.debug('Scan normalization complete', { 
-      id: this.id, 
-      positionsCount: positions.length,
-      schoolsCount: schools.length,
-      skillsCount: skills.length
-    });
-    
-    next();
-  } catch (error) {
-    logger.error('Error in Scan pre-save hook:', error);
-    next(error);
-  }
-});
+// Index for efficient querying
+scanSchema.index({ profile: 1, scanTime: 1 });
+scanSchema.index({ processedAt: 1 });
+scanSchema.index({ firstName: 1, lastName: 1 });
 
 module.exports = mongoose.model('Scan', scanSchema);

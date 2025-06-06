@@ -1,4 +1,56 @@
 const logger = require('../utils/logger');
+const Scan = require('../models/Scan');
+
+// Helper function to normalize position data
+const normalizePositions = (payload) => {
+  const positions = [];
+  let i = 0;
+  
+  while (payload[`Position-${i}-Company`]) {
+    positions.push({
+      company: payload[`Position-${i}-Company`],
+      title: payload[`Position-${i}-Title`],
+      startDate: payload[`Position-${i}-StartDate`],
+      endDate: payload[`Position-${i}-EndDate`],
+      duration: payload[`Position-${i}-Duration`],
+      location: payload[`Position-${i}-Location`]
+    });
+    i++;
+  }
+  
+  return positions;
+};
+
+// Helper function to normalize education data
+const normalizeEducation = (payload) => {
+  const education = [];
+  let i = 0;
+  
+  while (payload[`School-${i}-School`]) {
+    education.push({
+      school: payload[`School-${i}-School`],
+      degree: payload[`School-${i}-Degree`],
+      startYear: payload[`School-${i}-StartYear`],
+      endYear: payload[`School-${i}-EndYear`]
+    });
+    i++;
+  }
+  
+  return education;
+};
+
+// Helper function to normalize skills
+const normalizeSkills = (payload) => {
+  const skills = [];
+  let i = 0;
+  
+  while (payload[`Skill-${i}`]) {
+    skills.push(payload[`Skill-${i}`]);
+    i++;
+  }
+  
+  return skills;
+};
 
 const handleScan = async (req, res) => {
   try {
@@ -25,27 +77,86 @@ const handleScan = async (req, res) => {
       });
     }
     
-    // Simulate data processing without MongoDB
-    logger.info('Scan processed successfully', { 
+    // Normalize and structure the data
+    const scanData = {
       id: payload.id,
-      profile: payload.Profile
-    });
+      scanTime: new Date(payload.ScanTime),
+      profile: payload.Profile,
+      firstName: payload['First Name'],
+      lastName: payload['Last Name'],
+      headline: payload.Headline,
+      location: payload.Location,
+      connections: payload.Connections,
+      industry: payload.Industry,
+      summary: payload.Summary,
+      positions: normalizePositions(payload),
+      education: normalizeEducation(payload),
+      skills: normalizeSkills(payload)
+    };
     
-    res.status(200).json({
-      success: true,
-      message: 'Scan data processed successfully',
-      data: {
+    // Try to save to MongoDB
+    try {
+      // Use upsert to handle duplicates
+      const scan = await Scan.findOneAndUpdate(
+        { id: payload.id },
+        scanData,
+        { 
+          upsert: true, 
+          new: true,
+          runValidators: true 
+        }
+      );
+      
+      logger.info('Scan saved to MongoDB', { 
+        id: scan.id,
+        profile: scan.profile,
+        mongoId: scan._id,
+        positions: scan.positions.length,
+        education: scan.education.length,
+        skills: scan.skills.length
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: 'Scan data saved to database',
+        data: {
+          id: scan.id,
+          profile: scan.profile,
+          scanTime: scan.scanTime,
+          firstName: scan.firstName,
+          lastName: scan.lastName,
+          positions: scan.positions.length,
+          education: scan.education.length,
+          skills: scan.skills.length,
+          mongoId: scan._id
+        }
+      });
+      
+    } catch (dbError) {
+      // If MongoDB fails, log but don't crash
+      logger.warn('Failed to save to MongoDB, continuing without storage', {
         id: payload.id,
-        profile: payload.Profile,
-        scanTime: payload.ScanTime,
-        message: 'Data validated and logged (MongoDB not connected)'
-      }
-    });
+        error: dbError.message
+      });
+      
+      // Still return success but indicate no storage
+      res.status(200).json({
+        success: true,
+        message: 'Scan data processed (MongoDB unavailable)',
+        data: {
+          id: payload.id,
+          profile: payload.Profile,
+          scanTime: payload.ScanTime,
+          warning: 'Data not stored permanently'
+        }
+      });
+    }
     
   } catch (error) {
     logger.error('Error processing scan data:', {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
+      payload: payload
     });
     
     res.status(500).json({
