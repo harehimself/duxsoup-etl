@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: duxsoup-etl
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromDatabase:
+          name: duxsoup-etl-db
+          property: connectionString
+    healthCheckPath: /health
