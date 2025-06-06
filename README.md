@@ -2,7 +2,6 @@
 
 A production-ready webhook-driven LinkedIn data processing system that handles scan and visit data with MongoDB storage and real-time processing.
 
-🌐 **Live Demo:** https://duxsoup.onrender.com
 
 ## 🚀 Features
 
