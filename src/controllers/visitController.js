@@ -6,13 +6,15 @@ const handleVisit = async (req, res) => {
     const payload = req.body;
     const profileData = payload.data;
 
-    if (!profileData) {
-      logger.warn('Visit webhook received without expected "data" property', { payload });
+    // --- IMPORTANT: ADDED VALIDATION FOR 'id' HERE ---
+    if (!profileData || !profileData.id || typeof profileData.id !== 'string' || profileData.id.trim() === '') {
+      logger.warn('Visit webhook received with missing, null, or empty "id" in data property', { payload });
       return res.status(400).json({
-        error: 'Invalid visit payload structure',
-        message: 'Missing "data" property in webhook payload'
+        error: 'Invalid visit payload: Missing or invalid "id"',
+        message: 'The "id" field in the webhook data is required, must be a non-empty string, and cannot be null.',
       });
     }
+    // --- END ADDED VALIDATION ---
 
     logger.info("Processing visit data", {
       id: profileData.id,
@@ -20,16 +22,17 @@ const handleVisit = async (req, res) => {
     });
 
     const requiredFields = [
-      "id",
+      // "id", // 'id' is now explicitly checked above
       "VisitTime",
       "Profile",
       "Degree",
       "First Name",
     ];
+    // Filter out 'id' from missingFields check here as it's handled separately
     const missingFields = requiredFields.filter((field) => !profileData[field]);
 
     if (missingFields.length > 0) {
-      logger.warn("Missing required fields for visit", {
+      logger.warn("Missing required fields for visit (excluding 'id' which was validated)", {
         id: profileData.id,
         missingFields,
       });
@@ -72,15 +75,14 @@ const handleVisit = async (req, res) => {
     };
 
     try {
-      // Find a document by 'id' and update it, or create it if it doesn't exist
       const visit = await Visit.findOneAndUpdate(
-        { id: visitDataToSave.id }, // Filter by Dux-Soup ID
-        visitDataToSave, // Data to set/update
+        { id: visitDataToSave.id },
+        visitDataToSave,
         {
-          new: true, // Return the updated document
-          upsert: true, // Create if not found
-          runValidators: true, // Run schema validators on update/upsert
-          setDefaultsOnInsert: true // Apply defaults if a new doc is inserted
+          new: true,
+          upsert: true,
+          runValidators: true,
+          setDefaultsOnInsert: true,
         }
       );
 
@@ -88,10 +90,10 @@ const handleVisit = async (req, res) => {
         id: visit._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        status: visit.__v === 0 ? "inserted" : "updated" // Heuristic for status
+        status: visit.__v === 0 ? "inserted" : "updated", // This is a heuristic
       });
 
-      res.status(200).json({ // Using 200 OK for both insert and update for simplicity
+      res.status(200).json({
         success: true,
         message: "Visit data processed successfully (inserted or updated)",
         data: {
@@ -103,7 +105,6 @@ const handleVisit = async (req, res) => {
           status: "processed in database",
         },
       });
-
     } catch (dbError) {
       logger.error("Error saving or updating visit data:", {
         error: dbError.message,
@@ -116,7 +117,6 @@ const handleVisit = async (req, res) => {
         message: dbError.message,
       });
     }
-
   } catch (error) {
     logger.error("Error processing visit data:", {
       error: error.message,
