@@ -1,39 +1,29 @@
-<div align="center">
-<a href="https://dux-soup.com" target="_blank" title="DuxSoup ETL"><img width="196px" alt="DuxSoup Logo" src="https://raw.githubusercontent.com/harehimself/duxsoup-etl/refs/heads/master/duxsoup.png"></a>
-
-<a name="readme-top"></a>
-
-DuxSoup LinkedIn ETL System
-==================
+# DuxSoup LinkedIn ETL System
 
 A production-ready webhook-driven LinkedIn data processing system that handles scan and visit data with MongoDB storage and real-time processing.
 
-
-**Share the Project:** https://github.com/harehimself/duxsoup-etl
-<br>
+**Share the Project:** https://github.com/harehimself/duxsoup-etl  
 **DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
-<br><br>
-✨ [![Connect With Me On LinkedIn](https://img.shields.io/badge/Connect%20With%20Me%20On%20LinkedIn-blue)](https://www.linkedin.com/in/mike-hare) ✨
-
-</div>  
 
 <br>
-
 ## Features
 
-- **Webhook Processing** - Handles DuxSoup LinkedIn data via POST /api/webhook
-- **Type-Based Routing** - Automatically routes scan vs visit data to appropriate handlers
-- **Data Validation** - Comprehensive validation for required fields
-- **Error Handling** - Robust error handling with detailed logging
-- **Production Ready** - Deployed on Render with health monitoring
-- **Extensible** - Easy to add MongoDB storage and data normalization
+* **Webhook Processing** - Handles DuxSoup LinkedIn data via `POST /api/webhook`.
+* **Type-Based Routing** - Automatically routes scan vs visit data to appropriate handlers based on the `type` field in the payload.
+* **Data Validation** - Comprehensive validation for required fields, including a custom validator for the `id` field to ensure it's a non-empty string.
+* **Error Handling** - Robust error handling with detailed logging using Winston.
+* **Production Ready** - Designed for deployment on platforms like Render with health monitoring.
+* **Extensible** - Easy to add MongoDB storage and data normalization.
+* **MongoDB Storage** - Integrates with MongoDB using Mongoose to persist processed data.
 
 <br>
-
 ## API Endpoints
 
-### POST /api/webhook
-Main webhook endpoint for DuxSoup data processing.
+<br>
+### `POST /api/webhook`
+Main webhook endpoint for DuxSoup data processing. It expects a JSON payload with a `type` field to route the data correctly.
+
+**Request Body Examples:**
 
 **Visit Data:**
 ```json
@@ -41,244 +31,81 @@ Main webhook endpoint for DuxSoup data processing.
   "type": "visit",
   "id": "visit_12345",
   "VisitTime": "2025-06-06T10:30:00Z",
-  "Profile": "https://linkedin.com/in/johndoe",
-  "Degree": "MBA",
-  "First Name": "John"
+  ...
 }
 ```
-
-<br>
 
 **Scan Data:**
 ```json
 {
-  "type": "scan", 
+  "type": "scan",
   "id": "scan_67890",
   "ScanTime": "2025-06-06T14:15:00Z",
-  "Profile": "https://linkedin.com/in/janesmith",
-  "First Name": "Jane",
-  "Last Name": "Smith"
-}
-```
-
-### GET /health
-Health check endpoint returning server status.
-
-### GET /api/test
-Test endpoint for API verification.
-
-<br>
-
-## 🛠️ Tech Stack
-
-- **Runtime:** Node.js 18+
-- **Framework:** Express.js
-- **Database:** MongoDB Atlas (ready to integrate)
-- **Logging:** Winston
-- **Deployment:** Render
-- **Development:** Nodemon
-
-<br>
-
-## Local Development
-
-### Prerequisites
-- Node.js 18+
-- MongoDB Atlas account
-- Git
-
-<br>
-
-### Step-by-Step Setup
-
-#### 1. Create Project Structure
-```powershell
-New-Item -ItemType Directory -Name "duxsoup-etl"
-Set-Location "duxsoup-etl"
-
-# Create directory structure
-New-Item -ItemType Directory -Path "src\routes", "src\controllers", "src\models", "src\utils", "examples" -Force
-```
-
-#### 2. Initialize Node.js Project
-```powershell
-npm init -y
-```
-
-#### 3. Install Dependencies
-```powershell
-# Production dependencies
-npm install express mongoose winston dotenv cors
-
-# Development dependencies
-npm install --save-dev nodemon
-```
-
-#### 4. Set Up MongoDB Atlas
-1. Go to [MongoDB Atlas](https://cloud.mongodb.com)
-2. Create free cluster
-3. Create database user
-4. Whitelist IP addresses (0.0.0.0/0 for development)
-5. Get connection string
-
-#### 5. Configure Environment
-```powershell
-# Copy example env file
-Copy-Item ".env.example" ".env"
-
-# Edit .env with your MongoDB URI
-notepad .env
-```
-
-Update `.env`:
-```bash
-PORT=3000
-MONGODB_URI=mongodb+srv://your-username:your-password@cluster.mongodb.net/duxsoup-etl?retryWrites=true&w=majority
-NODE_ENV=development
-```
-
-#### 6. Create Files in Order
-
-**Core files** (copy from artifacts above):
-1. `package.json` - Project configuration
-2. `src/utils/logger.js` - Winston logging setup
-3. `src/models/Visit.js` - Visit schema with normalization
-4. `src/models/Scan.js` - Scan schema with normalization
-5. `src/controllers/visitController.js` - Visit data handler
-6. `src/controllers/scanController.js` - Scan data handler
-7. `src/routes/apiRoutes.js` - Route definitions
-8. `src/index.js` - Express server entry point
-
-**Example files**:
-9. `examples/visit.json` - Sample visit payload
-10. `examples/scan.json` - Sample scan payload
-
-**Deployment**:
-11. `render.yaml` - Render deployment config
-12. `.env.example` - Environment template
-
-#### 7. Test Locally
-```bash
-# Start development server
-npm run dev
-
-# Server should start on http://localhost:3000
-```
-
-#### 8. Test Endpoints
-
-**Health Check:**
-```bash
-curl http://localhost:3000/health
-```
-
-**Test Visit Webhook:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/webhook" -Method POST -ContentType "application/json" -InFile "examples\visit.json"
-```
-
-**Test Scan Webhook:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/webhook" -Method POST -ContentType "application/json" -InFile "examples\scan.json"
-```
-
-<br>
-
-## 📁 Project Structure
-```
-duxsoup-etl/
-├── src/
-│   ├── routes/
-│   │   └── apiRoutes.js          # Webhook routing logic
-│   ├── controllers/
-│   │   ├── visitController.js    # Visit data processing
-│   │   └── scanController.js     # Scan data processing
-│   ├── models/
-│   │   ├── Visit.js             # Visit schema + normalization
-│   │   └── Scan.js              # Scan schema + normalization
-│   ├── utils/
-│   │   └── logger.js            # Winston logging
-│   └── index.js                 # Express server
-├── examples/
-│   ├── visit.json               # Sample visit payload
-│   └── scan.json                # Sample scan payload
-├── .env.example                 # Environment template
-├── render.yaml                  # Render deployment config
-├── package.json                 # Dependencies
-└── README.md                    # This file
-```
-<br>
-
-## 🔌 API Endpoints
-
-### POST /api/webhook
-Main webhook endpoint for DuxSoup data.
-
-**Request Body:**
-```json
-{
-  "type": "visit" | "scan",
-  "id": "unique_identifier",
-  // ... other fields based on type
+  ...
 }
 ```
 
 **Responses:**
-- `200` - Success
-- `400` - Invalid payload/missing fields
-- `409` - Duplicate ID
-- `500` - Server error
 
-### GET /health
-Health check endpoint.
+- 200 OK - Success: Data processed successfully (inserted or updated).
+- 400 Bad Request - Invalid payload/missing fields.
+- 409 Conflict - Duplicate ID.
+- 500 Internal Server Error - Server error.
 
-**Response:**
+<br>
+### `GET /health`
+Health check endpoint returning server and database status.
+
 ```json
 {
   "status": "ok",
-  "timestamp": "2025-06-06T...",
-  "uptime": 123.45
+  "database": {
+    "isConnected": true,
+    "readyState": 1,
+    "host": "your_mongodb_host",
+    "name": "duxsoup-etl"
+  },
+  "timestamp": "2025-06-06T..."
 }
 ```
-<br>
 
+<br>
+### `GET /api/test`
+Test endpoint for API verification.
+
+<br>
 ## Data Models
 
+The application uses Mongoose to define schemas for Visit and Scan data, ensuring data integrity and structure. Both models include createdAt and updatedAt timestamps.
+
+<br>
 ### Visit Model
-**Required Fields:**
-- `id` (String, unique)
-- `VisitTime` (Date)
-- `Profile` (String)
-- `Degree` (String)
-- `First Name` (String)
 
-**Normalized Arrays:**
-- `positions[]` - Up to 36 data points
-- `schools[]` - Up to 20 data points
-- `skills[]` - Up to 20 skills
+- id: String, Required, Unique, Indexed.
+- VisitTime: Date, Required, Indexed.
+- Profile: String, Required, Indexed.
+- First Name: String, Required.
+- Last Name: String (Optional).
+- Other fields: SalesProfile, RecruiterProfile, Picture, Middle Name, Connections, Summary, Title, From, Company, CompanyProfile, CompanyWebsite, PersonalWebsite, Email, Phone, IM, Twitter, Location, Industry, My Tags (Array of Strings), extended (Mixed), My Notes (Mixed).
+- rawData: Mixed type, stores the entire original webhook payload.
 
 <br>
-
 ### Scan Model
-**Required Fields:**
-- `id` (String, unique)
-- `ScanTime` (Date)
-- `Profile` (String)
-- `First Name` (String)
-- `Last Name` (String)
 
-**Normalized Arrays:**
-- `positions[]` - Up to 36 data points
-- `schools[]` - Up to 20 data points
-- `skills[]` - Up to 20 skills
+- id: String, Required, Unique, Indexed.
+- ScanTime: Date, Required, Indexed.
+- Profile: String, Required, Indexed.
+- First Name: String, Required.
+- Last Name: String, Required.
+- Other fields: Company, Title, Location, Industry, ConnectionDegree, ProfileUrl (Optional).
+- rawData: Mixed type, stores the entire original webhook payload.
 
 <br>
-
 ## Data Normalization
 
-Both models use pre-save hooks to normalize raw DuxSoup data:
+Both models use pre-save hooks to normalize raw DuxSoup data from a flat format to structured arrays.
 
-**Raw Format:**
+**Raw Format Example:**
 ```json
 {
   "Position-0-Company": "TechCorp",
@@ -288,7 +115,7 @@ Both models use pre-save hooks to normalize raw DuxSoup data:
 }
 ```
 
-**Normalized Format:**
+**Normalized Format Example:**
 ```json
 {
   "positions": [
@@ -302,103 +129,170 @@ Both models use pre-save hooks to normalize raw DuxSoup data:
 ```
 
 <br>
+## 🛠️ Tech Stack
 
+- Runtime: Node.js 18+
+- Framework: Express.js
+- Database: MongoDB Atlas
+- ODM: Mongoose
+- Logging: Winston
+- Environment Variables: Dotenv
+- CORS: Cors
+- Deployment: Render
+- Development: Nodemon
+
+<br>
+## Local Development
+
+<br>
+### Prerequisites
+
+- Node.js 18+
+- MongoDB Atlas account
+- Git
+
+<br>
+### Step-by-Step Setup
+
+**Clone Project and Install Dependencies:**
+
+```bash
+git clone https://github.com/harehimself/duxsoup-etl.git
+cd duxsoup-etl
+npm install
+```
+
+**Set Up MongoDB Atlas:**
+
+1. Go to MongoDB Atlas and create a free cluster.
+2. Create a database user and whitelist IP addresses.
+3. Obtain your MongoDB connection string.
+
+**Configure Environment:**
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file:
+
+```env
+PORT=3000
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/duxsoup-etl
+NODE_ENV=development
+```
+
+**Test Locally**
+
+```bash
+npm run dev
+```
+
+**Health Check:**
+
+```bash
+curl http://localhost:3000/health
+```
+
+**Test Visit Webhook:**
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d @examples/visit.json http://localhost:3000/api/webhook
+```
+
+**Test Scan Webhook:**
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d @examples/scan.json http://localhost:3000/api/webhook
+```
+
+<br>
+## 📁 Project Structure
+
+```
+duxsoup-etl/
+├── src/
+│   ├── controllers/
+│   ├── models/
+│   ├── routes/
+│   ├── utils/
+│   └── index.js
+├── examples/
+├── .env.example
+├── package.json
+├── render.yaml
+└── README.md
+```
+
+<br>
 ## Deployment
 
+<br>
 ### Option 1: Render (Recommended)
-1. Push code to GitHub
-2. Connect Render to repository
-3. Render will use `render.yaml` configuration
-4. Set environment variables in Render dashboard
 
-### Option 2: Manual Deployment
+1. Push to GitHub.
+2. Connect Render to GitHub repo.
+3. Use `render.yaml` for config.
+4. Set `MONGODB_URI` in dashboard.
+
+<br>
+### Option 2: Manual
+
 ```bash
-# Production build
 npm install --production
 npm start
 ```
-<br>
 
+<br>
 ## Development
 
-### Available Scripts
-```bash
-npm start     # Production server
-npm run dev   # Development with nodemon
-```
+**Available Scripts:**
 
-### Adding New Fields
-1. Update model schemas in `src/models/`
-2. Modify normalization logic in pre-save hooks
-3. Update controllers if validation changes
-4. Test with sample payloads
+- `npm start`
+- `npm run dev`
 
-### Debugging
-- Check logs in console (Winston)
-- Use `/api/webhook/test` for testing
-- Monitor MongoDB Atlas for data storage
+**Adding New Fields:**
+
+- Update models.
+- Adjust normalization logic.
+- Update controllers.
+- Test with payloads.
 
 <br>
+## Debugging
 
+- Check console logs (Winston).
+- Monitor MongoDB Atlas.
+
+<br>
 ## Troubleshooting
 
-### Common Issues
+- **MongoDB Connection:** Check URI, IP whitelist, user permissions.
+- **Validation Errors:** Confirm schema conformity.
+- **Duplicate Key Errors:** Check uniqueness of `id`.
 
-**MongoDB Connection Failed:**
-- Verify connection string in `.env`
-- Check IP whitelist in Atlas
-- Ensure database user has correct permissions
-
-**Validation Errors:**
-- Check required fields in payload
-- Verify data types (dates, strings)
-- Review model schemas
-
-**Duplicate Key Errors:**
-- Each `id` must be unique per collection
-- Use upsert logic in controllers
-
-### Logs
-```powershell
-# View logs in development
-npm run dev
-
-# Production logs (if file logging enabled)
-Get-Content "combined.log" -Wait
-Get-Content "error.log" -Wait
-```
 <br>
+## Logs
 
+- **Dev Logs:** Console.
+- **Prod Logs:** Use Winston files.
+
+<br>
 ## Monitoring
 
-### Health Checks
-- GET `/health` - Basic server status
-- Monitor MongoDB connection
-- Check Winston logs for errors
-
-### Data Validation
-- Required field validation in controllers
-- Schema validation in models
-- Duplicate prevention with unique IDs
+- `GET /health`
+- Check MongoDB connectivity.
 
 <br>
+## Data Validation
 
+- Schema + controller-level validation.
+- Unique `id` fields.
+
+<br>
 ## Security Notes
 
-- Validate all incoming webhook data
-- Use environment variables for secrets
-- Enable CORS for specific origins in production
-- Consider webhook authentication for DuxSoup
-
-<br>
-
-## 📚 Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Runtime | Node.js 18+ |
-| Framework | Express.js |
-| Database | MongoDB Atlas |
-| ODM | Mongoose |
-| Logging | Winston |
-| Deployment | Render |
+- Validate all inputs.
+- Use environment variables.
+- Enable CORS carefully.
+- Consider webhook authentication.
