@@ -53,7 +53,10 @@ const visitSchema = new mongoose.Schema(
     Industry: String,
     "My Tags": [String], // Array of strings, note the space
     extended: mongoose.Schema.Types.Mixed, // For nested complex data like positions, skills, schools
-    "My Notes": String, // Note the space
+    // --- CHANGE MADE HERE ---
+    // Changed to Mixed to accommodate both String and Array types for 'My Notes'
+    "My Notes": mongoose.Schema.Types.Mixed,
+    // --- END CHANGE ---
 
     // rawData should capture the entire original webhook payload
     rawData: {
