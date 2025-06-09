@@ -6,6 +6,7 @@ A production-ready webhook-driven LinkedIn data processing system that handles s
 **DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
 
 <br>
+
 ## Features
 
 * **Webhook Processing** - Handles DuxSoup LinkedIn data via `POST /api/webhook`.
@@ -17,9 +18,9 @@ A production-ready webhook-driven LinkedIn data processing system that handles s
 * **MongoDB Storage** - Integrates with MongoDB using Mongoose to persist processed data.
 
 <br>
+
 ## API Endpoints
 
-<br>
 ### `POST /api/webhook`
 Main webhook endpoint for DuxSoup data processing. It expects a JSON payload with a `type` field to route the data correctly.
 
@@ -52,7 +53,7 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 - 409 Conflict - Duplicate ID.
 - 500 Internal Server Error - Server error.
 
-<br>
+
 ### `GET /health`
 Health check endpoint returning server and database status.
 
@@ -69,16 +70,17 @@ Health check endpoint returning server and database status.
 }
 ```
 
-<br>
+
 ### `GET /api/test`
 Test endpoint for API verification.
 
 <br>
+
 ## Data Models
 
 The application uses Mongoose to define schemas for Visit and Scan data, ensuring data integrity and structure. Both models include createdAt and updatedAt timestamps.
 
-<br>
+
 ### Visit Model
 
 - id: String, Required, Unique, Indexed.
@@ -89,7 +91,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 - Other fields: SalesProfile, RecruiterProfile, Picture, Middle Name, Connections, Summary, Title, From, Company, CompanyProfile, CompanyWebsite, PersonalWebsite, Email, Phone, IM, Twitter, Location, Industry, My Tags (Array of Strings), extended (Mixed), My Notes (Mixed).
 - rawData: Mixed type, stores the entire original webhook payload.
 
-<br>
+
 ### Scan Model
 
 - id: String, Required, Unique, Indexed.
@@ -101,6 +103,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 - rawData: Mixed type, stores the entire original webhook payload.
 
 <br>
+
 ## Data Normalization
 
 Both models use pre-save hooks to normalize raw DuxSoup data from a flat format to structured arrays.
@@ -129,6 +132,7 @@ Both models use pre-save hooks to normalize raw DuxSoup data from a flat format 
 ```
 
 <br>
+
 ## 🛠️ Tech Stack
 
 - Runtime: Node.js 18+
@@ -142,16 +146,17 @@ Both models use pre-save hooks to normalize raw DuxSoup data from a flat format 
 - Development: Nodemon
 
 <br>
+
 ## Local Development
 
-<br>
+
 ### Prerequisites
 
 - Node.js 18+
 - MongoDB Atlas account
 - Git
 
-<br>
+
 ### Step-by-Step Setup
 
 **Clone Project and Install Dependencies:**
@@ -207,6 +212,7 @@ curl -X POST -H "Content-Type: application/json" -d @examples/scan.json http://l
 ```
 
 <br>
+
 ## 📁 Project Structure
 
 ```
@@ -225,9 +231,10 @@ duxsoup-etl/
 ```
 
 <br>
+
 ## Deployment
 
-<br>
+
 ### Option 1: Render (Recommended)
 
 1. Push to GitHub.
@@ -235,7 +242,7 @@ duxsoup-etl/
 3. Use `render.yaml` for config.
 4. Set `MONGODB_URI` in dashboard.
 
-<br>
+
 ### Option 2: Manual
 
 ```bash
@@ -244,6 +251,7 @@ npm start
 ```
 
 <br>
+
 ## Development
 
 **Available Scripts:**
@@ -259,12 +267,14 @@ npm start
 - Test with payloads.
 
 <br>
+
 ## Debugging
 
 - Check console logs (Winston).
 - Monitor MongoDB Atlas.
 
 <br>
+
 ## Troubleshooting
 
 - **MongoDB Connection:** Check URI, IP whitelist, user permissions.
@@ -272,24 +282,28 @@ npm start
 - **Duplicate Key Errors:** Check uniqueness of `id`.
 
 <br>
+
 ## Logs
 
 - **Dev Logs:** Console.
 - **Prod Logs:** Use Winston files.
 
 <br>
+
 ## Monitoring
 
 - `GET /health`
 - Check MongoDB connectivity.
 
 <br>
+
 ## Data Validation
 
 - Schema + controller-level validation.
 - Unique `id` fields.
 
 <br>
+
 ## Security Notes
 
 - Validate all inputs.
