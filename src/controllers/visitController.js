@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const Visit = require('../models/Visit');
+const Visit = require('../models/visit');
 
 const handleVisit = async (req, res) => {
   try {

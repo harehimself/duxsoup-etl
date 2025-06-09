@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const Scan = require('../models/Scan');
+const Scan = require('../models/scan');
 
 const handleScan = async (req, res) => {
   try {
