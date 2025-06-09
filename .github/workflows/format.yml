@@ -1,0 +1,29 @@
+name: Format Code
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Prettier (check only)
+        # Assuming you have Prettier installed and a script like `npm run format:check`
+        # This checks for formatting issues without changing files.
+        run: |
+          # npm install prettier # Uncomment if Prettier is not a dev dependency and needed here
+          # npx prettier --check .
+          echo "Prettier check step - implement your format check command here (e.g., npx prettier --check .)"
