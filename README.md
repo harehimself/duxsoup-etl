@@ -251,17 +251,22 @@ cd duxsoup-etl
 npm install
 ```
 
+<br>
+
 **Set Up MongoDB Atlas:**
 
 1. Go to MongoDB Atlas and create a free cluster.
 2. Create a database user and whitelist IP addresses.
 3. Obtain your MongoDB connection string.
 
+<br>
+
 **Configure Environment:**
 
 ```bash
 cp .env.example .env
 ```
+<br>
 
 Edit the `.env` file:
 
@@ -271,11 +276,15 @@ MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/duxsoup-etl
 NODE_ENV=development
 ```
 
+<br>
+
 **Test Locally**
 
 ```bash
 npm run dev
 ```
+
+<br>
 
 **Health Check:**
 
@@ -283,11 +292,15 @@ npm run dev
 curl http://localhost:3000/health
 ```
 
+<br>
+
 **Test Visit Webhook:**
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d @examples/visit.json http://localhost:3000/api/webhook
 ```
+
+<br>
 
 **Test Scan Webhook:**
 
