@@ -72,6 +72,8 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 }
 ```
 
+<br>
+
 **Scan Data:**
 ```json
 {
@@ -108,6 +110,8 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 }
 ```
 
+<br>
+
 **Responses:**
 
 ```json
@@ -123,6 +127,7 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 }
 ```
 
+<br>
 
 ### `GET /health`
 Health check endpoint returning server and database status.
@@ -140,6 +145,7 @@ Health check endpoint returning server and database status.
 }
 ```
 
+<br>
 
 ### `GET /api/test`
 Test endpoint for API verification.
@@ -160,6 +166,9 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 - **`Last Name:`** String (Optional).
 - Additional Data Points: **`SalesProfile`**, **`RecruiterProfile`**, **`Picture`**, **`Middle Name`**, **`Connections`**, **`Summary`**, **`Title`**, **`From`**, **`Company`**, **`CompanyProfile`, **`CompanyWebsite`, **`PersonalWebsite`, `Email`, **`Phone`**, **`IM`**, **`Twitter`**, **`Location`**, **`Industry`**, etc.
 - **`rawData:`** Mixed type, stores the entire original webhook payload.
+
+
+<br>
 
 
 ### Scan Model
@@ -187,6 +196,9 @@ Both models use pre-save hooks to normalize raw DuxSoup data from a flat format 
   "Skill-0": "JavaScript"
 }
 ```
+
+<br>
+
 
 **Normalized Format Example:**
 ```json
@@ -225,6 +237,8 @@ Both models use pre-save hooks to normalize raw DuxSoup data from a flat format 
 - Node.js 18+
 - MongoDB Atlas account
 - Git
+
+<br>
 
 
 ### Step-by-Step Setup
