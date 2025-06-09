@@ -13,7 +13,7 @@ A production-ready webhook-driven LinkedIn data processing system that handles s
 <br>
 **DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
 <br><br>
-[![Connect With Me On LinkedIn](https://img.shields.io/badge/Connect%20With%20Me%20On%20LinkedIn-blue)](https://www.linkedin.com/in/mike-hare)
+✨ [![Connect With Me On LinkedIn](https://img.shields.io/badge/Connect%20With%20Me%20On%20LinkedIn-blue)](https://www.linkedin.com/in/mike-hare) ✨
 
 </div>  
 
@@ -46,6 +46,8 @@ Main webhook endpoint for DuxSoup data processing.
   "First Name": "John"
 }
 ```
+
+<br>
 
 **Scan Data:**
 ```json
@@ -84,6 +86,8 @@ Test endpoint for API verification.
 - Node.js 18+
 - MongoDB Atlas account
 - Git
+
+<br>
 
 ### Step-by-Step Setup
 
@@ -178,6 +182,8 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/webhook" -Method POST -Content
 Invoke-RestMethod -Uri "http://localhost:3000/api/webhook" -Method POST -ContentType "application/json" -InFile "examples\scan.json"
 ```
 
+<br>
+
 ## 📁 Project Structure
 ```
 duxsoup-etl/
@@ -250,6 +256,8 @@ Health check endpoint.
 - `positions[]` - Up to 36 data points
 - `schools[]` - Up to 20 data points
 - `skills[]` - Up to 20 skills
+
+<br>
 
 ### Scan Model
 **Required Fields:**
@@ -332,7 +340,7 @@ npm run dev   # Development with nodemon
 
 <br>
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
