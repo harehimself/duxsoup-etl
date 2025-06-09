@@ -1,5 +1,5 @@
 <div align="center">
-<a href="https://dux-soup.com" target="_blank" title="DuxSoup ETL"><img width="196px" alt="DuxSoup Logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTcMrv6rQvZIm5ufBRE7djADR64Q68vVJG2Xg&s"></a>
+<a href="https://dux-soup.com" target="_blank" title="DuxSoup ETL"><img width="196px" alt="DuxSoup Logo" src="https://raw.githubusercontent.com/harehimself/duxsoup-etl/refs/heads/master/duxsoup.png"></a>
 
 <a name="readme-top"></a>
 
