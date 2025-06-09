@@ -28,7 +28,6 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 
 **Visit Data:**
 ```json
-```json
 {
   "type": "visit",
   "id": "visit_12345",
