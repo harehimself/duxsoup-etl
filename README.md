@@ -28,11 +28,48 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 
 **Visit Data:**
 ```json
+```json
 {
   "type": "visit",
   "id": "visit_12345",
   "VisitTime": "2025-06-06T10:30:00Z",
-  ...
+  "Profile": "[https://www.linkedin.com/in/johndoe/](https://www.linkedin.com/in/johndoe/)",
+  "Degree": "MBA",
+  "First Name": "John",
+  "Last Name": "Doe",
+  "Headline": "Senior Software Engineer at TechCorp",
+  "Location": "San Francisco, CA",
+  "Connections": "500+",
+  "Position-0-Company": "TechCorp",
+  "Position-0-Title": "Senior Software Engineer",
+  "Position-0-StartDate": "Jan 2022",
+  "Position-0-EndDate": "Present",
+  "Position-0-Duration": "3 years 5 months",
+  "Position-0-Location": "San Francisco, CA",
+  "Position-0-Description": "Leading development of cloud-native applications",
+  "Position-1-Company": "StartupXYZ",
+  "Position-1-Title": "Software Engineer",
+  "Position-1-StartDate": "Jun 2019",
+  "Position-1-EndDate": "Dec 2021",
+  "Position-1-Duration": "2 years 7 months",
+  "Position-1-Location": "New York, NY",
+  "School-0-School": "Stanford University",
+  "School-0-Degree": "Master of Business Administration",
+  "School-0-Field": "Technology Management",
+  "School-0-StartYear": "2017",
+  "School-0-EndYear": "2019",
+  "School-1-School": "UC Berkeley",
+  "School-1-Degree": "Bachelor of Science",
+  "School-1-Field": "Computer Science",
+  "School-1-StartYear": "2013",
+  "School-1-EndYear": "2017",
+  "Skill-0": "JavaScript",
+  "Skill-1": "Node.js",
+  "Skill-2": "React",
+  "Skill-3": "MongoDB",
+  "Skill-4": "AWS",
+  "Summary": "Experienced software engineer with expertise in full-stack development",
+  "Industry": "Technology"
 }
 ```
 
@@ -42,16 +79,50 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
   "type": "scan",
   "id": "scan_67890",
   "ScanTime": "2025-06-06T14:15:00Z",
-  ...
+  "Profile": "[https://www.linkedin.com/in/janesmith/](https://www.linkedin.com/in/janesmith/)",
+  "First Name": "Jane",
+  "Last Name": "Smith",
+  "Headline": "Marketing Director at BigCorp",
+  "Location": "Chicago, IL",
+  "Connections": "1000+",
+  "Position-0-Company": "BigCorp",
+  "Position-0-Title": "Marketing Director",
+  "Position-0-StartDate": "Mar 2021",
+  "Position-0-EndDate": "Present",
+  "Position-0-Duration": "4 years 3 months",
+  "Position-0-Location": "Chicago, IL",
+  "Position-1-Company": "MidSize Inc",
+  "Position-1-Title": "Senior Marketing Manager",
+  "Position-1-StartDate": "Jan 2018",
+  "Position-1-EndDate": "Feb 2021",
+  "Position-1-Duration": "3 years 2 months",
+  "Position-1-Location": "Detroit, MI",
+  "School-0-School": "Northwestern University",
+  "School-0-Degree": "Master of Marketing",
+  "School-0-StartYear": "2016",
+  "School-0-EndYear": "2018",
+  "Skill-0": "Digital Marketing",
+  "Skill-1": "Brand Management",
+  "Skill-2": "Analytics",
+  "Summary": "Experienced marketing professional",
+  "Industry": "Marketing"
 }
 ```
 
 **Responses:**
 
-- 200 OK - Success: Data processed successfully (inserted or updated).
-- 400 Bad Request - Invalid payload/missing fields.
-- 409 Conflict - Duplicate ID.
-- 500 Internal Server Error - Server error.
+```json
+{
+  "status": "ok",
+  "database": {
+    "isConnected": true,
+    "readyState": 1,
+    "host": "your_mongodb_host",
+    "name": "duxsoup-etl"
+  },
+  "timestamp": "2025-06-06T..."
+}
+```
 
 
 ### `GET /health`
@@ -83,24 +154,24 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 
 ### Visit Model
 
-- id: String, Required, Unique, Indexed.
-- VisitTime: Date, Required, Indexed.
-- Profile: String, Required, Indexed.
-- First Name: String, Required.
-- Last Name: String (Optional).
-- Other fields: SalesProfile, RecruiterProfile, Picture, Middle Name, Connections, Summary, Title, From, Company, CompanyProfile, CompanyWebsite, PersonalWebsite, Email, Phone, IM, Twitter, Location, Industry, My Tags (Array of Strings), extended (Mixed), My Notes (Mixed).
-- rawData: Mixed type, stores the entire original webhook payload.
+- **`id:`** String, Required, Unique, Indexed.
+- **`VisitTime:`** Date, Required, Indexed.
+- **`Profile:`** String, Required, Indexed.
+- **`First Name:`** String, Required.
+- **`Last Name:`** String (Optional).
+- Additional Data Points: **`SalesProfile`**, **`RecruiterProfile`**, **`Picture`**, **`Middle Name`**, **`Connections`**, **`Summary`**, **`Title`**, **`From`**, **`Company`**, **`CompanyProfile`, **`CompanyWebsite`, **`PersonalWebsite`, `Email`, **`Phone`**, **`IM`**, **`Twitter`**, **`Location`**, **`Industry`**, etc.
+- **`rawData:`** Mixed type, stores the entire original webhook payload.
 
 
 ### Scan Model
 
-- id: String, Required, Unique, Indexed.
-- ScanTime: Date, Required, Indexed.
-- Profile: String, Required, Indexed.
-- First Name: String, Required.
-- Last Name: String, Required.
-- Other fields: Company, Title, Location, Industry, ConnectionDegree, ProfileUrl (Optional).
-- rawData: Mixed type, stores the entire original webhook payload.
+- `id:` String, Required, Unique, Indexed.
+- `ScanTime:` Date, Required, Indexed.
+- `Profile:` String, Required, Indexed.
+- `First Name:` String, Required.
+- `Last Name:` String, Required.
+- Other fields: `Company`, `Title`, `Location`, `Industry`, `ConnectionDegree`, `ProfileUrl`, etc.
+- `rawData:` Mixed type, stores the entire original webhook payload.
 
 <br>
 
