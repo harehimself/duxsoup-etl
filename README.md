@@ -1,9 +1,25 @@
-# DuxSoup LinkedIn ETL System
+<div align="center">
+<a href="https://dux-soup.com" target="_blank" title="DuxSoup ETL"><img width="196px" alt="DuxSoup Logo" src="https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_81085859a9ae95ed5e839ebdace5190b/dux-soup.png"></a>
+
+<a name="readme-top"></a>
+
+DuxSoup LinkedIn ETL System
+==================
 
 A production-ready webhook-driven LinkedIn data processing system that handles scan and visit data with MongoDB storage and real-time processing.
 
 
-## 🚀 Features
+**Share the Project:** https://github.com/harehimself/duxsoup-etl
+<br>
+**DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
+<br><br>
+[![Connect With Me On LinkedIn](https://img.shields.io/badge/Connect%20With%20Me%20On%20LinkedIn-blue)](https://www.linkedin.com/in/mike-hare)
+
+</div>  
+
+<br>
+
+## Features
 
 - **Webhook Processing** - Handles DuxSoup LinkedIn data via POST /api/webhook
 - **Type-Based Routing** - Automatically routes scan vs visit data to appropriate handlers
@@ -12,7 +28,9 @@ A production-ready webhook-driven LinkedIn data processing system that handles s
 - **Production Ready** - Deployed on Render with health monitoring
 - **Extensible** - Easy to add MongoDB storage and data normalization
 
-## 📡 API Endpoints
+<br>
+
+## API Endpoints
 
 ### POST /api/webhook
 Main webhook endpoint for DuxSoup data processing.
@@ -47,6 +65,8 @@ Health check endpoint returning server status.
 ### GET /api/test
 Test endpoint for API verification.
 
+<br>
+
 ## 🛠️ Tech Stack
 
 - **Runtime:** Node.js 18+
@@ -55,6 +75,8 @@ Test endpoint for API verification.
 - **Logging:** Winston
 - **Deployment:** Render
 - **Development:** Nodemon
+
+<br>
 
 ## Local Development
 
@@ -179,6 +201,7 @@ duxsoup-etl/
 ├── package.json                 # Dependencies
 └── README.md                    # This file
 ```
+<br>
 
 ## 🔌 API Endpoints
 
@@ -211,8 +234,9 @@ Health check endpoint.
   "uptime": 123.45
 }
 ```
+<br>
 
-## 📊 Data Models
+## Data Models
 
 ### Visit Model
 **Required Fields:**
@@ -240,7 +264,9 @@ Health check endpoint.
 - `schools[]` - Up to 20 data points
 - `skills[]` - Up to 20 skills
 
-## 🔄 Data Normalization
+<br>
+
+## Data Normalization
 
 Both models use pre-save hooks to normalize raw DuxSoup data:
 
@@ -267,7 +293,9 @@ Both models use pre-save hooks to normalize raw DuxSoup data:
 }
 ```
 
-## 🚀 Deployment
+<br>
+
+## Deployment
 
 ### Option 1: Render (Recommended)
 1. Push code to GitHub
@@ -281,8 +309,9 @@ Both models use pre-save hooks to normalize raw DuxSoup data:
 npm install --production
 npm start
 ```
+<br>
 
-## 🔧 Development
+## Development
 
 ### Available Scripts
 ```bash
@@ -300,6 +329,8 @@ npm run dev   # Development with nodemon
 - Check logs in console (Winston)
 - Use `/api/webhook/test` for testing
 - Monitor MongoDB Atlas for data storage
+
+<br>
 
 ## 🔍 Troubleshooting
 
@@ -328,8 +359,9 @@ npm run dev
 Get-Content "combined.log" -Wait
 Get-Content "error.log" -Wait
 ```
+<br>
 
-## 📈 Monitoring
+## Monitoring
 
 ### Health Checks
 - GET `/health` - Basic server status
@@ -341,12 +373,16 @@ Get-Content "error.log" -Wait
 - Schema validation in models
 - Duplicate prevention with unique IDs
 
-## 🔒 Security Notes
+<br>
+
+## Security Notes
 
 - Validate all incoming webhook data
 - Use environment variables for secrets
 - Enable CORS for specific origins in production
 - Consider webhook authentication for DuxSoup
+
+<br>
 
 ## 📚 Tech Stack
 
