@@ -9,9 +9,9 @@ A production-ready webhook-driven LinkedIn data processing system that handles s
 
 ## Features
 
-* **Webhook Processing** - Handles DuxSoup LinkedIn data via `POST /api/webhook`.
-* **Type-Based Routing** - Automatically routes scan vs visit data to appropriate handlers based on the `type` field in the payload.
-* **Data Validation** - Comprehensive validation for required fields, including a custom validator for the `id` field to ensure it's a non-empty string.
+* **Webhook Processing** - Handles DuxSoup LinkedIn data via **`POST /api/webhook`**.
+* **Type-Based Routing** - Automatically routes scan vs visit data to appropriate handlers based on the **`type`** field in the payload.
+* **Data Validation** - Comprehensive validation for required fields, including a custom validator for the **`id`** field to ensure it's a non-empty string.
 * **Error Handling** - Robust error handling with detailed logging using Winston.
 * **Production Ready** - Designed for deployment on platforms like Render with health monitoring.
 * **Extensible** - Easy to add MongoDB storage and data normalization.
@@ -159,7 +159,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 
 ### Visit Model
 
-- <span style="color:#d73a49">id:</span> String, Required, Unique, Indexed.
+- **`id:`** String, Required, Unique, Indexed.
 - **`VisitTime:`** Date, Required, Indexed.
 - **`Profile:`** String, Required, Indexed.
 - **`First Name:`** String, Required.
@@ -217,15 +217,15 @@ Both models use pre-save hooks to normalize raw DuxSoup data from a flat format 
 
 ## 🛠️ Tech Stack
 
-- Runtime: Node.js 18+
-- Framework: Express.js
-- Database: MongoDB Atlas
-- ODM: Mongoose
-- Logging: Winston
-- Environment Variables: Dotenv
-- CORS: Cors
-- Deployment: Render
-- Development: Nodemon
+- **`Runtime:`** Node.js 18+
+- **`Framework:`** Express.js
+- **`Database:`** MongoDB Atlas
+- **`ODM:`** Mongoose
+- **`Logging:`** Winston
+- **`Environment Variables:`** Dotenv
+- **`CORS:`** Cors
+- **`Deployment:`** Render
+- **`Development:`** Nodemon
 
 <br>
 
