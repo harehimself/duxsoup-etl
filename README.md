@@ -159,7 +159,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 
 ### Visit Model
 
-- **`id:`** String, Required, Unique, Indexed.
+- <span style="color:red">**`id:`**</span> String, Required, Unique, Indexed.
 - **`VisitTime:`** Date, Required, Indexed.
 - **`Profile:`** String, Required, Indexed.
 - **`First Name:`** String, Required.
