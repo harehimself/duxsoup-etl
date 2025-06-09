@@ -4,10 +4,8 @@ const Visit = require("../models/visit");
 const handleVisit = async (req, res) => {
   try {
     const payload = req.body;
-    // Extract the actual profile data from the 'data' property
     const profileData = payload.data;
 
-    // IMPORTANT: Check if profileData exists before proceeding
     if (!profileData) {
       logger.warn('Visit webhook received without expected "data" property', { payload });
       return res.status(400).json({
@@ -17,11 +15,10 @@ const handleVisit = async (req, res) => {
     }
 
     logger.info("Processing visit data", {
-      id: profileData.id, // Now using profileData.id
-      profile: profileData.Profile, // Now using profileData.Profile
+      id: profileData.id,
+      profile: profileData.Profile,
     });
 
-    // Validate required fields based on the actual incoming profileData
     const requiredFields = [
       "id",
       "VisitTime",
@@ -29,12 +26,11 @@ const handleVisit = async (req, res) => {
       "Degree",
       "First Name",
     ];
-    // Check missing fields on profileData, not payload
     const missingFields = requiredFields.filter((field) => !profileData[field]);
 
     if (missingFields.length > 0) {
       logger.warn("Missing required fields for visit", {
-        id: profileData.id, // Now using profileData.id
+        id: profileData.id,
         missingFields,
       });
       return res.status(400).json({
@@ -44,7 +40,6 @@ const handleVisit = async (req, res) => {
       });
     }
 
-    // Create visit document with direct mapping from profileData
     const visitDataToSave = {
       id: profileData.id,
       VisitTime: new Date(profileData.VisitTime),
@@ -73,50 +68,55 @@ const handleVisit = async (req, res) => {
       "My Tags": profileData["My Tags"] || [],
       extended: profileData.extended,
       "My Notes": profileData["My Notes"] || "",
-      rawData: payload, // Store the entire original webhook payload
+      rawData: payload,
     };
 
     try {
-      const visit = new Visit(visitDataToSave);
-      await visit.save();
+      // Find a document by 'id' and update it, or create it if it doesn't exist
+      const visit = await Visit.findOneAndUpdate(
+        { id: visitDataToSave.id }, // Filter by Dux-Soup ID
+        visitDataToSave, // Data to set/update
+        {
+          new: true, // Return the updated document
+          upsert: true, // Create if not found
+          runValidators: true, // Run schema validators on update/upsert
+          setDefaultsOnInsert: true // Apply defaults if a new doc is inserted
+        }
+      );
 
-      logger.info("Visit saved to MongoDB", {
+      logger.info("Visit data processed in MongoDB", {
         id: visit._id,
-        duxsoupId: profileData.id, // Using profileData.id
-        profile: profileData.Profile, // Using profileData.Profile
+        duxsoupId: profileData.id,
+        profile: profileData.Profile,
+        status: visit.__v === 0 ? "inserted" : "updated" // Heuristic for status
       });
 
-      res.status(201).json({
+      res.status(200).json({ // Using 200 OK for both insert and update for simplicity
         success: true,
-        message: "Visit data saved successfully",
+        message: "Visit data processed successfully (inserted or updated)",
         data: {
           id: visit._id,
-          duxsoupId: profileData.id, // Using profileData.id
-          profile: profileData.Profile, // Using profileData.Profile
+          duxsoupId: profileData.id,
+          profile: profileData.Profile,
           visitTime: profileData.VisitTime,
           firstName: profileData["First Name"],
-          status: "saved to database",
+          status: "processed in database",
         },
       });
-    } catch (dbError) {
-      if (dbError.code === 11000) {
-        logger.warn("Duplicate visit detected", {
-          duxsoupId: profileData.id, // Using profileData.id
-        });
 
-        res.status(200).json({
-          success: true,
-          message: "Visit already exists",
-          data: {
-            duxsoupId: profileData.id, // Using profileData.id
-            profile: profileData.Profile, // Using profileData.Profile
-            status: "duplicate - already in database",
-          },
-        });
-      } else {
-        throw dbError;
-      }
+    } catch (dbError) {
+      logger.error("Error saving or updating visit data:", {
+        error: dbError.message,
+        stack: dbError.stack,
+        duxsoupId: profileData.id,
+      });
+
+      res.status(500).json({
+        error: "Failed to process visit data (database error)",
+        message: dbError.message,
+      });
     }
+
   } catch (error) {
     logger.error("Error processing visit data:", {
       error: error.message,
