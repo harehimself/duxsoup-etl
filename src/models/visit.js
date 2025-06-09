@@ -8,6 +8,15 @@ const visitSchema = new mongoose.Schema(
       required: true,
       unique: true,
       index: true,
+      // --- ADDED CUSTOM VALIDATOR HERE ---
+      validate: {
+        validator: function(v) {
+          // Ensures 'v' exists, is a string, and is not just whitespace
+          return v && typeof v === 'string' && v.trim().length > 0;
+        },
+        message: props => `${props.value} is not a valid DuxSoup ID. It must be a non-empty string.`,
+      },
+      // --- END CUSTOM VALIDATOR ---
     },
     // Matches "VisitTime" from Dux-Soup webhook
     VisitTime: {
@@ -53,10 +62,7 @@ const visitSchema = new mongoose.Schema(
     Industry: String,
     "My Tags": [String], // Array of strings, note the space
     extended: mongoose.Schema.Types.Mixed, // For nested complex data like positions, skills, schools
-    // --- CHANGE MADE HERE ---
-    // Changed to Mixed to accommodate both String and Array types for 'My Notes'
-    "My Notes": mongoose.Schema.Types.Mixed,
-    // --- END CHANGE ---
+    "My Notes": mongoose.Schema.Types.Mixed, // Changed to Mixed to accommodate both String and Array types
 
     // rawData should capture the entire original webhook payload
     rawData: {

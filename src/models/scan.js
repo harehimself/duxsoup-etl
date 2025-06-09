@@ -6,7 +6,16 @@ const scanSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    index: true
+    index: true,
+    // --- ADDED CUSTOM VALIDATOR HERE ---
+    validate: {
+      validator: function(v) {
+        // Ensures 'v' exists, is a string, and is not just whitespace
+        return v && typeof v === 'string' && v.trim().length > 0;
+      },
+      message: props => `${props.value} is not a valid DuxSoup ID. It must be a non-empty string.`,
+    },
+    // --- END CUSTOM VALIDATOR ---
   },
   // Matches "ScanTime" from Dux-Soup webhook
   ScanTime: {
@@ -31,20 +40,20 @@ const scanSchema = new mongoose.Schema({
     required: true
   },
   // Fields that are present but not explicitly required in your schema (optional)
-  Company: String, // Added based on typical Dux-Soup scan data
-  Title: String,   // Added based on typical Dux-Soup scan data
-  Location: String,// Added based on typical Dux-Soup scan data
-  Industry: String,// Added based on typical Dux-Soup scan data
-  ConnectionDegree: String, // Changed to match Dux-Soup casing
-  ProfileUrl: String, // Changed to match Dux-Soup casing (if it exists)
-  
+  Company: String,
+  Title: String,
+  Location: String,
+  Industry: String,
+  ConnectionDegree: String,
+  ProfileUrl: String,
+
   // rawData should capture the entire original webhook payload
   rawData: {
     type: mongoose.Schema.Types.Mixed,
-    required: false // It's good to store raw data, but maybe not *always* required if you process other fields
+    required: false
   }
 }, {
-  timestamps: true // Keep this for createdAt and updatedAt
+  timestamps: true
 });
 
 module.exports = mongoose.model('Scan', scanSchema);
