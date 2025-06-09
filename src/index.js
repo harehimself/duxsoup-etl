@@ -5,70 +5,65 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const logger = require("./utils/logger");
-const { connectDB } = require("./utils/database");
+const database = require("./utils/database");
 const apiRoutes = require('./routes/apiRoutes');
 
-// Initialize MongoDB connection
-const initializeApp = async () => {
-  // Connect to MongoDB
-  const dbConnected = await connectDB();
-  if (dbConnected) {
-    logger.info('Application starting with MongoDB support');
-  } else {
-    logger.warn('Application starting without MongoDB (running in memory mode)');
+// Basic middleware
+app.use(express.json());
+
+// Add API routes
+app.use('/api', apiRoutes);
+
+// Health check endpoint with database status
+app.get("/health", async (req, res) => {
+  const dbStatus = database.getConnectionStatus();
+  res.json({ 
+    status: "ok",
+    database: dbStatus,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "DuxSoup ETL Server Running",
+    endpoints: [
+      "POST /api/visit - Process visit data",
+      "POST /api/scan - Process scan data",
+      "GET /health - Health check"
+    ]
+  });
+});
+
+// Initialize database connection and start server
+async function startServer() {
+  try {
+    // Connect to MongoDB
+    await database.connect();
+    logger.info('Database connected successfully');
+    
+    // Start the server
+    app.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT}`);
+    });
+    
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
   }
-  
-  // Basic middleware
-  app.use(express.json());
-
-  // Add API routes
-  app.use('/api', apiRoutes);
-
-  // Health check endpoint
-  app.get("/health", (req, res) => {
-    res.json({ 
-      status: "ok",
-      mongodb: dbConnected ? "connected" : "unavailable",
-      timestamp: new Date().toISOString()
-    });
-  });
-
-  // Root endpoint
-  app.get("/", (req, res) => {
-    res.json({ 
-      message: "DuxSoup LinkedIn ETL System",
-      status: "running",
-      mongodb: dbConnected ? "connected" : "unavailable",
-      endpoints: {
-        health: "/health",
-        webhook: "/api/webhook",
-        test: "/api/test"
-      }
-    });
-  });
-
-  // Start server
-  app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT}`, {
-      environment: process.env.NODE_ENV,
-      mongodb: dbConnected ? "connected" : "unavailable"
-    });
-  });
-};
+}
 
 // Handle graceful shutdown
-process.on('SIGINT', () => {
-  logger.info('Received SIGINT. Graceful shutdown...');
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  await database.disconnect();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM. Graceful shutdown...');
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  await database.disconnect();
   process.exit(0);
 });
 
-// Start the application
-initializeApp().catch(error => {
-  logger.error('Failed to initialize application:', error);
-  process.exit(1);
-});
+startServer();

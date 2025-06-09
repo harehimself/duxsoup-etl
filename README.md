@@ -56,7 +56,7 @@ Test endpoint for API verification.
 - **Deployment:** Render
 - **Development:** Nodemon
 
-## 🏗️ Local Development
+## Local Development
 
 ### Prerequisites
 - Node.js 18+
