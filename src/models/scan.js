@@ -1,42 +1,50 @@
 const mongoose = require('mongoose');
 
 const scanSchema = new mongoose.Schema({
-  duxsoupId: {
+  // Matches "id" from Dux-Soup webhook
+  id: {
     type: String,
     required: true,
     unique: true,
     index: true
   },
-  scanTime: {
+  // Matches "ScanTime" from Dux-Soup webhook
+  ScanTime: {
     type: Date,
     required: true,
     index: true
   },
-  profile: {
+  // Matches "Profile" from Dux-Soup webhook
+  Profile: {
     type: String,
     required: true,
     index: true
   },
-  firstName: {
+  // Matches "First Name" from Dux-Soup webhook (requires quotes)
+  'First Name': {
     type: String,
     required: true
   },
-  lastName: {
+  // Matches "Last Name" from Dux-Soup webhook (requires quotes)
+  'Last Name': {
     type: String,
     required: true
   },
-  company: String,
-  title: String,
-  location: String,
-  industry: String,
-  connectionDegree: String,
-  profileUrl: String,
+  // Fields that are present but not explicitly required in your schema (optional)
+  Company: String, // Added based on typical Dux-Soup scan data
+  Title: String,   // Added based on typical Dux-Soup scan data
+  Location: String,// Added based on typical Dux-Soup scan data
+  Industry: String,// Added based on typical Dux-Soup scan data
+  ConnectionDegree: String, // Changed to match Dux-Soup casing
+  ProfileUrl: String, // Changed to match Dux-Soup casing (if it exists)
+  
+  // rawData should capture the entire original webhook payload
   rawData: {
     type: mongoose.Schema.Types.Mixed,
-    required: true
+    required: false // It's good to store raw data, but maybe not *always* required if you process other fields
   }
 }, {
-  timestamps: true
+  timestamps: true // Keep this for createdAt and updatedAt
 });
 
 module.exports = mongoose.model('Scan', scanSchema);
