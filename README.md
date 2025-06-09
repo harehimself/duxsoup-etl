@@ -1,8 +1,9 @@
 # DuxSoup LinkedIn ETL System
 
-A production-ready webhook-driven LinkedIn data processing system that handles scan and visit data with MongoDB storage and real-time processing.
+A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time, and stores the data to a MongoDB Atlas database.
 
 **Share the Project:** https://github.com/harehimself/duxsoup-etl  
+
 **DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
 
 <br>
