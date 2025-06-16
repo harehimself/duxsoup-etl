@@ -10,20 +10,20 @@ A production-ready LinkedIn extraction pipeline. The system performs automatic L
 
 ## Features
 
-* **Webhook Processing** - Handles DuxSoup LinkedIn data via **`POST /api/webhook`**.
-* **Type-Based Routing** - Automatically routes scan vs visit data to appropriate handlers based on the **`type`** field in the payload.
-* **Data Validation** - Comprehensive validation for required fields, including a custom validator for the **`id`** field to ensure it's a non-empty string.
-* **Error Handling** - Robust error handling with detailed logging using Winston.
-* **Production Ready** - Designed for deployment on platforms like Render with health monitoring.
-* **Extensible** - Easy to add MongoDB storage and data normalization.
-* **MongoDB Storage** - Integrates with MongoDB using Mongoose to persist processed data.
+* **Webhook Processing**: Handles DuxSoup LinkedIn data via **`POST /api/webhook`**.
+* **Type-Based Routing**: Automatically routes scan vs visit data to appropriate handlers based on the **`type`** field in the payload.
+* **Data Validation**: Comprehensive validation for required fields, including a custom validator for the **`id`** field to ensure it's a non-empty string.
+* **Error Handling**: Robust error handling with detailed logging using Winston.
+* **Production Ready**: Designed for deployment on platforms like Render with health monitoring.
+* **Extensible**: Easy to add MongoDB storage and data normalization.
+* **MongoDB Storage**: Integrates with MongoDB using Mongoose to persist processed data.
 
 <br>
 
 ## API Endpoints
 
 ### `POST /api/webhook`
-Main webhook endpoint for DuxSoup data processing. It expects a JSON payload with a `type` field to route the data correctly.
+Main webhook endpoint for DuxSoup data processing. It expects a JSON payload with a **`type`** field to route the data correctly.
 
 **Request Body Examples:**
 
@@ -174,13 +174,13 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 
 ### Scan Model
 
-- `id:` String, Required, Unique, Indexed.
-- `ScanTime:` Date, Required, Indexed.
-- `Profile:` String, Required, Indexed.
-- `First Name:` String, Required.
-- `Last Name:` String, Required.
-- Other fields: `Company`, `Title`, `Location`, `Industry`, `ConnectionDegree`, `ProfileUrl`, etc.
-- `rawData:` Mixed type, stores the entire original webhook payload.
+- **`id:`** String, Required, Unique, Indexed.
+- **`ScanTime:`** Date, Required, Indexed.
+- **`Profile:`** String, Required, Indexed.
+- **`First Name:`** String, Required.
+- **`Last Name:`** String, Required.
+- Additional Data Points: **`Company`**, **`Title`**, **`Location`**, **`Industry`**, **`ConnectionDegree`**, **`ProfileUrl`**, etc.
+- **`rawData:`** Mixed type, stores the entire original webhook payload.
 
 <br>
 
@@ -269,7 +269,7 @@ cp .env.example .env
 ```
 <br>
 
-Edit the `.env` file:
+Edit the **`.env`** file:
 
 ```env
 PORT=3000
@@ -337,8 +337,8 @@ duxsoup-etl/
 
 1. Push to GitHub.
 2. Connect Render to GitHub repo.
-3. Use `render.yaml` for config.
-4. Set `MONGODB_URI` in dashboard.
+3. Use **`render.yaml`** for config.
+4. Set **`MONGODB_URI`** in dashboard.
 
 
 ### Option 2: Manual
