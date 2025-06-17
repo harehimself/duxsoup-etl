@@ -3,10 +3,8 @@
 </p>
 
 <p align="center">
-   A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time. Normalizes profile data into structured MongoDB Atlas records. Differentiates between scans and visits with custom routing. Includes health checks, validation, and logging. Built for background processing and extensibility. Useful for lead enrichment and graph-based CRM models.
-
-   **Share the Project:** https://github.com/harehimself/duxsoup-etl
-   <br>
+   A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time. Normalizes profile data into structured MongoDB Atlas records. Differentiates between scans and visits with custom routing. Includes health checks, validation, and logging. Built for background processing and extensibility. Useful for lead enrichment and graph-based CRM models. <br>
+   
    **DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
 </p>
 <br>
