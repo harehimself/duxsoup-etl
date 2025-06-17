@@ -3,7 +3,10 @@
 </p>
 
 <p align="center">
-   Webhook-driven ETL pipeline for ingesting LinkedIn data via the DuxSoup API. Normalizes profile data into structured MongoDB records. Differentiates between scans and visits with custom routing. Includes health checks, validation, and logging. Built for background processing and extensibility. Useful for lead enrichment and graph-based CRM models.
+   A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time. Normalizes profile data into structured MongoDB Atlas records. Differentiates between scans and visits with custom routing. Includes health checks, validation, and logging. Built for background processing and extensibility. Useful for lead enrichment and graph-based CRM models.
+
+   **Share the Project:** https://github.com/harehimself/duxsoup-etl
+   **DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
 </p>
 <br>
 
@@ -28,15 +31,6 @@
 - [Benefits](#benefits)
 - [How It Compares](#how-it-compares)
 - [License](#license)
-
-# DuxSoup LinkedIn ETL System
-
-A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time, and stores the data to a MongoDB Atlas database.
-
-**Share the Project:** https://github.com/harehimself/duxsoup-etl  
-
-**DuxSoup Docs:** https://support.dux-soup.com/category/441-dux-soup-api-documentation
-
 <br>
 
 ## Features
