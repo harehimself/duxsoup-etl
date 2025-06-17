@@ -1,3 +1,34 @@
+<p align="center">
+   <img src="https://raw.githubusercontent.com/harehimself/duxsoup-etl/master/duxsoup-etl.png">
+</p>
+
+<p align="center">
+   Webhook-driven ETL pipeline for ingesting LinkedIn data via the DuxSoup API. Normalizes profile data into structured MongoDB records. Differentiates between scans and visits with custom routing. Includes health checks, validation, and logging. Built for background processing and extensibility. Useful for lead enrichment and graph-based CRM models.
+</p>
+<br>
+
+<p align="center">
+  <a href="https://github.com/harehimself/duxsoup-etl/graphs/contributors">
+    <img src="https://img.shields.io/github/contributors/harehimself/duxsoup-etl" alt="Contributors"></a>
+  <a href="https://github.com/harehimself/duxsoup-etl/network/members">
+    <img src="https://img.shields.io/github/forks/harehimself/duxsoup-etl" alt="Forks"></a>
+  <a href="https://github.com/harehimself/duxsoup-etl/stargazers">
+    <img src="https://img.shields.io/github/stars/harehimself/duxsoup-etl" alt="Stars"></a>
+  <a href="https://github.com/harehimself/duxsoup-etl/issues">
+    <img src="https://img.shields.io/github/issues/harehimself/duxsoup-etl" alt="Issues"></a>
+  <a href="https://github.com/harehimself/duxsoup-etl/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/harehimself/duxsoup-etl" alt="MIT License"></a>
+</p>
+
+<br><br>
+
+## Table of Contents
+- [Table of Contents](#table-of-contents)
+- [Features](#features)
+- [Benefits](#benefits)
+- [How It Compares](#how-it-compares)
+- [License](#license)
+
 # DuxSoup LinkedIn ETL System
 
 A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time, and stores the data to a MongoDB Atlas database.
