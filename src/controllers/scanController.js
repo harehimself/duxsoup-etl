@@ -1,46 +1,43 @@
 const logger = require("../utils/logger");
 const Scan = require("../models/scan");
+const {
+  validateWebhookPayload,
+  validateRequiredFields,
+  createErrorResponse,
+  createSuccessResponse,
+  handleDatabaseError
+} = require("../utils/validation");
+const { getConfig } = require("../utils/env");
 
 const handleScan = async (req, res) => {
   try {
     const payload = req.body;
-    const profileData = payload.data;
+    const config = getConfig();
 
-    // --- IMPORTANT: ADDED VALIDATION FOR 'id' HERE ---
-    if (!profileData || !profileData.id || typeof profileData.id !== 'string' || profileData.id.trim() === '') {
-      logger.warn('Scan webhook received with missing, null, or empty "id" in data property', { payload });
-      return res.status(400).json({
-        error: 'Invalid scan payload: Missing or invalid "id"',
-        message: 'The "id" field in the webhook data is required, must be a non-empty string, and cannot be null.',
-      });
+    // Validate webhook payload structure
+    const payloadValidation = validateWebhookPayload(payload, 'scan');
+    if (!payloadValidation.isValid) {
+      return res.status(400).json(createErrorResponse(payloadValidation.error));
     }
-    // --- END ADDED VALIDATION ---
+
+    const profileData = payloadValidation.profileData;
 
     logger.info("Processing scan data", {
       id: profileData.id,
       profile: profileData.Profile,
     });
 
-    const requiredFields = [
-      // "id", // 'id' is now explicitly checked above
-      "ScanTime",
-      "Profile",
-      "First Name",
-      "Last Name",
-    ];
-    // Filter out 'id' from missingFields check here as it's handled separately
-    const missingFields = requiredFields.filter((field) => !profileData[field]);
+    // Validate required fields
+    const requiredFields = ["ScanTime", "Profile", "First Name", "Last Name"];
+    const fieldsValidation = validateRequiredFields(profileData, requiredFields, 'scan');
 
-    if (missingFields.length > 0) {
-      logger.warn("Missing required fields for scan (excluding 'id' which was validated)", {
-        id: profileData.id,
-        missingFields,
-      });
-      return res.status(400).json({
-        error: "Missing required fields",
-        missingFields,
-        required: requiredFields,
-      });
+    if (!fieldsValidation.isValid) {
+      return res.status(400).json(
+        createErrorResponse(fieldsValidation.error, {
+          missingFields: fieldsValidation.missingFields,
+          required: requiredFields
+        })
+      );
     }
 
     const scanDataToSave = {
@@ -74,33 +71,13 @@ const handleScan = async (req, res) => {
         id: scan._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        status: scan.__v === 0 ? "inserted" : "updated", // This is a heuristic
+        isNew: !scan.__v || scan.__v === 0
       });
 
-      res.status(200).json({
-        success: true,
-        message: "Scan data processed successfully (inserted or updated)",
-        data: {
-          id: scan._id,
-          duxsoupId: profileData.id,
-          profile: profileData.Profile,
-          scanTime: profileData.ScanTime,
-          firstName: profileData["First Name"],
-          lastName: profileData["Last Name"],
-          status: "processed in database",
-        },
-      });
+      res.status(200).json(createSuccessResponse('scan', scan, profileData));
     } catch (dbError) {
-      logger.error("Error saving or updating scan data:", {
-        error: dbError.message,
-        stack: dbError.stack,
-        duxsoupId: profileData.id,
-      });
-
-      res.status(500).json({
-        error: "Failed to process scan data (database error)",
-        message: dbError.message,
-      });
+      const errorResponse = handleDatabaseError(dbError, 'scan', profileData.id, config.isProduction);
+      return res.status(500).json(errorResponse);
     }
   } catch (error) {
     logger.error("Error processing scan data:", {
@@ -108,10 +85,17 @@ const handleScan = async (req, res) => {
       stack: error.stack,
     });
 
-    res.status(500).json({
+    const errorResponse = {
       error: "Failed to process scan data",
-      message: error.message,
-    });
+      message: error.message
+    };
+
+    // Don't expose stack traces in production
+    if (!config.isProduction && error.stack) {
+      errorResponse.stack = error.stack;
+    }
+
+    res.status(500).json(errorResponse);
   }
 };
 

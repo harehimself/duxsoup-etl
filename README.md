@@ -54,44 +54,65 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 {
   "type": "visit",
   "id": "visit_12345",
-  "VisitTime": "2025-06-06T10:30:00Z",
-  "Profile": "[https://www.linkedin.com/in/johndoe/](https://www.linkedin.com/in/johndoe/)",
-  "Degree": "MBA",
-  "First Name": "John",
-  "Last Name": "Doe",
-  "Headline": "Senior Software Engineer at TechCorp",
-  "Location": "San Francisco, CA",
-  "Connections": "500+",
-  "Position-0-Company": "TechCorp",
-  "Position-0-Title": "Senior Software Engineer",
-  "Position-0-StartDate": "Jan 2022",
-  "Position-0-EndDate": "Present",
-  "Position-0-Duration": "3 years 5 months",
-  "Position-0-Location": "San Francisco, CA",
-  "Position-0-Description": "Leading development of cloud-native applications",
-  "Position-1-Company": "StartupXYZ",
-  "Position-1-Title": "Software Engineer",
-  "Position-1-StartDate": "Jun 2019",
-  "Position-1-EndDate": "Dec 2021",
-  "Position-1-Duration": "2 years 7 months",
-  "Position-1-Location": "New York, NY",
-  "School-0-School": "Stanford University",
-  "School-0-Degree": "Master of Business Administration",
-  "School-0-Field": "Technology Management",
-  "School-0-StartYear": "2017",
-  "School-0-EndYear": "2019",
-  "School-1-School": "UC Berkeley",
-  "School-1-Degree": "Bachelor of Science",
-  "School-1-Field": "Computer Science",
-  "School-1-StartYear": "2013",
-  "School-1-EndYear": "2017",
-  "Skill-0": "JavaScript",
-  "Skill-1": "Node.js",
-  "Skill-2": "React",
-  "Skill-3": "MongoDB",
-  "Skill-4": "AWS",
-  "Summary": "Experienced software engineer with expertise in full-stack development",
-  "Industry": "Technology"
+  "data": {
+    "id": "visit_12345",
+    "VisitTime": "2025-06-06T10:30:00Z",
+    "Profile": "https://www.linkedin.com/in/johndoe/",
+    "Degree": "1",
+    "First Name": "John",
+    "Last Name": "Doe",
+    "Title": "Senior Software Engineer at TechCorp",
+    "Location": "San Francisco, CA",
+    "Connections": "500+",
+    "Summary": "Experienced software engineer with expertise in full-stack development",
+    "Industry": "Technology",
+    "Company": "TechCorp",
+    "Email": "john.doe@example.com",
+    "Phone": "555-1234",
+    "extended": {
+      "positions": [
+        {
+          "Company": "TechCorp",
+          "Location": "San Francisco, CA",
+          "Title": "Senior Software Engineer",
+          "Description": "Leading development of cloud-native applications",
+          "From": "Jan 2022",
+          "To": "Present"
+        },
+        {
+          "Company": "StartupXYZ",
+          "Location": "New York, NY",
+          "Title": "Software Engineer",
+          "Description": "Building scalable web applications",
+          "From": "Jun 2019",
+          "To": "Dec 2021"
+        }
+      ],
+      "skills": [
+        "JavaScript",
+        "Node.js",
+        "React",
+        "MongoDB",
+        "AWS"
+      ],
+      "schools": [
+        {
+          "Name": "Stanford University",
+          "Degree": "Master of Business Administration",
+          "Field": "Technology Management",
+          "From": "Sep 2017",
+          "To": "May 2019"
+        },
+        {
+          "Name": "UC Berkeley",
+          "Degree": "Bachelor of Science",
+          "Field": "Computer Science",
+          "From": "Sep 2013",
+          "To": "May 2017"
+        }
+      ]
+    }
+  }
 }
 ```
 
@@ -102,34 +123,19 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
 {
   "type": "scan",
   "id": "scan_67890",
-  "ScanTime": "2025-06-06T14:15:00Z",
-  "Profile": "[https://www.linkedin.com/in/janesmith/](https://www.linkedin.com/in/janesmith/)",
-  "First Name": "Jane",
-  "Last Name": "Smith",
-  "Headline": "Marketing Director at BigCorp",
-  "Location": "Chicago, IL",
-  "Connections": "1000+",
-  "Position-0-Company": "BigCorp",
-  "Position-0-Title": "Marketing Director",
-  "Position-0-StartDate": "Mar 2021",
-  "Position-0-EndDate": "Present",
-  "Position-0-Duration": "4 years 3 months",
-  "Position-0-Location": "Chicago, IL",
-  "Position-1-Company": "MidSize Inc",
-  "Position-1-Title": "Senior Marketing Manager",
-  "Position-1-StartDate": "Jan 2018",
-  "Position-1-EndDate": "Feb 2021",
-  "Position-1-Duration": "3 years 2 months",
-  "Position-1-Location": "Detroit, MI",
-  "School-0-School": "Northwestern University",
-  "School-0-Degree": "Master of Marketing",
-  "School-0-StartYear": "2016",
-  "School-0-EndYear": "2018",
-  "Skill-0": "Digital Marketing",
-  "Skill-1": "Brand Management",
-  "Skill-2": "Analytics",
-  "Summary": "Experienced marketing professional",
-  "Industry": "Marketing"
+  "data": {
+    "id": "scan_67890",
+    "ScanTime": "2025-06-06T14:15:00Z",
+    "Profile": "https://www.linkedin.com/in/janesmith/",
+    "First Name": "Jane",
+    "Last Name": "Smith",
+    "Title": "Marketing Director at BigCorp",
+    "Location": "Chicago, IL",
+    "Company": "BigCorp",
+    "Industry": "Marketing",
+    "Connection Degree": "2nd",
+    "Profile URL": "https://www.linkedin.com/in/janesmith/"
+  }
 }
 ```
 
@@ -206,35 +212,29 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 
 <br>
 
-## Data Normalization
+## Data Structure
 
-Both models use pre-save hooks to normalize raw DuxSoup data from a flat format to structured arrays.
+DuxSoup sends webhook data in a nested structure with profile information contained in a **`data`** property. The profile data includes an **`extended`** object that contains pre-normalized arrays for positions, skills, and schools.
 
-**Raw Format Example:**
+**Webhook Payload Structure:**
 ```json
 {
-  "Position-0-Company": "TechCorp",
-  "Position-0-Title": "Engineer",
-  "School-0-School": "Stanford",
-  "Skill-0": "JavaScript"
+  "type": "visit",
+  "id": "unique_id",
+  "data": {
+    "id": "unique_id",
+    "First Name": "John",
+    "Profile": "https://...",
+    "extended": {
+      "positions": [...],
+      "skills": [...],
+      "schools": [...]
+    }
+  }
 }
 ```
 
-<br>
-
-
-**Normalized Format Example:**
-```json
-{
-  "positions": [
-    { "company": "TechCorp", "title": "Engineer" }
-  ],
-  "schools": [
-    { "school": "Stanford" }
-  ],
-  "skills": ["JavaScript"]
-}
-```
+The system stores this data directly in MongoDB, preserving both the individual fields and the structured `extended` object for easy querying and analysis.
 
 <br>
 

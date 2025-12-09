@@ -1,46 +1,43 @@
 const logger = require("../utils/logger");
 const Visit = require("../models/visit");
+const {
+  validateWebhookPayload,
+  validateRequiredFields,
+  createErrorResponse,
+  createSuccessResponse,
+  handleDatabaseError
+} = require("../utils/validation");
+const { getConfig } = require("../utils/env");
 
 const handleVisit = async (req, res) => {
   try {
     const payload = req.body;
-    const profileData = payload.data;
+    const config = getConfig();
 
-    // --- IMPORTANT: ADDED VALIDATION FOR 'id' HERE ---
-    if (!profileData || !profileData.id || typeof profileData.id !== 'string' || profileData.id.trim() === '') {
-      logger.warn('Visit webhook received with missing, null, or empty "id" in data property', { payload });
-      return res.status(400).json({
-        error: 'Invalid visit payload: Missing or invalid "id"',
-        message: 'The "id" field in the webhook data is required, must be a non-empty string, and cannot be null.',
-      });
+    // Validate webhook payload structure
+    const payloadValidation = validateWebhookPayload(payload, 'visit');
+    if (!payloadValidation.isValid) {
+      return res.status(400).json(createErrorResponse(payloadValidation.error));
     }
-    // --- END ADDED VALIDATION ---
+
+    const profileData = payloadValidation.profileData;
 
     logger.info("Processing visit data", {
       id: profileData.id,
       profile: profileData.Profile,
     });
 
-    const requiredFields = [
-      // "id", // 'id' is now explicitly checked above
-      "VisitTime",
-      "Profile",
-      "Degree",
-      "First Name",
-    ];
-    // Filter out 'id' from missingFields check here as it's handled separately
-    const missingFields = requiredFields.filter((field) => !profileData[field]);
+    // Validate required fields
+    const requiredFields = ["VisitTime", "Profile", "Degree", "First Name"];
+    const fieldsValidation = validateRequiredFields(profileData, requiredFields, 'visit');
 
-    if (missingFields.length > 0) {
-      logger.warn("Missing required fields for visit (excluding 'id' which was validated)", {
-        id: profileData.id,
-        missingFields,
-      });
-      return res.status(400).json({
-        error: "Missing required fields",
-        missingFields,
-        required: requiredFields,
-      });
+    if (!fieldsValidation.isValid) {
+      return res.status(400).json(
+        createErrorResponse(fieldsValidation.error, {
+          missingFields: fieldsValidation.missingFields,
+          required: requiredFields
+        })
+      );
     }
 
     const visitDataToSave = {
@@ -90,32 +87,13 @@ const handleVisit = async (req, res) => {
         id: visit._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        status: visit.__v === 0 ? "inserted" : "updated", // This is a heuristic
+        isNew: !visit.__v || visit.__v === 0
       });
 
-      res.status(200).json({
-        success: true,
-        message: "Visit data processed successfully (inserted or updated)",
-        data: {
-          id: visit._id,
-          duxsoupId: profileData.id,
-          profile: profileData.Profile,
-          visitTime: profileData.VisitTime,
-          firstName: profileData["First Name"],
-          status: "processed in database",
-        },
-      });
+      res.status(200).json(createSuccessResponse('visit', visit, profileData));
     } catch (dbError) {
-      logger.error("Error saving or updating visit data:", {
-        error: dbError.message,
-        stack: dbError.stack,
-        duxsoupId: profileData.id,
-      });
-
-      res.status(500).json({
-        error: "Failed to process visit data (database error)",
-        message: dbError.message,
-      });
+      const errorResponse = handleDatabaseError(dbError, 'visit', profileData.id, config.isProduction);
+      return res.status(500).json(errorResponse);
     }
   } catch (error) {
     logger.error("Error processing visit data:", {
@@ -123,10 +101,17 @@ const handleVisit = async (req, res) => {
       stack: error.stack,
     });
 
-    res.status(500).json({
+    const errorResponse = {
       error: "Failed to process visit data",
-      message: error.message,
-    });
+      message: error.message
+    };
+
+    // Don't expose stack traces in production
+    if (!config.isProduction && error.stack) {
+      errorResponse.stack = error.stack;
+    }
+
+    res.status(500).json(errorResponse);
   }
 };
 

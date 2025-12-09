@@ -1,15 +1,43 @@
 require("dotenv").config();
 const express = require("express");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
+const cors = require("cors");
 
 const logger = require("./utils/logger");
 const database = require("./utils/database");
+const { validateEnvironment, getConfig } = require("./utils/env");
 const apiRoutes = require("./routes/apiRoutes");
 
-// Basic middleware
-app.use(express.json());
+// Validate environment variables before starting
+try {
+  validateEnvironment();
+} catch (error) {
+  logger.error("Environment validation failed:", error);
+  process.exit(1);
+}
+
+const config = getConfig();
+const app = express();
+
+// Security and middleware configuration
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json({
+  limit: '10mb',
+  strict: true
+}));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.debug(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get('user-agent')
+  });
+  next();
+});
 
 // Add API routes
 app.use("/api", apiRoutes);
@@ -42,8 +70,8 @@ async function startServer() {
     logger.info("Database connected successfully");
 
     // Start the server
-    app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
+    app.listen(config.port, () => {
+      logger.info(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
     });
   } catch (error) {
     logger.error("Failed to start server:", error);
