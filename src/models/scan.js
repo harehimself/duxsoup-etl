@@ -42,11 +42,13 @@ const scanSchema = new mongoose.Schema({
   // Fields that are present but not explicitly required in your schema (optional)
   'Middle Name': String,
   Company: String,
+  CompanyID: String,
   Title: String,
   Location: String,
   Industry: String,
   'Connection Degree': String,
   'Profile URL': String,
+  PublicProfile: String,
   Degree: String,
   Picture: String,
   Connections: String,

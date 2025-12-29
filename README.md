@@ -126,22 +126,24 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
   "data": {
     "id": "scan_67890",
     "ScanTime": "2025-06-06T14:15:00Z",
-    "Profile": "https://www.linkedin.com/in/janesmith/",
+    "Profile": "https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7",
+    "PublicProfile": "https://www.linkedin.com/in/janesmith/",
+    "SalesProfile": "https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7",
+    "RecruiterProfile": "https://www.linkedin.com/talent/profile/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ",
+    "Thumbnail": "https://media.licdn.com/dms/image/v2/C4D03AQF-DpuU2S50ew/profile-displayphoto-shrink_100_100/0/1516536377985",
     "First Name": "Jane",
     "Middle Name": "",
     "Last Name": "Smith",
     "Title": "Marketing Director at BigCorp",
     "Location": "Chicago, IL",
     "Company": "BigCorp",
+    "CompanyID": "12345678",
     "Industry": "Marketing",
     "Connection Degree": "2nd",
     "Profile URL": "https://www.linkedin.com/in/janesmith/",
     "Degree": "2nd",
-    "Picture": "https://media.licdn.com/dms/image/...",
     "Connections": "500+",
-    "Summary": "Marketing professional with 10+ years experience",
-    "SalesProfile": "",
-    "RecruiterProfile": ""
+    "Summary": "Marketing professional with 10+ years experience"
   }
 }
 ```
@@ -214,7 +216,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 - **`Profile:`** String, Required, Indexed.
 - **`First Name:`** String, Required.
 - **`Last Name:`** String, Required.
-- Additional Data Points: **`Middle Name`**, **`Company`**, **`Title`**, **`Location`**, **`Industry`**, **`Connection Degree`**, **`Profile URL`**, **`Degree`**, **`Picture`**, **`Connections`**, **`Summary`**, **`SalesProfile`**, **`RecruiterProfile`**, etc.
+- Additional Data Points: **`Middle Name`**, **`Company`**, **`CompanyID`**, **`Title`**, **`Location`**, **`Industry`**, **`Connection Degree`**, **`Profile URL`**, **`PublicProfile`**, **`Degree`**, **`Picture`** (from Thumbnail), **`Connections`**, **`Summary`**, **`SalesProfile`**, **`RecruiterProfile`**, etc.
 - **`rawData:`** Mixed type, stores the entire original webhook payload.
 
 <br>
