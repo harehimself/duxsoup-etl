@@ -1,5 +1,8 @@
 {
+  "userid": "101362440758755865362",
+  "time": "2025-06-06T10:30:00.000Z",
   "type": "visit",
+  "event": "create",
   "id": "visit_12345",
   "data": {
     "id": "visit_12345",

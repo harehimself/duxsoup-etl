@@ -203,6 +203,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 - **`First Name:`** String, Required.
 - **`Last Name:`** String (Optional).
 - Additional Data Points: **`SalesProfile`**, **`RecruiterProfile`**, **`Picture`**, **`Middle Name`**, **`Connections`**, **`Summary`**, **`Title`**, **`From`**, **`Company`**, **`CompanyProfile`, **`CompanyWebsite`, **`PersonalWebsite`, `Email`, **`Phone`**, **`IM`**, **`Twitter`**, **`Location`**, **`Industry`**, etc.
+- Metadata Fields: **`userid`** (DuxSoup user ID), **`time`** (event timestamp), **`type`** (event type), **`event`** (create/update), **`messagecontext`** (context ID)
 - **`rawData:`** Mixed type, stores the entire original webhook payload.
 
 

@@ -64,6 +64,13 @@ const visitSchema = new mongoose.Schema(
     extended: mongoose.Schema.Types.Mixed, // For nested complex data like positions, skills, schools
     "My Notes": mongoose.Schema.Types.Mixed, // Changed to Mixed to accommodate both String and Array types
 
+    // Metadata fields from top-level webhook payload
+    userid: String, // DuxSoup user ID who performed the visit
+    time: Date, // Event creation timestamp
+    type: String, // Event type (e.g., "visit")
+    event: String, // Event stage (e.g., "create" or "update")
+    messagecontext: String, // Message context identifier
+
     // rawData should capture the entire original webhook payload
     rawData: {
       type: mongoose.Schema.Types.Mixed,

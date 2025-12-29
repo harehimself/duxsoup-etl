@@ -68,6 +68,12 @@ const handleVisit = async (req, res) => {
       "My Tags": profileData["My Tags"] || [],
       extended: profileData.extended,
       "My Notes": profileData["My Notes"] || "",
+      // Metadata fields from top-level payload
+      userid: payload.userid || "",
+      time: payload.time ? new Date(payload.time) : null,
+      type: payload.type || "",
+      event: payload.event || "",
+      messagecontext: payload.messagecontext || "",
       rawData: payload,
     };
 
