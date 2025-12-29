@@ -40,12 +40,19 @@ const scanSchema = new mongoose.Schema({
     required: true
   },
   // Fields that are present but not explicitly required in your schema (optional)
+  'Middle Name': String,
   Company: String,
   Title: String,
   Location: String,
   Industry: String,
-  ConnectionDegree: String,
-  ProfileUrl: String,
+  'Connection Degree': String,
+  'Profile URL': String,
+  Degree: String,
+  Picture: String,
+  Connections: String,
+  Summary: String,
+  SalesProfile: String,
+  RecruiterProfile: String,
 
   // rawData should capture the entire original webhook payload
   rawData: {

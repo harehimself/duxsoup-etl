@@ -128,13 +128,20 @@ Main webhook endpoint for DuxSoup data processing. It expects a JSON payload wit
     "ScanTime": "2025-06-06T14:15:00Z",
     "Profile": "https://www.linkedin.com/in/janesmith/",
     "First Name": "Jane",
+    "Middle Name": "",
     "Last Name": "Smith",
     "Title": "Marketing Director at BigCorp",
     "Location": "Chicago, IL",
     "Company": "BigCorp",
     "Industry": "Marketing",
     "Connection Degree": "2nd",
-    "Profile URL": "https://www.linkedin.com/in/janesmith/"
+    "Profile URL": "https://www.linkedin.com/in/janesmith/",
+    "Degree": "2nd",
+    "Picture": "https://media.licdn.com/dms/image/...",
+    "Connections": "500+",
+    "Summary": "Marketing professional with 10+ years experience",
+    "SalesProfile": "",
+    "RecruiterProfile": ""
   }
 }
 ```
@@ -207,7 +214,7 @@ The application uses Mongoose to define schemas for Visit and Scan data, ensurin
 - **`Profile:`** String, Required, Indexed.
 - **`First Name:`** String, Required.
 - **`Last Name:`** String, Required.
-- Additional Data Points: **`Company`**, **`Title`**, **`Location`**, **`Industry`**, **`ConnectionDegree`**, **`ProfileUrl`**, etc.
+- Additional Data Points: **`Middle Name`**, **`Company`**, **`Title`**, **`Location`**, **`Industry`**, **`Connection Degree`**, **`Profile URL`**, **`Degree`**, **`Picture`**, **`Connections`**, **`Summary`**, **`SalesProfile`**, **`RecruiterProfile`**, etc.
 - **`rawData:`** Mixed type, stores the entire original webhook payload.
 
 <br>

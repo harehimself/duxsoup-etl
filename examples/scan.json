@@ -6,12 +6,19 @@
     "ScanTime": "2025-06-06T14:15:00Z",
     "Profile": "https://www.linkedin.com/in/janesmith/",
     "First Name": "Jane",
+    "Middle Name": "",
     "Last Name": "Smith",
     "Title": "Marketing Director at BigCorp",
     "Location": "Chicago, IL",
     "Company": "BigCorp",
     "Industry": "Marketing",
     "Connection Degree": "2nd",
-    "Profile URL": "https://www.linkedin.com/in/janesmith/"
+    "Profile URL": "https://www.linkedin.com/in/janesmith/",
+    "Degree": "2nd",
+    "Picture": "https://media.licdn.com/dms/image/...",
+    "Connections": "500+",
+    "Summary": "Marketing professional with 10+ years experience",
+    "SalesProfile": "",
+    "RecruiterProfile": ""
   }
 }
