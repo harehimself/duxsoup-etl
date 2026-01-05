@@ -8,6 +8,10 @@ const {
   handleDatabaseError
 } = require("../utils/validation");
 const { getConfig } = require("../utils/env");
+const { computeEventKey } = require("../utils/eventKey");
+const { upsertFromObservation } = require("./personController");
+const DeadLetter = require("../models/deadLetter");
+const { resolvePersonIdentity } = require("../utils/identityResolver");
 
 const handleScan = async (req, res) => {
   try {
@@ -40,6 +44,9 @@ const handleScan = async (req, res) => {
       );
     }
 
+    // Compute idempotency key (Guardrail: prevents duplicate observations)
+    const eventKey = computeEventKey(payload);
+
     const scanDataToSave = {
       id: profileData.id,
       ScanTime: new Date(profileData.ScanTime),
@@ -62,10 +69,14 @@ const handleScan = async (req, res) => {
       SalesProfile: profileData.SalesProfile || "",
       RecruiterProfile: profileData.RecruiterProfile || "",
       rawData: payload,
+      event_key: eventKey, // Idempotency key
     };
 
+    // PHASE 1: Write to scans collection (legacy, system-of-record)
+    // This MUST succeed for webhook to return success
+    let scan;
     try {
-      const scan = await Scan.findOneAndUpdate(
+      scan = await Scan.findOneAndUpdate(
         { id: scanDataToSave.id },
         scanDataToSave,
         {
@@ -80,14 +91,65 @@ const handleScan = async (req, res) => {
         id: scan._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        isNew: !scan.__v || scan.__v === 0
+        isNew: !scan.__v || scan.__v === 0,
+        event_key: eventKey,
       });
-
-      res.status(200).json(createSuccessResponse('scan', scan, profileData));
     } catch (dbError) {
+      // Legacy write failed - return error (webhook will retry)
       const errorResponse = handleDatabaseError(dbError, 'scan', profileData.id, config.isProduction);
       return res.status(500).json(errorResponse);
     }
+
+    // PHASE 2: Dual-write to people collection (new system)
+    // Failures here are logged but don't fail the webhook
+    let peopleUpsertSuccess = false;
+
+    try {
+      await upsertFromObservation(scan, 'scan');
+      peopleUpsertSuccess = true;
+
+      logger.info("Person upserted from scan", {
+        scan_id: scan._id,
+        event_key: eventKey,
+      });
+    } catch (peopleError) {
+      // Log failure but DON'T fail the webhook
+      logger.error("Failed to upsert person from scan", {
+        scan_id: scan._id,
+        event_key: eventKey,
+        error: peopleError.message,
+        stack: peopleError.stack,
+      });
+
+      // Write to dead_letters for replay
+      try {
+        const identityHints = resolvePersonIdentity(payload);
+        await DeadLetter.createFromFailure(
+          scan._id,
+          'scan',
+          peopleError,
+          identityHints,
+          payload
+        );
+
+        logger.info("Logged failed person upsert to dead_letters", {
+          scan_id: scan._id,
+          event_key: eventKey,
+        });
+      } catch (deadLetterError) {
+        // If dead_letter fails, just log - don't block webhook
+        logger.error("Failed to log to dead_letters", {
+          scan_id: scan._id,
+          error: deadLetterError.message,
+        });
+      }
+    }
+
+    // Always return success if legacy write succeeded
+    const response = createSuccessResponse('scan', scan, profileData);
+    response.people_upsert = peopleUpsertSuccess;
+
+    res.status(200).json(response);
   } catch (error) {
     logger.error("Error processing scan data:", {
       error: error.message,

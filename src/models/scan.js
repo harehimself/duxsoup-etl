@@ -60,7 +60,16 @@ const scanSchema = new mongoose.Schema({
   rawData: {
     type: mongoose.Schema.Types.Mixed,
     required: false
-  }
+  },
+
+  // Idempotency key to prevent duplicate observations
+  // Computed from: sha1(userid + type + time + id)
+  event_key: {
+    type: String,
+    unique: true,
+    sparse: true, // Allow null for backwards compatibility
+    index: true,
+  },
 }, {
   timestamps: true
 });

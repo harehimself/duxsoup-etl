@@ -1,0 +1,375 @@
+const Person = require('../models/person');
+const logger = require('../utils/logger');
+
+/**
+ * Identity Resolver Service
+ *
+ * DB-backed alias matching and person deduplication.
+ * Prevents duplicate person records when URLs or names change.
+ *
+ * Core responsibilities:
+ * 1. Find existing person by any alias
+ * 2. Resolve or create canonical person
+ * 3. Merge people when aliases conflict
+ * 4. Maintain alias integrity
+ */
+
+class IdentityResolverService {
+  /**
+   * Find people matching any of the provided aliases
+   *
+   * @param {Array} aliases - Array of { type, value } alias objects
+   * @returns {Promise<Array>} Array of matching Person documents
+   */
+  async findByAnyAlias(aliases) {
+    if (!aliases || aliases.length === 0) {
+      return [];
+    }
+
+    // Extract alias values for query
+    const aliasValues = aliases.map(a => a.value).filter(Boolean);
+
+    if (aliasValues.length === 0) {
+      return [];
+    }
+
+    try {
+      // Find people where any alias matches
+      const people = await Person.find({
+        'aliases.value': { $in: aliasValues },
+      });
+
+      return people;
+    } catch (error) {
+      logger.error('Failed to find people by aliases', {
+        error: error.message,
+        aliasValues,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Merge aliases into a person document
+   * Uses $addToSet to avoid duplicates
+   *
+   * @param {Object} person - Person document
+   * @param {Array} newAliases - Array of { type, value } alias objects
+   * @returns {Promise<Object>} Updated person document
+   */
+  async mergeAliases(person, newAliases) {
+    if (!newAliases || newAliases.length === 0) {
+      return person;
+    }
+
+    try {
+      // Filter out aliases that already exist
+      const existingValues = new Set(person.aliases.map(a => a.value));
+      const uniqueAliases = newAliases.filter(a => !existingValues.has(a.value));
+
+      if (uniqueAliases.length === 0) {
+        return person;
+      }
+
+      // Use $addToSet to add only unique aliases
+      const updated = await Person.findByIdAndUpdate(
+        person._id,
+        {
+          $addToSet: {
+            aliases: { $each: uniqueAliases },
+          },
+        },
+        { new: true }
+      );
+
+      logger.info('Merged aliases into person', {
+        person_id: person._id,
+        newAliasCount: uniqueAliases.length,
+      });
+
+      return updated;
+    } catch (error) {
+      logger.error('Failed to merge aliases', {
+        person_id: person._id,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Determine the winner in a merge scenario
+   * Deterministic rules (in priority order):
+   * 1. Prefer doc with Sales Nav ID format (_id starts with ACwAAA)
+   * 2. Prefer doc with most observations
+   * 3. Prefer most recently updated
+   * 4. Prefer lowest _id (lexical tie-breaker)
+   *
+   * @param {Array} people - Array of Person documents to compare
+   * @returns {Object} Winner person document
+   */
+  determineWinner(people) {
+    if (people.length === 0) {
+      throw new Error('Cannot determine winner from empty array');
+    }
+
+    if (people.length === 1) {
+      return people[0];
+    }
+
+    return people.reduce((winner, candidate) => {
+      // Rule 1: Prefer Sales Nav ID format
+      const winnerHasSalesNav = winner._id.startsWith('ACwAAA');
+      const candidateHasSalesNav = candidate._id.startsWith('ACwAAA');
+
+      if (candidateHasSalesNav && !winnerHasSalesNav) {
+        return candidate;
+      }
+      if (winnerHasSalesNav && !candidateHasSalesNav) {
+        return winner;
+      }
+
+      // Rule 2: Prefer most observations
+      const winnerObsCount = (winner.observations.visits?.length || 0) + (winner.observations.scans?.length || 0);
+      const candidateObsCount = (candidate.observations.visits?.length || 0) + (candidate.observations.scans?.length || 0);
+
+      if (candidateObsCount > winnerObsCount) {
+        return candidate;
+      }
+      if (winnerObsCount > candidateObsCount) {
+        return winner;
+      }
+
+      // Rule 3: Prefer most recently updated
+      const winnerUpdated = new Date(winner.updatedAt).getTime();
+      const candidateUpdated = new Date(candidate.updatedAt).getTime();
+
+      if (candidateUpdated > winnerUpdated) {
+        return candidate;
+      }
+      if (winnerUpdated > candidateUpdated) {
+        return winner;
+      }
+
+      // Rule 4: Lexical tie-breaker (lowest _id)
+      if (candidate._id < winner._id) {
+        return candidate;
+      }
+
+      return winner;
+    });
+  }
+
+  /**
+   * Merge multiple people into a single canonical person
+   * Combines aliases, observations, roles, education, skills
+   * Deletes loser documents
+   * Creates merge audit record
+   *
+   * @param {Object} winner - Person document to keep
+   * @param {Array} losers - Person documents to merge and delete
+   * @param {Object} mergeReason - { reason, sourceObservationId }
+   * @returns {Promise<Object>} Updated winner person document
+   */
+  async mergePeople(winner, losers, mergeReason = {}) {
+    if (!losers || losers.length === 0) {
+      return winner;
+    }
+
+    try {
+      logger.info('Merging people', {
+        winner_id: winner._id,
+        loser_ids: losers.map(l => l._id),
+        reason: mergeReason.reason || 'alias_conflict',
+      });
+
+      // Collect all unique aliases
+      const allAliases = [...winner.aliases];
+      const aliasValues = new Set(allAliases.map(a => a.value));
+
+      losers.forEach(loser => {
+        loser.aliases.forEach(alias => {
+          if (!aliasValues.has(alias.value)) {
+            allAliases.push(alias);
+            aliasValues.add(alias.value);
+          }
+        });
+      });
+
+      // Collect all observation references
+      const allVisits = new Set([...(winner.observations.visits || [])]);
+      const allScans = new Set([...(winner.observations.scans || [])]);
+
+      losers.forEach(loser => {
+        (loser.observations.visits || []).forEach(v => allVisits.add(v.toString()));
+        (loser.observations.scans || []).forEach(s => allScans.add(s.toString()));
+      });
+
+      // Merge roles (deduplicate by title + company + dates)
+      const roleKeys = new Set();
+      const allRoles = [];
+
+      const addRole = (role) => {
+        const key = `${role.title}|${role.companyId}|${role.startDate}`;
+        if (!roleKeys.has(key)) {
+          roleKeys.add(key);
+          allRoles.push(role);
+        }
+      };
+
+      (winner.snapshot.roles || []).forEach(addRole);
+      losers.forEach(loser => {
+        (loser.snapshot.roles || []).forEach(addRole);
+      });
+
+      // Merge education (deduplicate by school + degree)
+      const eduKeys = new Set();
+      const allEducation = [];
+
+      const addEducation = (edu) => {
+        const key = `${edu.school}|${edu.degree}|${edu.field}`;
+        if (!eduKeys.has(key)) {
+          eduKeys.add(key);
+          allEducation.push(edu);
+        }
+      };
+
+      (winner.snapshot.education || []).forEach(addEducation);
+      losers.forEach(loser => {
+        (loser.snapshot.education || []).forEach(addEducation);
+      });
+
+      // Merge skills (deduplicate)
+      const allSkills = new Set([...(winner.snapshot.skills || [])]);
+      losers.forEach(loser => {
+        (loser.snapshot.skills || []).forEach(skill => allSkills.add(skill));
+      });
+
+      // Update winner with merged data
+      winner.aliases = allAliases;
+      winner.observations.visits = Array.from(allVisits);
+      winner.observations.scans = Array.from(allScans);
+      winner.snapshot.roles = allRoles;
+      winner.snapshot.education = allEducation;
+      winner.snapshot.skills = Array.from(allSkills);
+
+      await winner.save();
+
+      // Create merge audit record
+      const Merge = require('../models/merge');
+      await Merge.create({
+        winner_id: winner._id,
+        loser_ids: losers.map(l => l._id),
+        reason: mergeReason.reason || 'alias_conflict',
+        sourceObservationId: mergeReason.sourceObservationId,
+        timestamp: new Date(),
+      });
+
+      // Delete loser documents
+      const loserIds = losers.map(l => l._id);
+      await Person.deleteMany({ _id: { $in: loserIds } });
+
+      logger.info('Successfully merged people', {
+        winner_id: winner._id,
+        merged_count: losers.length,
+      });
+
+      return winner;
+    } catch (error) {
+      logger.error('Failed to merge people', {
+        winner_id: winner._id,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Resolve or create canonical person from identity
+   * Handles deduplication and merge scenarios
+   *
+   * @param {Object} identity - { person_id, aliases, source } from identityResolver
+   * @param {Object} mergeReason - Optional merge context
+   * @returns {Promise<Object>} Canonical person document
+   */
+  async resolveOrCreate(identity, mergeReason = {}) {
+    if (!identity || !identity.person_id) {
+      throw new Error('Identity must include person_id');
+    }
+
+    try {
+      // Step 1: Check if person exists by exact _id (fastest path)
+      let person = await Person.findById(identity.person_id);
+
+      if (person) {
+        // Found exact match - merge any new aliases
+        if (identity.aliases && identity.aliases.length > 0) {
+          person = await this.mergeAliases(person, identity.aliases);
+        }
+        return person;
+      }
+
+      // Step 2: Search by aliases to find potential matches
+      const matches = await this.findByAnyAlias(identity.aliases || []);
+
+      if (matches.length === 0) {
+        // No matches - create new person
+        logger.info('Creating new person', {
+          person_id: identity.person_id,
+          source: identity.source,
+        });
+
+        person = await Person.create({
+          _id: identity.person_id,
+          person_id: identity.person_id,
+          aliases: identity.aliases || [],
+          snapshot: {},
+          observations: { visits: [], scans: [] },
+        });
+
+        return person;
+      }
+
+      if (matches.length === 1) {
+        // Single match - merge aliases and return
+        logger.info('Found existing person by alias', {
+          person_id: matches[0]._id,
+          matched_alias: identity.aliases?.[0]?.value,
+        });
+
+        person = await this.mergeAliases(matches[0], identity.aliases || []);
+        return person;
+      }
+
+      // Step 3: Multiple matches - merge scenario
+      logger.warn('Multiple people match aliases - triggering merge', {
+        person_id: identity.person_id,
+        match_count: matches.length,
+        matched_ids: matches.map(m => m._id),
+      });
+
+      const winner = this.determineWinner(matches);
+      const losers = matches.filter(m => m._id !== winner._id);
+
+      person = await this.mergePeople(winner, losers, {
+        reason: mergeReason.reason || 'alias_conflict_detected',
+        sourceObservationId: mergeReason.sourceObservationId,
+      });
+
+      // Merge new aliases into winner
+      if (identity.aliases && identity.aliases.length > 0) {
+        person = await this.mergeAliases(person, identity.aliases);
+      }
+
+      return person;
+    } catch (error) {
+      logger.error('Failed to resolve or create person', {
+        person_id: identity.person_id,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+}
+
+module.exports = new IdentityResolverService();

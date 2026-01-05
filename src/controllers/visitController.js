@@ -8,6 +8,10 @@ const {
   handleDatabaseError
 } = require("../utils/validation");
 const { getConfig } = require("../utils/env");
+const { computeEventKey } = require("../utils/eventKey");
+const { upsertFromObservation } = require("./personController");
+const DeadLetter = require("../models/deadLetter");
+const { resolvePersonIdentity } = require("../utils/identityResolver");
 
 const handleVisit = async (req, res) => {
   try {
@@ -39,6 +43,9 @@ const handleVisit = async (req, res) => {
         })
       );
     }
+
+    // Compute idempotency key (Guardrail: prevents duplicate observations)
+    const eventKey = computeEventKey(payload);
 
     const visitDataToSave = {
       id: profileData.id,
@@ -75,10 +82,14 @@ const handleVisit = async (req, res) => {
       event: payload.event || "",
       messagecontext: payload.messagecontext || "",
       rawData: payload,
+      event_key: eventKey, // Idempotency key
     };
 
+    // PHASE 1: Write to visits collection (legacy, system-of-record)
+    // This MUST succeed for webhook to return success
+    let visit;
     try {
-      const visit = await Visit.findOneAndUpdate(
+      visit = await Visit.findOneAndUpdate(
         { id: visitDataToSave.id },
         visitDataToSave,
         {
@@ -93,14 +104,65 @@ const handleVisit = async (req, res) => {
         id: visit._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        isNew: !visit.__v || visit.__v === 0
+        isNew: !visit.__v || visit.__v === 0,
+        event_key: eventKey,
       });
-
-      res.status(200).json(createSuccessResponse('visit', visit, profileData));
     } catch (dbError) {
+      // Legacy write failed - return error (webhook will retry)
       const errorResponse = handleDatabaseError(dbError, 'visit', profileData.id, config.isProduction);
       return res.status(500).json(errorResponse);
     }
+
+    // PHASE 2: Dual-write to people collection (new system)
+    // Failures here are logged but don't fail the webhook
+    let peopleUpsertSuccess = false;
+
+    try {
+      await upsertFromObservation(visit, 'visit');
+      peopleUpsertSuccess = true;
+
+      logger.info("Person upserted from visit", {
+        visit_id: visit._id,
+        event_key: eventKey,
+      });
+    } catch (peopleError) {
+      // Log failure but DON'T fail the webhook
+      logger.error("Failed to upsert person from visit", {
+        visit_id: visit._id,
+        event_key: eventKey,
+        error: peopleError.message,
+        stack: peopleError.stack,
+      });
+
+      // Write to dead_letters for replay
+      try {
+        const identityHints = resolvePersonIdentity(payload);
+        await DeadLetter.createFromFailure(
+          visit._id,
+          'visit',
+          peopleError,
+          identityHints,
+          payload
+        );
+
+        logger.info("Logged failed person upsert to dead_letters", {
+          visit_id: visit._id,
+          event_key: eventKey,
+        });
+      } catch (deadLetterError) {
+        // If dead_letter fails, just log - don't block webhook
+        logger.error("Failed to log to dead_letters", {
+          visit_id: visit._id,
+          error: deadLetterError.message,
+        });
+      }
+    }
+
+    // Always return success if legacy write succeeded
+    const response = createSuccessResponse('visit', visit, profileData);
+    response.people_upsert = peopleUpsertSuccess;
+
+    res.status(200).json(response);
   } catch (error) {
     logger.error("Error processing visit data:", {
       error: error.message,

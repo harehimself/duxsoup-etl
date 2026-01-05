@@ -76,6 +76,15 @@ const visitSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       required: false, // It's good to store raw data, but maybe not *always* required if you process other fields
     },
+
+    // Idempotency key to prevent duplicate observations
+    // Computed from: sha1(userid + type + time + id)
+    event_key: {
+      type: String,
+      unique: true,
+      sparse: true, // Allow null for backwards compatibility
+      index: true,
+    },
   },
   {
     timestamps: true, // Keep this for createdAt and updatedAt
