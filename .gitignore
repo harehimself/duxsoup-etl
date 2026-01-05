@@ -107,3 +107,8 @@ Thumbs.db
 
 # Backup files
 backup/
+
+# Claude Code local files (personal overrides, not shared with team)
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/CLAUDE.local.md
