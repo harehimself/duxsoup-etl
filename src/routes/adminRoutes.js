@@ -282,8 +282,14 @@ router.post('/run-linking', async (req, res) => {
         logger.error('Failed to link person', {
           person_id: person._id,
           error: error.message,
+          stack: error.stack,
         });
         stats.failed++;
+        results.push({
+          from: person._id,
+          error: error.message,
+          failed: true,
+        });
       }
     }
 
@@ -293,7 +299,7 @@ router.post('/run-linking', async (req, res) => {
       success: true,
       message: 'Linking job complete',
       stats,
-      results: results.slice(0, 10), // Show first 10 merges
+      results: results.slice(0, 10), // Show first 10 merges (or errors)
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
