@@ -22,6 +22,30 @@ router.get('/test', (req, res) => {
   res.json({ message: 'API routes working' });
 });
 
+// Version endpoint to verify deployed code
+router.get('/version', (req, res) => {
+  const { exec } = require('child_process');
+  exec('git rev-parse --short HEAD', (error, stdout, stderr) => {
+    if (error) {
+      return res.json({
+        version: 'unknown',
+        error: error.message,
+        regex_test: {
+          ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACwAAA-test'),
+          ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACoAAA-test')
+        }
+      });
+    }
+    res.json({
+      commit: stdout.trim(),
+      regex_test: {
+        ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACwAAA-test'),
+        ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACoAAA-test')
+      }
+    });
+  });
+});
+
 // Health endpoints for ops monitoring
 router.get('/health/ingestion', getIngestionHealth);
 router.get('/health/parity', getParityHealth);
