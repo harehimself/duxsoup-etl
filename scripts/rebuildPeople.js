@@ -97,8 +97,12 @@ async function rebuildPeople(args) {
             console.log(`  [DRY RUN] Would upsert from visit ${visit._id}`);
             stats.skipped++;
           } else {
-            await upsertFromObservation(visit, 'visit');
-            stats.people_upserted++;
+            const result = await upsertFromObservation(visit, 'visit');
+            if (result) {
+              stats.people_upserted++;
+            } else {
+              stats.errors++;
+            }
           }
           stats.visits_processed++;
 
@@ -132,8 +136,12 @@ async function rebuildPeople(args) {
             console.log(`  [DRY RUN] Would upsert from scan ${scan._id}`);
             stats.skipped++;
           } else {
-            await upsertFromObservation(scan, 'scan');
-            stats.people_upserted++;
+            const result = await upsertFromObservation(scan, 'scan');
+            if (result) {
+              stats.people_upserted++;
+            } else {
+              stats.errors++;
+            }
           }
           stats.scans_processed++;
 
