@@ -15,11 +15,11 @@ const logger = require('./logger');
 
 /**
  * Extract Sales Navigator person ID from URL or field
- * Format: ACwAAAxxxxxxx (base64-like ID)
+ * Format: ACwAAAxxxxxxx or ACoAAAxxxxxxx (base64-like ID)
  *
- * Examples:
- * - https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7
- * - https://www.linkedin.com/sales/people/ACwAAABCDEF
+ * LinkedIn uses two formats:
+ * - ACwAAA (common in scans): https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ
+ * - ACoAAA (common in visits): https://www.linkedin.com/sales/people/ACoAABJdcQ8BIhAujd1YYtK2saU-EJcfP4SRYuQ
  *
  * @param {string} url - URL or field value
  * @returns {string|null} Sales Navigator person ID or null
@@ -27,8 +27,8 @@ const logger = require('./logger');
 function extractSalesNavId(url) {
   if (!url || typeof url !== 'string') return null;
 
-  // Pattern: ACwAAA followed by base64-like characters
-  const salesNavPattern = /(ACwAAA[A-Za-z0-9_-]+)/;
+  // Pattern: Match BOTH ACwAAA and ACoAAA followed by base64-like characters
+  const salesNavPattern = /(A[Cc][owA][AAA][A-Za-z0-9_-]+)/;
   const match = url.match(salesNavPattern);
 
   return match ? match[1] : null;
