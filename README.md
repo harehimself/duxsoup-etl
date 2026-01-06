@@ -3,7 +3,14 @@
 </p>
 
 <p align="center">
-   A production-ready LinkedIn extraction pipeline. The system performs automatic LinkedIn profile extractions in real-time. Normalizes profile data into structured MongoDB Atlas records. Differentiates between scans and visits with custom routing. Includes health checks, validation, and logging. Built for background processing and extensibility. Useful for lead enrichment and graph-based CRM models. 
+<strong>A canonical LinkedIn extraction and profile-intelligence pipeline.</strong><br><br> 
+   
+   **DuxSoup ETL** is a production-grade LinkedIn extraction, ingestion, and identity resolution pipeline - designed to safely process real-time extraction webhooks while maintaining a canonical profile model. The system ingests **scan** and **visit** events (via the DuxSoup API) as immutable observations. It resolves identities deterministically, and maintains a continuously updated **People Snapshot** optimized for analytics, CRM enrichment, and graph-based intelligence workflows. The system has been designed for background processing and extensibility. 
+
+Significant controls have been included for safety, such as idempotent ingestion, automatic deduplication, and failure recovery.
+
+   Finally, the system normalizes profile data and is stored in MongoDB Atlas records (documents). A very useful app for lead enrichment, CRM models, and overarching people intelligence.<br>
+   <br> 
 </p>
 <br>
 
@@ -26,9 +33,25 @@
 - [Table of Contents](#table-of-contents)
 - [Features](#features)
 - [Benefits](#benefits)
-- [How It Compares](#how-it-compares)
+  - [Business Value](#business-value)
+  - [Technical Advantages](#technical-advantages)
+- [Tech Stack](#tech-stack)
+  - [Core Technologies](#core-technologies)
+  - [Deployment Platforms](#deployment-platforms)
+- [API Reference](#api-reference)
+  - [POST /api/webhook](#post-apiwebhook)
+  - [GET /api/people/:id](#get-apipeopleid)
+  - [GET /api/people/by-alias/:value](#get-apipeopleby-aliasvalue)
+  - [GET /api/people/metrics](#get-apipeoplemetrics)
+  - [Health](#health)
+- [Data Model](#data-model)
+- [Architecture \& Data Flow](#architecture--data-flow)
+- [Read Modes \& Cutover Strategy](#read-modes--cutover-strategy)
+- [Project Structure](#project-structure)
+- [Operations \& Debugging](#operations--debugging)
 - [License](#license)
-<br>
+
+<br><br>
 
 ## Features
 
@@ -45,403 +68,121 @@
 * **Custom Routing**: Differentiates between scans and visits.
 * **Data Normalization**: Normalizes profile data into structured records.
 
-<br>
+<br><br>
 
-## API Endpoints
+## Benefits
 
-### `POST /api/webhook`
-Main webhook endpoint for DuxSoup data processing. It expects a JSON payload with a **`type`** field to route the data correctly.
+### Business Value
+- **Lead Enrichment**: Automatically enriches CRM data with LinkedIn insights for sales and marketing teams
+- **Graph-based CRM**: Builds comprehensive relationship graphs for advanced customer relationship management
+- **Time Efficiency**: Eliminates manual LinkedIn data collection, saving hours of manual work
+- **Data Consistency**: Ensures clean, normalized data across all records with standardized formatting
 
-**Request Body Examples:**
+### Technical Advantages
+- **Scalability**: Horizontal scaling ready with stateless architecture
+- **Reliability**: 99.9% uptime target with comprehensive error handling
+- **Low Maintenance**: Minimal operational overhead with automated health checks
+- **Easy Integration**: Simple REST API for third-party integration
+- **Comprehensive Monitoring**: Built-in health checks and logging for production environments
 
-**Visit Data:**
-```json
-{
-  "type": "visit",
-  "id": "visit_12345",
-  "data": {
-    "id": "visit_12345",
-    "VisitTime": "2025-06-06T10:30:00Z",
-    "Profile": "https://www.linkedin.com/in/johndoe/",
-    "Degree": "1",
-    "First Name": "John",
-    "Last Name": "Doe",
-    "Title": "Senior Software Engineer at TechCorp",
-    "Location": "San Francisco, CA",
-    "Connections": "500+",
-    "Summary": "Experienced software engineer with expertise in full-stack development",
-    "Industry": "Technology",
-    "Company": "TechCorp",
-    "Email": "john.doe@example.com",
-    "Phone": "555-1234",
-    "extended": {
-      "positions": [
-        {
-          "Company": "TechCorp",
-          "Location": "San Francisco, CA",
-          "Title": "Senior Software Engineer",
-          "Description": "Leading development of cloud-native applications",
-          "From": "Jan 2022",
-          "To": "Present"
-        },
-        {
-          "Company": "StartupXYZ",
-          "Location": "New York, NY",
-          "Title": "Software Engineer",
-          "Description": "Building scalable web applications",
-          "From": "Jun 2019",
-          "To": "Dec 2021"
-        }
-      ],
-      "skills": [
-        "JavaScript",
-        "Node.js",
-        "React",
-        "MongoDB",
-        "AWS"
-      ],
-      "schools": [
-        {
-          "Name": "Stanford University",
-          "Degree": "Master of Business Administration",
-          "Field": "Technology Management",
-          "From": "Sep 2017",
-          "To": "May 2019"
-        },
-        {
-          "Name": "UC Berkeley",
-          "Degree": "Bachelor of Science",
-          "Field": "Computer Science",
-          "From": "Sep 2013",
-          "To": "May 2017"
-        }
-      ]
-    }
-  }
-}
-```
+<br><br>
 
-<br>
+## Tech Stack
 
-**Scan Data:**
-```json
-{
-  "type": "scan",
-  "id": "scan_67890",
-  "data": {
-    "id": "scan_67890",
-    "ScanTime": "2025-06-06T14:15:00Z",
-    "Profile": "https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7",
-    "PublicProfile": "https://www.linkedin.com/in/janesmith/",
-    "SalesProfile": "https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7",
-    "RecruiterProfile": "https://www.linkedin.com/talent/profile/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ",
-    "Thumbnail": "https://media.licdn.com/dms/image/v2/C4D03AQF-DpuU2S50ew/profile-displayphoto-shrink_100_100/0/1516536377985",
-    "First Name": "Jane",
-    "Middle Name": "",
-    "Last Name": "Smith",
-    "Title": "Marketing Director at BigCorp",
-    "Location": "Chicago, IL",
-    "Company": "BigCorp",
-    "CompanyID": "12345678",
-    "Industry": "Marketing",
-    "Connection Degree": "2nd",
-    "Profile URL": "https://www.linkedin.com/in/janesmith/",
-    "Degree": "2nd",
-    "Connections": "500+",
-    "Summary": "Marketing professional with 10+ years experience"
-  }
-}
-```
-
-<br>
-
-**Responses:**
-
-```json
-{
-  "status": "ok",
-  "database": {
-    "isConnected": true,
-    "readyState": 1,
-    "host": "your_mongodb_host",
-    "name": "duxsoup-etl"
-  },
-  "timestamp": "2025-06-06T..."
-}
-```
-
-<br>
-
-### `GET /health`
-Health check endpoint returning server and database status.
-
-```json
-{
-  "status": "ok",
-  "database": {
-    "isConnected": true,
-    "readyState": 1,
-    "host": "your_mongodb_host",
-    "name": "duxsoup-etl"
-  },
-  "timestamp": "2025-06-06T..."
-}
-```
-
-<br>
-
-### `GET /api/test`
-Test endpoint for API verification.
-
-<br>
-
-## Data Models
-
-The application uses Mongoose to define schemas for Visit and Scan data, ensuring data integrity and structure. Both models include createdAt and updatedAt timestamps.
-
-
-### Visit Model
-
-- **`id:`** String, Required, Unique, Indexed.
-- **`VisitTime:`** Date, Required, Indexed.
-- **`Profile:`** String, Required, Indexed.
-- **`First Name:`** String, Required.
-- **`Last Name:`** String (Optional).
-- Additional Data Points: **`SalesProfile`**, **`RecruiterProfile`**, **`Picture`**, **`Middle Name`**, **`Connections`**, **`Summary`**, **`Title`**, **`From`**, **`Company`**, **`CompanyProfile`, **`CompanyWebsite`, **`PersonalWebsite`, `Email`, **`Phone`**, **`IM`**, **`Twitter`**, **`Location`**, **`Industry`**, etc.
-- Metadata Fields: **`userid`** (DuxSoup user ID), **`time`** (event timestamp), **`type`** (event type), **`event`** (create/update), **`messagecontext`** (context ID)
-- **`rawData:`** Mixed type, stores the entire original webhook payload.
-
-
-<br>
-
-
-### Scan Model
-
-- **`id:`** String, Required, Unique, Indexed.
-- **`ScanTime:`** Date, Required, Indexed.
-- **`Profile:`** String, Required, Indexed.
-- **`First Name:`** String, Required.
-- **`Last Name:`** String, Required.
-- Additional Data Points: **`Middle Name`**, **`Company`**, **`CompanyID`**, **`Title`**, **`Location`**, **`Industry`**, **`Connection Degree`**, **`Profile URL`**, **`PublicProfile`**, **`Degree`**, **`Picture`** (from Thumbnail), **`Connections`**, **`Summary`**, **`SalesProfile`**, **`RecruiterProfile`**, etc.
-- **`rawData:`** Mixed type, stores the entire original webhook payload.
-
-<br>
-
-## Data Structure
-
-DuxSoup sends webhook data in a nested structure with profile information contained in a **`data`** property. The profile data includes an **`extended`** object that contains pre-normalized arrays for positions, skills, and schools.
-
-**Webhook Payload Structure:**
-```json
-{
-  "type": "visit",
-  "id": "unique_id",
-  "data": {
-    "id": "unique_id",
-    "First Name": "John",
-    "Profile": "https://...",
-    "extended": {
-      "positions": [...],
-      "skills": [...],
-      "schools": [...]
-    }
-  }
-}
-```
-
-The system stores this data directly in MongoDB, preserving both the individual fields and the structured `extended` object for easy querying and analysis.
-
-<br>
-
-## 🛠️ Tech Stack
-
-- **`Runtime:`** Node.js 18+
-- **`Framework:`** Express.js
-- **`Database:`** MongoDB Atlas
-- **`ODM:`** Mongoose
-- **`Logging:`** Winston
-- **`Environment Variables:`** Dotenv
-- **`CORS:`** Cors
-- **`Deployment:`** Render
-- **`Development:`** Nodemon
-
-<br>
-
-## Local Development
-
-
-### Prerequisites
-
+### Core Technologies
 - Node.js 18+
-- MongoDB Atlas account
-- Git
+- Express.js 4.x
+- MongoDB Atlas
+- Mongoose 7.x
+- Winston 3.x
+- Dotenv 16.x
+- cors 2.x
+- Jest (unit + integration)
+- Nodemon 3.x
 
-<br>
+### Deployment Platforms
+- Render (primary)
+- AWS / DigitalOcean / Heroku / Fly.io
+- PM2 recommended
+- Docker-compatible
 
+<br><br>
 
-### Step-by-Step Setup
+## API Reference
 
-**Clone Project and Install Dependencies:**
+### POST /api/webhook
+Primary ingestion endpoint.
+
+Example Response:
+```json
+{
+  "stored": true,
+  "people_upsert": true,
+  "duplicate": false
+}
+```
+
+### GET /api/people/:id
+Fetch canonical person by ID.
+
+### GET /api/people/by-alias/:value
+Resolve person by any alias.
+
+### GET /api/people/metrics
+Read-path metrics.
+
+### Health
+- `/health`
+- `/api/health/ingestion`
+- `/api/health/parity`
+- `/api/health/coverage-breakdown`
+- `/api/health/metrics`
+
+<br><br>
+
+## Data Model
+
+- **Observations**: `visits`, `scans`, `Immutable`, `Idempotent`.
+- **People**: One document per person; alias-based identity; role timeline; provenance + metrics.
+- **Companies**: Canonical LinkedIn company registry.
+- **Dead Letters**: Failed upserts; replayable.
+- **Merges**: Identity merge audit trail.
+
+<br><br>
+
+## Architecture & Data Flow
+
+DuxSoup Webhook ➡️ Validation ➡️ Observations ➡️ Identity Resolution ➡️ People Snapshot
+
+<br><br>
+
+## Read Modes & Cutover Strategy
+
+READ_SOURCE:
+- legacy
+- hybrid
+- people
+
+Instant rollback via env change.
+
+<br><br>
+
+## Project Structure
+
+`src/`, `scripts/`, `tests/`, `render.yaml`, `.env.example`
+
+<br><br>
+
+## Operations & Debugging
 
 ```bash
-git clone https://github.com/harehimself/duxsoup-etl.git
-cd duxsoup-etl
-npm install
+node scripts/replayDeadLetters.js
+node scripts/rebuildPeople.js
+node scripts/linkIdentities.js
 ```
 
-<br>
+<br><br>
 
-**Set Up MongoDB Atlas:**
+## License
 
-1. Go to MongoDB Atlas and create a free cluster.
-2. Create a database user and whitelist IP addresses.
-3. Obtain your MongoDB connection string.
-
-<br>
-
-**Configure Environment:**
-
-```bash
-cp .env.example .env
-```
-<br>
-
-Edit the **`.env`** file:
-
-```env
-PORT=3000
-MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/duxsoup-etl
-NODE_ENV=development
-```
-
-<br>
-
-**Test Locally**
-
-```bash
-npm run dev
-```
-
-<br>
-
-**Health Check:**
-
-```bash
-curl http://localhost:3000/health
-```
-
-<br>
-
-**Test Visit Webhook:**
-
-```bash
-curl -X POST -H "Content-Type: application/json" -d @examples/visit.json http://localhost:3000/api/webhook
-```
-
-<br>
-
-**Test Scan Webhook:**
-
-```bash
-curl -X POST -H "Content-Type: application/json" -d @examples/scan.json http://localhost:3000/api/webhook
-```
-
-<br>
-
-## 📁 Project Structure
-
-```
-duxsoup-etl/
-├── src/
-│   ├── controllers/
-│   ├── models/
-│   ├── routes/
-│   ├── utils/
-│   └── index.js
-├── examples/
-├── .env.example
-├── package.json
-├── render.yaml
-└── README.md
-```
-
-<br>
-
-## Deployment
-
-
-### Option 1: Render (Recommended)
-
-1. Push to GitHub.
-2. Connect Render to GitHub repo.
-3. Use **`render.yaml`** for config.
-4. Set **`MONGODB_URI`** in dashboard.
-
-
-### Option 2: Manual
-
-```bash
-npm install --production
-npm start
-```
-
-<br>
-
-## Development
-
-**Available Scripts:**
-
-- `npm start`
-- `npm run dev`
-
-**Adding New Fields:**
-
-- Update models.
-- Adjust normalization logic.
-- Update controllers.
-- Test with payloads.
-
-<br>
-
-## Debugging
-
-- Check console logs (Winston).
-- Monitor MongoDB Atlas.
-
-<br>
-
-## Troubleshooting
-
-- **MongoDB Connection:** Check URI, IP whitelist, user permissions.
-- **Validation Errors:** Confirm schema conformity.
-- **Duplicate Key Errors:** Check uniqueness of `id`.
-
-<br>
-
-## Logs
-
-- **Dev Logs:** Console.
-- **Prod Logs:** Use Winston files.
-
-<br>
-
-## Monitoring
-
-- `GET /health`
-- Check MongoDB connectivity.
-
-<br>
-
-## Data Validation
-
-- Schema + controller-level validation.
-- Unique `id` fields.
-
-<br>
-
-## Security Notes
-
-- Validate all inputs.
-- Use environment variables.
-- Enable CORS carefully.
-- Consider webhook authentication.
+MIT License © 2024 Mike Hare
