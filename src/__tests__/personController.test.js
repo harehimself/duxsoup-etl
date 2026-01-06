@@ -363,46 +363,6 @@ describe('PersonController', () => {
     });
   });
 
-  // Integration tests (require MongoDB)
-  describe('upsertFromObservation() [Integration]', () => {
-    beforeAll(async () => {
-      await connect();
-    });
-
-    afterAll(async () => {
-      await closeDatabase();
-    });
-
-    beforeEach(async () => {
-      await clearDatabase();
-    });
-
-    it('should add observation reference without duplication', async () => {
-      // This test requires MongoDB - will skip if not connected
-      if (require('mongoose').connection.readyState === 0) {
-        console.log('Skipping integration test - MongoDB not connected');
-        return;
-      }
-
-      const observationDoc = {
-        _id: 'visit123',
-        rawData: {
-          SalesProfile: 'https://www.linkedin.com/sales/lead/ACwAAABCDEF',
-          'First Name': 'John',
-          'Last Name': 'Doe',
-          Title: 'Engineer',
-          Company: 'TechCorp',
-          VisitTime: new Date('2024-01-15'),
-        },
-      };
-
-      // First upsert
-      const person1 = await upsertFromObservation(observationDoc, 'visit');
-      expect(person1.observations.visits).toHaveLength(1);
-
-      // Second upsert with same observation (should not duplicate)
-      const person2 = await upsertFromObservation(observationDoc, 'visit');
-      expect(person2.observations.visits).toHaveLength(1); // Not duplicated
-    });
-  });
+  // Note: Integration tests for upsertFromObservation() moved to separate file
+  // See personController.integration.test.js for DB-backed tests
 });

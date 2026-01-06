@@ -6,10 +6,12 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:verbose": "jest --verbose"
+    "test": "jest --config=jest.config.unit.js",
+    "test:integration": "jest --config=jest.config.integration.js",
+    "test:all": "npm test && npm run test:integration",
+    "test:watch": "jest --watch --config=jest.config.unit.js",
+    "test:coverage": "jest --coverage --config=jest.config.unit.js",
+    "test:verbose": "jest --verbose --config=jest.config.unit.js"
   },
   "keywords": [
     "linkedin",
