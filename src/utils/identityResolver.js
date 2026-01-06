@@ -135,13 +135,24 @@ function resolvePersonIdentity(webhookData) {
     }
   }
 
-  // Priority 3: Try to extract numeric ID from Profile field
+  // Priority 3: Try to extract Sales Nav ID or numeric ID from Profile field
+  // (DuxSoup sometimes puts Sales Nav URLs in Profile field instead of SalesProfile)
   if (!person_id && webhookData.Profile) {
-    const numericId = extractNumericId(webhookData.Profile);
-    if (numericId) {
-      person_id = numericId;
-      source = 'numericId';
-      aliases.push({ type: 'numericId', value: numericId });
+    // First try Sales Nav ID extraction
+    const salesNavId = extractSalesNavId(webhookData.Profile);
+    if (salesNavId) {
+      person_id = salesNavId;
+      source = 'salesNavId';
+      aliases.push({ type: 'salesNavId', value: salesNavId });
+      aliases.push({ type: 'profileUrl', value: webhookData.Profile });
+    } else {
+      // Fallback to numeric ID extraction
+      const numericId = extractNumericId(webhookData.Profile);
+      if (numericId) {
+        person_id = numericId;
+        source = 'numericId';
+        aliases.push({ type: 'numericId', value: numericId });
+      }
     }
   }
 
