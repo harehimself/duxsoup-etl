@@ -33,17 +33,17 @@ echo ""
 
 check_pass() {
   echo -e "${GREEN}✓${NC} $1"
-  ((PASS_COUNT++))
+  ((++PASS_COUNT))
 }
 
 check_warn() {
   echo -e "${YELLOW}⚠${NC} $1"
-  ((WARN_COUNT++))
+  ((++WARN_COUNT))
 }
 
 check_fail() {
   echo -e "${RED}✗${NC} $1"
-  ((FAIL_COUNT++))
+  ((++FAIL_COUNT))
 }
 
 ###############################################################################

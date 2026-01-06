@@ -5,7 +5,6 @@ const scanSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
-    unique: true,
     index: true,
     // --- ADDED CUSTOM VALIDATOR HERE ---
     validate: {
