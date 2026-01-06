@@ -13,6 +13,7 @@ const {
   getPersonByAlias,
   getReadMetrics,
 } = require('../controllers/personReadController');
+const adminRoutes = require('./adminRoutes');
 
 const router = express.Router();
 
@@ -58,5 +59,8 @@ router.post('/webhook', (req, res) => {
     });
   }
 });
+
+// Admin endpoints (one-time migrations, etc.)
+router.use('/admin', adminRoutes);
 
 module.exports = router;
