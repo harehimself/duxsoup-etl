@@ -2,6 +2,11 @@ const express = require('express');
 const logger = require('../utils/logger');
 const { handleVisit } = require('../controllers/visitController');
 const { handleScan } = require('../controllers/scanController');
+const {
+  getIngestionHealth,
+  getParityHealth,
+  getMetrics,
+} = require('../controllers/healthController');
 
 const router = express.Router();
 
@@ -9,6 +14,11 @@ const router = express.Router();
 router.get('/test', (req, res) => {
   res.json({ message: 'API routes working' });
 });
+
+// Health endpoints for ops monitoring
+router.get('/health/ingestion', getIngestionHealth);
+router.get('/health/parity', getParityHealth);
+router.get('/health/metrics', getMetrics);
 
 // Main webhook endpoint
 router.post('/webhook', (req, res) => {
