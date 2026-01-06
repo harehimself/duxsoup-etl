@@ -558,6 +558,93 @@ router.post('/rebuild-people', async (req, res) => {
 });
 
 /**
+ * Debug: Inspect sample observations to understand data structure
+ * GET /api/admin/inspect-observations
+ */
+router.get('/inspect-observations', async (req, res) => {
+  try {
+    const Scan = require('../models/scan');
+    const Visit = require('../models/visit');
+    const { resolvePersonIdentity } = require('../utils/identityResolver');
+
+    // Get a scan with Sales Nav URL
+    const scanWithSalesNav = await Scan.findOne({
+      Profile: { $regex: /sales\/lead/ },
+    })
+      .lean()
+      .limit(1);
+
+    // Get a scan without Sales Nav (for comparison)
+    const scanWithoutSalesNav = await Scan.findOne({
+      Profile: { $not: { $regex: /sales\/lead/ } },
+    })
+      .lean()
+      .limit(1);
+
+    const results = {
+      scan_with_sales_nav: null,
+      scan_without_sales_nav: null,
+    };
+
+    if (scanWithSalesNav) {
+      const identity = resolvePersonIdentity(scanWithSalesNav);
+      results.scan_with_sales_nav = {
+        _id: scanWithSalesNav._id,
+        Profile: scanWithSalesNav.Profile,
+        SalesProfile: scanWithSalesNav.SalesProfile,
+        RecruiterProfile: scanWithSalesNav.RecruiterProfile,
+        identity_resolved: {
+          person_id: identity.person_id,
+          source: identity.source,
+          aliases: identity.aliases,
+        },
+        rawData_keys: scanWithSalesNav.rawData
+          ? Object.keys(scanWithSalesNav.rawData)
+          : [],
+      };
+    }
+
+    if (scanWithoutSalesNav) {
+      const identity = resolvePersonIdentity(scanWithoutSalesNav);
+      results.scan_without_sales_nav = {
+        _id: scanWithoutSalesNav._id,
+        Profile: scanWithoutSalesNav.Profile,
+        SalesProfile: scanWithoutSalesNav.SalesProfile,
+        RecruiterProfile: scanWithoutSalesNav.RecruiterProfile,
+        identity_resolved: {
+          person_id: identity.person_id,
+          source: identity.source,
+          aliases: identity.aliases,
+        },
+        rawData_keys: scanWithoutSalesNav.rawData
+          ? Object.keys(scanWithoutSalesNav.rawData)
+          : [],
+      };
+    }
+
+    res.json({
+      success: true,
+      results,
+      analysis: {
+        sales_nav_extraction_working:
+          results.scan_with_sales_nav?.identity_resolved?.source === 'salesNavId',
+        total_scans: await Scan.countDocuments(),
+        scans_with_sales_nav_urls: await Scan.countDocuments({
+          Profile: { $regex: /sales\/lead/ },
+        }),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to inspect observations', { error: error.message });
+    res.status(500).json({
+      error: 'Failed to inspect observations',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * Health check for admin endpoints
  * GET /api/admin/health
  */
