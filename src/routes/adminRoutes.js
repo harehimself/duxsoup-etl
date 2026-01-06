@@ -165,7 +165,7 @@ router.post('/run-linking', async (req, res) => {
     }
 
     const Person = require('../models/person');
-    const IdentityResolverService = require('../services/identityResolverService');
+    const identityResolver = require('../services/identityResolverService');
 
     const stats = {
       found: 0,
@@ -219,7 +219,7 @@ router.post('/run-linking', async (req, res) => {
     }
 
     // Execute merges (not dry run)
-    const identityResolver = new IdentityResolverService();
+    // identityResolver is already an instance (singleton pattern)
     const results = [];
 
     for (const person of upgradablePeople) {
