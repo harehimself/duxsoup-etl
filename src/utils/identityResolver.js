@@ -144,7 +144,7 @@ function resolvePersonIdentity(webhookData) {
       person_id = salesNavId;
       source = 'salesNavId';
       aliases.push({ type: 'salesNavId', value: salesNavId });
-      aliases.push({ type: 'profileUrl', value: webhookData.Profile });
+      aliases.push({ type: 'salesUrl', value: webhookData.Profile });
     } else {
       // Fallback to numeric ID extraction
       const numericId = extractNumericId(webhookData.Profile);
