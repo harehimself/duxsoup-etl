@@ -288,6 +288,129 @@ router.post('/run-linking', async (req, res) => {
 });
 
 /**
+ * Run rebuild people collection from observations
+ *
+ * POST /api/admin/rebuild-people
+ * Body: { "limit": 1000, "source": "visit" | "scan" | "both", "dryRun": false }
+ */
+router.post('/rebuild-people', async (req, res) => {
+  try {
+    const { limit = 1000, source = 'both', dryRun = true } = req.body;
+
+    if (!dryRun && limit > 5000) {
+      return res.status(400).json({
+        error: 'Safety limit exceeded',
+        message: 'Maximum limit is 5000 for API execution. Use Shell for larger batches.',
+      });
+    }
+
+    const Visit = require('../models/visit');
+    const Scan = require('../models/scan');
+    const { upsertFromObservation } = require('../controllers/personController');
+
+    const stats = {
+      visits_processed: 0,
+      scans_processed: 0,
+      people_upserted: 0,
+      errors: 0,
+      skipped: 0,
+    };
+
+    const startTime = Date.now();
+
+    logger.info('Starting rebuild via API', { limit, source, dryRun });
+
+    // Process visits
+    if (source === 'both' || source === 'visit') {
+      const visits = await Visit.find({})
+        .sort({ VisitTime: 1 })
+        .limit(source === 'visit' ? limit : Math.floor(limit / 2))
+        .lean();
+
+      for (const visit of visits) {
+        try {
+          if (dryRun) {
+            stats.skipped++;
+          } else {
+            const result = await upsertFromObservation(visit, 'visit');
+            if (result) {
+              stats.people_upserted++;
+            } else {
+              stats.errors++;
+            }
+          }
+          stats.visits_processed++;
+        } catch (error) {
+          logger.error('Failed to upsert from visit', {
+            visit_id: visit._id,
+            error: error.message,
+          });
+          stats.errors++;
+        }
+      }
+    }
+
+    // Process scans
+    if (source === 'both' || source === 'scan') {
+      const scans = await Scan.find({})
+        .sort({ ScanTime: 1 })
+        .limit(source === 'scan' ? limit : Math.floor(limit / 2))
+        .lean();
+
+      for (const scan of scans) {
+        try {
+          if (dryRun) {
+            stats.skipped++;
+          } else {
+            const result = await upsertFromObservation(scan, 'scan');
+            if (result) {
+              stats.people_upserted++;
+            } else {
+              stats.errors++;
+            }
+          }
+          stats.scans_processed++;
+        } catch (error) {
+          logger.error('Failed to upsert from scan', {
+            scan_id: scan._id,
+            error: error.message,
+          });
+          stats.errors++;
+        }
+      }
+    }
+
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
+    const throughput =
+      elapsedSeconds > 0
+        ? Math.round((stats.visits_processed + stats.scans_processed) / elapsedSeconds)
+        : 0;
+
+    logger.info('Rebuild complete via API', stats);
+
+    res.json({
+      success: true,
+      message: dryRun ? 'Dry run complete' : 'Rebuild complete',
+      stats: {
+        ...stats,
+        elapsed_seconds: parseFloat(elapsedSeconds),
+        throughput_per_second: throughput,
+      },
+      next_step: dryRun
+        ? 'Set dryRun=false to execute rebuild'
+        : 'Check coverage: GET /api/health/parity',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Rebuild failed', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      error: 'Rebuild failed',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * Health check for admin endpoints
  * GET /api/admin/health
  */
@@ -299,6 +422,7 @@ router.get('/health', (req, res) => {
       'DELETE /api/admin/drop-id-index - Drop old duplicate id indexes',
       'GET /api/admin/check-upgradable - Check how many people can be upgraded',
       'POST /api/admin/run-linking - Run linking job via API (limit: 1000)',
+      'POST /api/admin/rebuild-people - Rebuild people collection (limit: 5000)',
     ],
   });
 });
