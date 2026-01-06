@@ -288,6 +288,153 @@ router.post('/run-linking', async (req, res) => {
 });
 
 /**
+ * Run rebuild people collection from observations (FULL - no limit)
+ *
+ * POST /api/admin/rebuild-people-full
+ * Body: { "source": "visit" | "scan" | "both", "dryRun": false }
+ */
+router.post('/rebuild-people-full', async (req, res) => {
+  try {
+    const { source = 'both', dryRun = true } = req.body;
+
+    const Visit = require('../models/visit');
+    const Scan = require('../models/scan');
+    const Person = require('../models/person');
+    const { upsertFromObservation } = require('../controllers/personController');
+
+    const stats = {
+      visits_processed: 0,
+      scans_processed: 0,
+      people_upserted: 0,
+      people_updated: 0,
+      errors: 0,
+      skipped: 0,
+    };
+
+    const startTime = Date.now();
+
+    logger.info('Starting FULL rebuild via API', { source, dryRun });
+
+    // Get all existing people to track which observations are already processed
+    const existingPeople = await Person.find({}).select('observations').lean();
+    const processedVisits = new Set();
+    const processedScans = new Set();
+
+    existingPeople.forEach(person => {
+      person.observations?.visits?.forEach(id => processedVisits.add(id.toString()));
+      person.observations?.scans?.forEach(id => processedScans.add(id.toString()));
+    });
+
+    logger.info('Found existing observations', {
+      processed_visits: processedVisits.size,
+      processed_scans: processedScans.size,
+    });
+
+    // Process visits
+    if (source === 'both' || source === 'visit') {
+      const allVisits = await Visit.find({}).sort({ VisitTime: 1 }).lean();
+
+      for (const visit of allVisits) {
+        const alreadyProcessed = processedVisits.has(visit._id.toString());
+
+        try {
+          if (dryRun) {
+            stats.skipped++;
+          } else {
+            const result = await upsertFromObservation(visit, 'visit');
+            if (result) {
+              if (alreadyProcessed) {
+                stats.people_updated++;
+              } else {
+                stats.people_upserted++;
+              }
+            } else {
+              stats.errors++;
+            }
+          }
+          stats.visits_processed++;
+
+          if (stats.visits_processed % 500 === 0) {
+            logger.info(`Processed ${stats.visits_processed} visits...`);
+          }
+        } catch (error) {
+          logger.error('Failed to upsert from visit', {
+            visit_id: visit._id,
+            error: error.message,
+          });
+          stats.errors++;
+        }
+      }
+    }
+
+    // Process scans
+    if (source === 'both' || source === 'scan') {
+      const allScans = await Scan.find({}).sort({ ScanTime: 1 }).lean();
+
+      for (const scan of allScans) {
+        const alreadyProcessed = processedScans.has(scan._id.toString());
+
+        try {
+          if (dryRun) {
+            stats.skipped++;
+          } else {
+            const result = await upsertFromObservation(scan, 'scan');
+            if (result) {
+              if (alreadyProcessed) {
+                stats.people_updated++;
+              } else {
+                stats.people_upserted++;
+              }
+            } else {
+              stats.errors++;
+            }
+          }
+          stats.scans_processed++;
+
+          if (stats.scans_processed % 500 === 0) {
+            logger.info(`Processed ${stats.scans_processed} scans...`);
+          }
+        } catch (error) {
+          logger.error('Failed to upsert from scan', {
+            scan_id: scan._id,
+            error: error.message,
+          });
+          stats.errors++;
+        }
+      }
+    }
+
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
+    const throughput =
+      elapsedSeconds > 0
+        ? Math.round((stats.visits_processed + stats.scans_processed) / elapsedSeconds)
+        : 0;
+
+    logger.info('FULL rebuild complete via API', stats);
+
+    res.json({
+      success: true,
+      message: dryRun ? 'Dry run complete' : 'FULL rebuild complete',
+      stats: {
+        ...stats,
+        elapsed_seconds: parseFloat(elapsedSeconds),
+        throughput_per_second: throughput,
+      },
+      next_step: dryRun
+        ? 'Set dryRun=false to execute rebuild'
+        : 'Check coverage: GET /api/health/parity',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('FULL rebuild failed', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      error: 'FULL rebuild failed',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * Run rebuild people collection from observations
  *
  * POST /api/admin/rebuild-people
@@ -423,6 +570,7 @@ router.get('/health', (req, res) => {
       'GET /api/admin/check-upgradable - Check how many people can be upgraded',
       'POST /api/admin/run-linking - Run linking job via API (limit: 1000)',
       'POST /api/admin/rebuild-people - Rebuild people collection (limit: 5000)',
+      'POST /api/admin/rebuild-people-full - FULL rebuild all observations (no limit)',
     ],
   });
 });
