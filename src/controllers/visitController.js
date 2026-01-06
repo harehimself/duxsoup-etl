@@ -88,44 +88,78 @@ const handleVisit = async (req, res) => {
     // PHASE 1: Write to visits collection (legacy, system-of-record)
     // This MUST succeed for webhook to return success
     let visit;
+    let isDuplicate = false;
+
     try {
+      // Use event_key for idempotency
       visit = await Visit.findOneAndUpdate(
-        { id: visitDataToSave.id },
-        visitDataToSave,
+        { event_key: eventKey },
+        { $setOnInsert: visitDataToSave },
         {
           new: true,
           upsert: true,
           runValidators: true,
-          setDefaultsOnInsert: true,
         }
       );
+
+      // Check if this was a duplicate (existing document returned)
+      isDuplicate = visit.id === visitDataToSave.id && visit.event_key === eventKey;
 
       logger.info("Visit data processed in MongoDB", {
         id: visit._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        isNew: !visit.__v || visit.__v === 0,
+        isDuplicate,
         event_key: eventKey,
       });
     } catch (dbError) {
-      // Legacy write failed - return error (webhook will retry)
-      const errorResponse = handleDatabaseError(dbError, 'visit', profileData.id, config.isProduction);
-      return res.status(500).json(errorResponse);
+      // E11000 duplicate key error - webhook retried, find existing visit
+      if (dbError.code === 11000 && dbError.keyPattern?.event_key) {
+        logger.info("Duplicate event_key detected, returning existing visit", {
+          event_key: eventKey,
+        });
+
+        visit = await Visit.findOne({ event_key: eventKey });
+        isDuplicate = true;
+
+        if (!visit) {
+          // Race condition - retry once
+          visit = await Visit.findOne({ event_key: eventKey });
+        }
+
+        if (!visit) {
+          // Should never happen, but log and fail
+          logger.error("E11000 but cannot find visit by event_key", { event_key: eventKey });
+          return res.status(500).json({ error: "Duplicate detection failed" });
+        }
+      } else {
+        // Other DB error - fail the webhook
+        const errorResponse = handleDatabaseError(dbError, 'visit', profileData.id, config.isProduction);
+        return res.status(500).json(errorResponse);
+      }
     }
 
     // PHASE 2: Dual-write to people collection (new system)
     // Failures here are logged but don't fail the webhook
+    // Skip if this is a duplicate (already processed)
     let peopleUpsertSuccess = false;
 
-    try {
-      await upsertFromObservation(visit, 'visit');
-      peopleUpsertSuccess = true;
-
-      logger.info("Person upserted from visit", {
+    if (isDuplicate) {
+      logger.info("Skipping person upsert for duplicate event", {
         visit_id: visit._id,
         event_key: eventKey,
       });
-    } catch (peopleError) {
+      peopleUpsertSuccess = true; // Already processed before
+    } else {
+      try {
+        await upsertFromObservation(visit, 'visit');
+        peopleUpsertSuccess = true;
+
+        logger.info("Person upserted from visit", {
+          visit_id: visit._id,
+          event_key: eventKey,
+        });
+      } catch (peopleError) {
       // Log failure but DON'T fail the webhook
       logger.error("Failed to upsert person from visit", {
         visit_id: visit._id,
@@ -156,11 +190,13 @@ const handleVisit = async (req, res) => {
           error: deadLetterError.message,
         });
       }
+      }
     }
 
     // Always return success if legacy write succeeded
     const response = createSuccessResponse('visit', visit, profileData);
     response.people_upsert = peopleUpsertSuccess;
+    response.duplicate = isDuplicate;
 
     res.status(200).json(response);
   } catch (error) {

@@ -75,44 +75,78 @@ const handleScan = async (req, res) => {
     // PHASE 1: Write to scans collection (legacy, system-of-record)
     // This MUST succeed for webhook to return success
     let scan;
+    let isDuplicate = false;
+
     try {
+      // Use event_key for idempotency
       scan = await Scan.findOneAndUpdate(
-        { id: scanDataToSave.id },
-        scanDataToSave,
+        { event_key: eventKey },
+        { $setOnInsert: scanDataToSave },
         {
           new: true,
           upsert: true,
           runValidators: true,
-          setDefaultsOnInsert: true,
         }
       );
+
+      // Check if this was a duplicate (existing document returned)
+      isDuplicate = scan.id === scanDataToSave.id && scan.event_key === eventKey;
 
       logger.info("Scan data processed in MongoDB", {
         id: scan._id,
         duxsoupId: profileData.id,
         profile: profileData.Profile,
-        isNew: !scan.__v || scan.__v === 0,
+        isDuplicate,
         event_key: eventKey,
       });
     } catch (dbError) {
-      // Legacy write failed - return error (webhook will retry)
-      const errorResponse = handleDatabaseError(dbError, 'scan', profileData.id, config.isProduction);
-      return res.status(500).json(errorResponse);
+      // E11000 duplicate key error - webhook retried, find existing scan
+      if (dbError.code === 11000 && dbError.keyPattern?.event_key) {
+        logger.info("Duplicate event_key detected, returning existing scan", {
+          event_key: eventKey,
+        });
+
+        scan = await Scan.findOne({ event_key: eventKey });
+        isDuplicate = true;
+
+        if (!scan) {
+          // Race condition - retry once
+          scan = await Scan.findOne({ event_key: eventKey });
+        }
+
+        if (!scan) {
+          // Should never happen, but log and fail
+          logger.error("E11000 but cannot find scan by event_key", { event_key: eventKey });
+          return res.status(500).json({ error: "Duplicate detection failed" });
+        }
+      } else {
+        // Other DB error - fail the webhook
+        const errorResponse = handleDatabaseError(dbError, 'scan', profileData.id, config.isProduction);
+        return res.status(500).json(errorResponse);
+      }
     }
 
     // PHASE 2: Dual-write to people collection (new system)
     // Failures here are logged but don't fail the webhook
+    // Skip if this is a duplicate (already processed)
     let peopleUpsertSuccess = false;
 
-    try {
-      await upsertFromObservation(scan, 'scan');
-      peopleUpsertSuccess = true;
-
-      logger.info("Person upserted from scan", {
+    if (isDuplicate) {
+      logger.info("Skipping person upsert for duplicate event", {
         scan_id: scan._id,
         event_key: eventKey,
       });
-    } catch (peopleError) {
+      peopleUpsertSuccess = true; // Already processed before
+    } else {
+      try {
+        await upsertFromObservation(scan, 'scan');
+        peopleUpsertSuccess = true;
+
+        logger.info("Person upserted from scan", {
+          scan_id: scan._id,
+          event_key: eventKey,
+        });
+      } catch (peopleError) {
       // Log failure but DON'T fail the webhook
       logger.error("Failed to upsert person from scan", {
         scan_id: scan._id,
@@ -143,11 +177,13 @@ const handleScan = async (req, res) => {
           error: deadLetterError.message,
         });
       }
+      }
     }
 
     // Always return success if legacy write succeeded
     const response = createSuccessResponse('scan', scan, profileData);
     response.people_upsert = peopleUpsertSuccess;
+    response.duplicate = isDuplicate;
 
     res.status(200).json(response);
   } catch (error) {
