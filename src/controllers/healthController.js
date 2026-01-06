@@ -3,6 +3,8 @@ const Visit = require('../models/visit');
 const Scan = require('../models/scan');
 const DeadLetter = require('../models/deadLetter');
 const logger = require('../utils/logger');
+const { getConfig } = require('../utils/env');
+const personReadService = require('../services/personReadService');
 
 /**
  * Health Controller - Ops monitoring endpoints
@@ -296,9 +298,21 @@ async function getMetrics(req, res) {
       })(),
     ]);
 
+    // Get read metrics (cutover monitoring)
+    const config = getConfig();
+    const readMetrics = personReadService.getMetrics();
+
     res.json({
+      read_source: config.readSource,
       ingestion: ingestionHealth,
       parity: parityHealth,
+      reads: {
+        people_read_success_rate_24h: readMetrics.people_read_success_rate,
+        people_read_not_found_rate_24h: readMetrics.people_read_not_found_rate,
+        legacy_fallback_hit_rate_24h: readMetrics.legacy_fallback_hit_rate,
+        legacy_fallback_hits_24h: readMetrics.legacy_fallback_hits,
+        people_read_attempts: readMetrics.people_read_attempts,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

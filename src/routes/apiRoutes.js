@@ -8,6 +8,11 @@ const {
   getMetrics,
   getCoverageBreakdown,
 } = require('../controllers/healthController');
+const {
+  getPersonById,
+  getPersonByAlias,
+  getReadMetrics,
+} = require('../controllers/personReadController');
 
 const router = express.Router();
 
@@ -21,6 +26,11 @@ router.get('/health/ingestion', getIngestionHealth);
 router.get('/health/parity', getParityHealth);
 router.get('/health/metrics', getMetrics);
 router.get('/health/coverage-breakdown', getCoverageBreakdown);
+
+// Person read endpoints (hybrid cutover)
+router.get('/people/metrics', getReadMetrics);
+router.get('/people/:id', getPersonById);
+router.get('/people/by-alias/:value', getPersonByAlias);
 
 // Main webhook endpoint
 router.post('/webhook', (req, res) => {

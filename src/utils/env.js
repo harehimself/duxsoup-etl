@@ -36,12 +36,23 @@ function validateEnvironment() {
  * @returns {Object} Configuration object
  */
 function getConfig() {
+  // Validate READ_SOURCE if provided
+  const readSource = process.env.READ_SOURCE || 'hybrid';
+  const validReadSources = ['hybrid', 'people', 'legacy'];
+
+  if (!validReadSources.includes(readSource)) {
+    throw new Error(
+      `Invalid READ_SOURCE: ${readSource}. Must be one of: ${validReadSources.join(', ')}`
+    );
+  }
+
   return {
     port: parseInt(process.env.PORT, 10) || 3000,
     mongoUri: process.env.MONGODB_URI,
     nodeEnv: process.env.NODE_ENV || 'development',
     isProduction: process.env.NODE_ENV === 'production',
-    allowedOrigins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['*']
+    allowedOrigins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['*'],
+    readSource: readSource, // hybrid (default) | people | legacy
   };
 }
 
