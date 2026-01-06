@@ -233,33 +233,51 @@ router.post('/run-linking', async (req, res) => {
           continue;
         }
 
-        const identity = {
-          person_id: stableId,
-          aliases: [{ type: salesNavAlias ? 'salesNavId' : 'numericId', value: stableId }],
-          source: salesNavAlias ? 'salesNavId' : 'numericId',
-        };
+        // Check if person with stable ID already exists
+        let canonicalPerson = await Person.findById(stableId);
 
-        const canonicalPerson = await identityResolver.resolveOrCreate(identity, {
-          reason: 'linking_job_api',
-          from_url_fallback: person._id,
-        });
+        if (canonicalPerson) {
+          // Canonical person already exists - check if it's the same as URL person
+          if (canonicalPerson._id === person._id) {
+            stats.alreadyLinked++;
+            continue;
+          }
 
-        if (canonicalPerson._id === person._id) {
-          stats.alreadyLinked++;
-          continue;
+          // Merge URL person into canonical person
+          const urlPersonDoc = await Person.findById(person._id);
+          const mergedPerson = await identityResolver.mergePeople(canonicalPerson, [urlPersonDoc], {
+            reason: 'linking_job_api',
+            automated: true,
+          });
+
+          stats.merged++;
+          results.push({
+            from: person._id,
+            to: mergedPerson._id,
+          });
+        } else {
+          // Canonical person doesn't exist - create it and merge URL person into it
+          canonicalPerson = await Person.create({
+            _id: stableId,
+            person_id: stableId,
+            aliases: [{ type: salesNavAlias ? 'salesNavId' : 'numericId', value: stableId }],
+            snapshot: {},
+            observations: { visits: [], scans: [] },
+          });
+
+          // Merge URL person into new canonical person
+          const urlPersonDoc = await Person.findById(person._id);
+          const mergedPerson = await identityResolver.mergePeople(canonicalPerson, [urlPersonDoc], {
+            reason: 'linking_job_api',
+            automated: true,
+          });
+
+          stats.merged++;
+          results.push({
+            from: person._id,
+            to: mergedPerson._id,
+          });
         }
-
-        const urlPersonDoc = await Person.findById(person._id);
-        const mergedPerson = await identityResolver.mergePeople(canonicalPerson, [urlPersonDoc], {
-          reason: 'linking_job_api',
-          automated: true,
-        });
-
-        stats.merged++;
-        results.push({
-          from: person._id,
-          to: mergedPerson._id,
-        });
       } catch (error) {
         logger.error('Failed to link person', {
           person_id: person._id,
