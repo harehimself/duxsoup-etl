@@ -89,6 +89,58 @@ router.delete('/drop-id-index', async (req, res) => {
 });
 
 /**
+ * Fix invalid alias types in existing person documents
+ *
+ * POST /api/admin/fix-alias-types
+ */
+router.post('/fix-alias-types', async (req, res) => {
+  try {
+    logger.info('Admin: Fixing invalid alias types');
+
+    const Person = require('../models/person');
+
+    // Find all people with 'profileUrl' alias type
+    const peopleWithInvalidAliases = await Person.find({
+      'aliases.type': 'profileUrl'
+    });
+
+    let fixed = 0;
+
+    for (const person of peopleWithInvalidAliases) {
+      // Fix alias types: profileUrl → salesUrl (if it's a sales URL) or publicUrl
+      person.aliases = person.aliases.map(alias => {
+        if (alias.type === 'profileUrl') {
+          // Check if it's a sales URL
+          if (alias.value && (alias.value.includes('/sales/') || alias.value.startsWith('https://www.linkedin.com/sales/'))) {
+            return { ...alias.toObject(), type: 'salesUrl' };
+          } else {
+            return { ...alias.toObject(), type: 'publicUrl' };
+          }
+        }
+        return alias;
+      });
+
+      await person.save();
+      fixed++;
+    }
+
+    res.json({
+      success: true,
+      message: `Fixed ${fixed} people with invalid alias types`,
+      fixed_count: fixed,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to fix alias types', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix alias types',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * Check how many URL-fallback people are upgradable
  *
  * GET /api/admin/check-upgradable
