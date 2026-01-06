@@ -39,6 +39,11 @@
 * **Production Ready**: Designed for deployment on platforms like Render with health monitoring.
 * **Extensible**: Easy to add MongoDB storage and data normalization.
 * **MongoDB Storage**: Integrates with MongoDB using Mongoose to persist processed data.
+* **Real-time Processing**: Processes LinkedIn data in real-time.
+* **Background Jobs**: Built for background processing.
+* **Health Monitoring**: Built-in health checks and monitoring.
+* **Custom Routing**: Differentiates between scans and visits.
+* **Data Normalization**: Normalizes profile data into structured records.
 
 <br>
 
