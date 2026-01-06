@@ -246,7 +246,7 @@ router.post('/run-linking', async (req, res) => {
           // Merge URL person into canonical person
           const urlPersonDoc = await Person.findById(person._id);
           const mergedPerson = await identityResolver.mergePeople(canonicalPerson, [urlPersonDoc], {
-            reason: 'linking_job_api',
+            reason: 'duplicate_detection',
             automated: true,
           });
 
@@ -268,7 +268,7 @@ router.post('/run-linking', async (req, res) => {
           // Merge URL person into new canonical person
           const urlPersonDoc = await Person.findById(person._id);
           const mergedPerson = await identityResolver.mergePeople(canonicalPerson, [urlPersonDoc], {
-            reason: 'linking_job_api',
+            reason: 'duplicate_detection',
             automated: true,
           });
 
