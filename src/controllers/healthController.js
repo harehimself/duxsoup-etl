@@ -99,16 +99,19 @@ async function getIngestionHealth(req, res) {
  */
 async function getParityHealth(req, res) {
   try {
-    // Count distinct people in observations
-    const [visitPeopleCount, scanPeopleCount, totalPeopleCount] = await Promise.all([
-      Visit.distinct('Profile').then(profiles => profiles.length),
-      Scan.distinct('Profile').then(profiles => profiles.length),
+    // Count distinct people in observations using union strategy
+    const [visitProfiles, scanProfiles, totalPeopleCount] = await Promise.all([
+      Visit.distinct('Profile'),
+      Scan.distinct('Profile'),
       Person.countDocuments(),
     ]);
 
-    // Estimate distinct people in legacy system (union of visits + scans)
-    // This is approximate - exact count would require $setUnion aggregation
-    const estimatedLegacyPeople = visitPeopleCount + scanPeopleCount;
+    // Calculate true union of distinct people (no double-counting)
+    const allProfiles = new Set([...visitProfiles, ...scanProfiles]);
+    const estimatedLegacyPeople = allProfiles.size;
+
+    const visitPeopleCount = visitProfiles.length;
+    const scanPeopleCount = scanProfiles.length;
 
     // Coverage ratio (how many people we've successfully created)
     const coverageRatio =
@@ -163,6 +166,91 @@ async function getParityHealth(req, res) {
     res.status(500).json({
       status: 'error',
       error: 'Failed to compute parity health',
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * GET /health/coverage-breakdown
+ * Breakdown of people by identity source to identify coverage gaps
+ */
+async function getCoverageBreakdown(req, res) {
+  try {
+    const totalPeople = await Person.countDocuments();
+
+    // Count by primary identity source (what _id format they use)
+    const salesNavPeople = await Person.countDocuments({
+      _id: { $regex: /^ACwAAA/ }
+    });
+
+    const numericPeople = await Person.countDocuments({
+      _id: { $regex: /^\d{8,}$/ }
+    });
+
+    const urlFallbackPeople = totalPeople - salesNavPeople - numericPeople;
+
+    // Count "url-fallback-only" people (no stable ID aliases)
+    // These are people who have NO salesNavId or numericId aliases
+    const urlFallbackOnlyPeople = await Person.countDocuments({
+      _id: { $regex: /^linkedin\.com/ }, // URL format _id
+      $and: [
+        { 'aliases.type': { $nin: ['salesNavId', 'numericId'] } }
+      ]
+    });
+
+    // Also count people who DO have stable IDs in aliases but not as primary
+    const upgradablePeople = await Person.countDocuments({
+      _id: { $regex: /^linkedin\.com/ }, // URL format _id
+      'aliases.type': { $in: ['salesNavId', 'numericId'] }
+    });
+
+    const breakdown = {
+      total_people: totalPeople,
+      by_identity_source: {
+        sales_nav_id: salesNavPeople,
+        member_numeric_id: numericPeople,
+        public_url_fallback: urlFallbackPeople,
+      },
+      percentages: {
+        sales_nav_id: Math.round((salesNavPeople / totalPeople) * 100 * 100) / 100,
+        member_numeric_id: Math.round((numericPeople / totalPeople) * 100 * 100) / 100,
+        public_url_fallback: Math.round((urlFallbackPeople / totalPeople) * 100 * 100) / 100,
+      },
+      url_fallback_analysis: {
+        url_fallback_only: urlFallbackOnlyPeople,
+        upgradable_to_stable_id: upgradablePeople,
+        stuck_on_url: urlFallbackOnlyPeople - upgradablePeople,
+      },
+      recommendations: [],
+    };
+
+    // Generate recommendations
+    if (upgradablePeople > 0) {
+      breakdown.recommendations.push({
+        action: 'run_linking_job',
+        message: `${upgradablePeople} people have stable IDs in aliases but URL as primary. Run linking job to upgrade them.`,
+        impact: `Could reduce URL-fallback count by ${upgradablePeople}`,
+      });
+    }
+
+    if (urlFallbackOnlyPeople - upgradablePeople > 0) {
+      breakdown.recommendations.push({
+        action: 'investigate_observations',
+        message: `${urlFallbackOnlyPeople - upgradablePeople} people are stuck with only URL identity. Check their observations for missing ID fields.`,
+        impact: 'May require webhook payload fixes or manual data enrichment',
+      });
+    }
+
+    res.json(breakdown);
+  } catch (error) {
+    logger.error('Failed to get coverage breakdown', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      error: 'Failed to compute coverage breakdown',
       message: error.message,
     });
   }
@@ -230,4 +318,5 @@ module.exports = {
   getIngestionHealth,
   getParityHealth,
   getMetrics,
+  getCoverageBreakdown,
 };

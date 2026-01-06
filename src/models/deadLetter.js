@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const { stableStringify } = require('../utils/stableStringify');
 
 /**
  * DeadLetter Model - Failed person upserts for replay
@@ -93,7 +94,7 @@ deadLetterSchema.index({ observation_id: 1 }, { unique: true });
 deadLetterSchema.statics.createFromFailure = async function(observationId, sourceType, error, identityHints, payload) {
   const payloadHash = crypto
     .createHash('sha256')
-    .update(JSON.stringify(payload))
+    .update(stableStringify(payload))
     .digest('hex');
 
   try {

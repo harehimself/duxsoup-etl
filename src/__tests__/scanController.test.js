@@ -3,12 +3,20 @@ const Scan = require('../models/scan');
 const validation = require('../utils/validation');
 const logger = require('../utils/logger');
 const { getConfig } = require('../utils/env');
+const { computeEventKey } = require('../utils/eventKey');
+const { upsertFromObservation } = require('../controllers/personController');
+const DeadLetter = require('../models/deadLetter');
+const { resolvePersonIdentity } = require('../utils/identityResolver');
 
 // Mock all dependencies
 jest.mock('../models/scan');
 jest.mock('../utils/logger');
 jest.mock('../utils/validation');
 jest.mock('../utils/env');
+jest.mock('../utils/eventKey');
+jest.mock('../controllers/personController');
+jest.mock('../models/deadLetter');
+jest.mock('../utils/identityResolver');
 
 describe('scanController', () => {
   let req, res;
@@ -48,6 +56,22 @@ describe('scanController', () => {
     logger.info = jest.fn();
     logger.error = jest.fn();
     logger.warn = jest.fn();
+
+    // Mock event key computation
+    computeEventKey.mockReturnValue('mock-event-key-456');
+
+    // Mock person controller
+    upsertFromObservation.mockResolvedValue({});
+
+    // Mock dead letter
+    DeadLetter.createFromFailure = jest.fn().mockResolvedValue({});
+
+    // Mock identity resolver
+    resolvePersonIdentity.mockReturnValue({
+      person_id: 'mock-person-id',
+      aliases: [],
+      source: 'publicUrl'
+    });
   });
 
   describe('handleScan - Success Cases', () => {

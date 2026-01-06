@@ -6,6 +6,7 @@ const {
   getIngestionHealth,
   getParityHealth,
   getMetrics,
+  getCoverageBreakdown,
 } = require('../controllers/healthController');
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.get('/test', (req, res) => {
 router.get('/health/ingestion', getIngestionHealth);
 router.get('/health/parity', getParityHealth);
 router.get('/health/metrics', getMetrics);
+router.get('/health/coverage-breakdown', getCoverageBreakdown);
 
 // Main webhook endpoint
 router.post('/webhook', (req, res) => {

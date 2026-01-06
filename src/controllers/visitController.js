@@ -14,9 +14,10 @@ const DeadLetter = require("../models/deadLetter");
 const { resolvePersonIdentity } = require("../utils/identityResolver");
 
 const handleVisit = async (req, res) => {
+  const payload = req.body;
+  const config = getConfig();
+
   try {
-    const payload = req.body;
-    const config = getConfig();
 
     // Validate webhook payload structure
     const payloadValidation = validateWebhookPayload(payload, 'visit');
@@ -102,8 +103,8 @@ const handleVisit = async (req, res) => {
         }
       );
 
-      // Check if this was a duplicate (existing document returned)
-      isDuplicate = visit.id === visitDataToSave.id && visit.event_key === eventKey;
+      // First insert - not a duplicate
+      isDuplicate = false;
 
       logger.info("Visit data processed in MongoDB", {
         id: visit._id,
