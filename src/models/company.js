@@ -35,6 +35,14 @@ const companySchema = new mongoose.Schema({
     required: true,
   },
 
+  // Canonical internal ID (deterministic UUID derived from best identifier)
+  canonical_id: {
+    type: String,
+    unique: true,
+    sparse: true,
+    index: true,
+  },
+
   // Explicit company_id field (redundant but clear)
   company_id: {
     type: String,
@@ -82,6 +90,22 @@ const companySchema = new mongoose.Schema({
     },
   },
 
+  meta: {
+    last_observed_at: Date,
+    last_observation: {
+      type: {
+        type: String,
+        enum: ['visit', 'scan'],
+      },
+      id: mongoose.Schema.Types.ObjectId,
+      observed_at: Date,
+    },
+    observations_count: {
+      type: Number,
+      default: 0,
+    },
+  },
+
   // Metadata
   createdAt: {
     type: Date,
@@ -100,6 +124,9 @@ companySchema.index({ 'aliases.value': 1 });
 companySchema.index({ 'snapshot.name': 1 });
 companySchema.index({ 'snapshot.lastObservedAt': -1 });
 companySchema.index({ createdAt: -1 });
+companySchema.index({ canonical_id: 1 });
+companySchema.index({ 'meta.last_observed_at': -1 });
+companySchema.index({ 'meta.observations_count': -1 });
 
 // Pre-save hook to ensure company_id matches _id
 companySchema.pre('save', function(next) {

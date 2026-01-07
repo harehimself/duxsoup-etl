@@ -181,6 +181,8 @@ node scripts/replayDeadLetters.js
 node scripts/rebuildPeople.js
 node scripts/linkIdentities.js
 node scripts/backfillCanonicalId.js --dry-run
+node scripts/backfillCompanyCanonicalId.js --dry-run
+node scripts/backfillLocationCanonicalId.js --dry-run
 node scripts/dedupeAliases.js --dry-run
 ```
 

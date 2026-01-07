@@ -222,6 +222,13 @@ async function createIndexes() {
 
     await ensureIndex(
       companiesCollection,
+      { canonical_id: 1 },
+      { name: 'canonical_id_1', unique: true, background: true, sparse: true },
+      'canonical_id (unique)'
+    );
+
+    await ensureIndex(
+      companiesCollection,
       { 'snapshot.name': 1 },
       { name: 'snapshot_name_1', background: true },
       'snapshot.name'
@@ -229,6 +236,38 @@ async function createIndexes() {
 
     await ensureIndex(
       companiesCollection,
+      { createdAt: -1 },
+      { name: 'createdAt_-1', background: true },
+      'createdAt (descending)'
+    );
+
+    // Location Collection Indexes
+    console.log('\nCreating Location indexes...');
+    const locationsCollection = db.collection('locations');
+
+    await ensureIndex(
+      locationsCollection,
+      { 'aliases.value': 1 },
+      { name: 'aliases_value_1', background: true },
+      'aliases.value (multikey)'
+    );
+
+    await ensureIndex(
+      locationsCollection,
+      { canonical_id: 1 },
+      { name: 'canonical_id_1', unique: true, background: true },
+      'canonical_id (unique)'
+    );
+
+    await ensureIndex(
+      locationsCollection,
+      { 'snapshot.normalized': 1 },
+      { name: 'snapshot_normalized_1', background: true },
+      'snapshot.normalized'
+    );
+
+    await ensureIndex(
+      locationsCollection,
       { createdAt: -1 },
       { name: 'createdAt_-1', background: true },
       'createdAt (descending)'
@@ -246,6 +285,7 @@ async function createIndexes() {
       { name: 'deadletters', collection: deadLettersCollection },
       { name: 'merges', collection: mergesCollection },
       { name: 'companies', collection: companiesCollection },
+      { name: 'locations', collection: locationsCollection },
     ];
 
     for (const { name, collection } of collections) {

@@ -236,6 +236,8 @@ describe('Identity Resolution Utility', () => {
 
       expect(result.company_id).toBe('12345678');
       expect(result.source).toBe('numericId');
+      expect(result.canonical_id).toBeTruthy();
+      expect(result.canonical_key).toBe('numericId:12345678');
       expect(result.aliases).toContainEqual({
         type: 'numericId',
         value: '12345678',
@@ -251,6 +253,7 @@ describe('Identity Resolution Utility', () => {
 
       expect(result.company_id).toBe('TechCorp');
       expect(result.source).toBe('name');
+      expect(result.canonical_key).toBe('name:TechCorp');
     });
 
     it('should include company profile URL as alias', () => {

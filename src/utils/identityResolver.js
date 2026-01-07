@@ -102,6 +102,24 @@ function extractCompanyId(companyId) {
   return match ? match[1] : null;
 }
 
+function extractCompanyProfileUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+
+  try {
+    const normalized = url
+      .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, '')
+      .replace(/\/$/, '')
+      .trim();
+
+    const companyPattern = /^\/company\/([^\/\?]+)/;
+    const match = normalized.match(companyPattern);
+
+    return match ? `linkedin.com${match[0]}` : null;
+  } catch (error) {
+    logger.warn('Failed to extract company profile URL', { url, error: error.message });
+    return null;
+  }
+}
 const CANONICAL_ID_NAMESPACE = process.env.CANONICAL_ID_NAMESPACE || '9a6c1cf1-5f9f-4f7e-9b5d-3a0d8d8c0f1a';
 
 function uuidToBytes(uuid) {
@@ -269,6 +287,7 @@ function resolveCompanyIdentity(webhookData) {
   const aliases = [];
   let company_id = null;
   let source = null;
+  let primaryIdType = null;
 
   // Priority 1: CompanyID field (numeric ID)
   if (webhookData.CompanyID) {
@@ -276,36 +295,110 @@ function resolveCompanyIdentity(webhookData) {
     if (numericId) {
       company_id = numericId;
       source = 'numericId';
+      primaryIdType = 'numericId';
       aliases.push({ type: 'numericId', value: numericId });
     }
   }
 
-  // Priority 2: Company name as fallback
-  if (!company_id && webhookData.Company) {
-    company_id = webhookData.Company.trim();
-    source = 'name';
-    aliases.push({ type: 'name', value: webhookData.Company.trim() });
+  // Priority 2: Company profile URL as fallback
+  if (webhookData.CompanyProfile) {
+    const profileUrl = extractCompanyProfileUrl(webhookData.CompanyProfile) || webhookData.CompanyProfile;
+    if (!company_id && profileUrl) {
+      company_id = profileUrl;
+      source = 'profileUrl';
+      primaryIdType = 'profileUrl';
+    }
+    if (profileUrl) {
+      aliases.push({ type: 'profileUrl', value: profileUrl });
+    }
   }
 
-  // Add company profile URL as alias
-  if (webhookData.CompanyProfile) {
-    aliases.push({ type: 'profileUrl', value: webhookData.CompanyProfile });
+  // Priority 3: Company name as fallback
+  if (!company_id && webhookData.Company) {
+    const name = webhookData.Company.trim();
+    if (name) {
+      company_id = name;
+      source = 'name';
+      primaryIdType = 'name';
+      aliases.push({ type: 'name', value: name });
+    }
+  } else if (webhookData.Company) {
+    const name = webhookData.Company.trim();
+    if (name && !aliases.find(a => a.value === name)) {
+      aliases.push({ type: 'name', value: name });
+    }
   }
+
+  const canonical_key = buildCanonicalKey(primaryIdType, company_id);
+  const canonical_id = computeCanonicalId(canonical_key);
 
   return {
     company_id,
     aliases,
     source,
+    primary_id_type: primaryIdType,
+    canonical_key,
+    canonical_id,
   };
 }
 
+function normalizeLocationName(value) {
+  if (!value || typeof value !== 'string') return null;
+
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s\-.,]/g, '');
+}
+
+function slugifyLocation(value) {
+  if (!value) return null;
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+function resolveLocationIdentity(locationValue) {
+  const normalized = normalizeLocationName(locationValue);
+  if (!normalized) {
+    return {
+      location_id: null,
+      aliases: [],
+      source: null,
+      primary_id_type: null,
+      canonical_key: null,
+      canonical_id: null,
+    };
+  }
+
+  const slug = slugifyLocation(normalized);
+  const canonicalKey = buildCanonicalKey('location', slug);
+
+  return {
+    location_id: slug,
+    aliases: [
+      { type: 'raw', value: locationValue },
+      { type: 'normalized', value: normalized },
+    ],
+    source: 'normalized',
+    primary_id_type: 'location',
+    canonical_key: canonicalKey,
+    canonical_id: computeCanonicalId(canonicalKey),
+    normalized,
+  };
+}
 module.exports = {
   extractSalesNavId,
   extractNumericId,
   extractPublicProfileUrl,
   extractCompanyId,
+  extractCompanyProfileUrl,
   buildCanonicalKey,
   computeCanonicalId,
   resolvePersonIdentity,
   resolveCompanyIdentity,
+  normalizeLocationName,
+  resolveLocationIdentity,
 };
