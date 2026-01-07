@@ -5,6 +5,7 @@ const {
   extractCompanyId,
   resolvePersonIdentity,
   resolveCompanyIdentity,
+  resolveLocationIdentity,
 } = require('../utils/identityResolver');
 
 describe('Identity Resolution Utility', () => {
@@ -267,7 +268,7 @@ describe('Identity Resolution Utility', () => {
 
       expect(result.aliases).toContainEqual({
         type: 'profileUrl',
-        value: 'https://www.linkedin.com/company/techcorp',
+        value: 'linkedin.com/company/techcorp',
       });
     });
 
@@ -280,6 +281,26 @@ describe('Identity Resolution Utility', () => {
 
       expect(result.company_id).toBeNull();
       expect(result.source).toBeNull();
+    });
+  });
+
+  describe('resolveLocationIdentity()', () => {
+    it('should normalize and compute canonical_id for location', () => {
+      const result = resolveLocationIdentity('Greater Indianapolis, IN');
+
+      expect(result.location_id).toBe('greater-indianapolis-in');
+      expect(result.canonical_id).toBeTruthy();
+      expect(result.canonical_key).toBe('location:greater-indianapolis-in');
+      expect(result.aliases).toContainEqual(
+        expect.objectContaining({ type: 'normalized', value: 'Greater Indianapolis, IN' })
+      );
+    });
+
+    it('should return null identifiers for empty input', () => {
+      const result = resolveLocationIdentity('   ');
+
+      expect(result.location_id).toBeNull();
+      expect(result.canonical_id).toBeNull();
     });
   });
 });

@@ -10,6 +10,8 @@ const {
 const { getConfig } = require("../utils/env");
 const { computeEventKey } = require("../utils/eventKey");
 const { upsertFromObservation } = require("./personController");
+const { upsertCompanyFromObservation } = require("./companyController");
+const { upsertLocationFromObservation } = require("./locationController");
 const DeadLetter = require("../models/deadLetter");
 const { resolvePersonIdentity } = require("../utils/identityResolver");
 
@@ -144,6 +146,8 @@ const handleVisit = async (req, res) => {
     // Failures here are logged but don't fail the webhook
     // Skip if this is a duplicate (already processed)
     let peopleUpsertSuccess = false;
+    let companyUpsertSuccess = false;
+    let locationUpsertSuccess = false;
 
     if (isDuplicate) {
       logger.info("Skipping person upsert for duplicate event", {
@@ -160,6 +164,27 @@ const handleVisit = async (req, res) => {
           visit_id: visit._id,
           event_key: eventKey,
         });
+        try {
+          await upsertCompanyFromObservation(visit, 'visit');
+          companyUpsertSuccess = true;
+        } catch (companyError) {
+          logger.error("Failed to upsert company from visit", {
+            visit_id: visit._id,
+            event_key: eventKey,
+            error: companyError.message,
+          });
+        }
+
+        try {
+          await upsertLocationFromObservation(visit, 'visit');
+          locationUpsertSuccess = true;
+        } catch (locationError) {
+          logger.error("Failed to upsert location from visit", {
+            visit_id: visit._id,
+            event_key: eventKey,
+            error: locationError.message,
+          });
+        }
       } catch (peopleError) {
       // Log failure but DON'T fail the webhook
       logger.error("Failed to upsert person from visit", {
@@ -197,6 +222,8 @@ const handleVisit = async (req, res) => {
     // Always return success if legacy write succeeded
     const response = createSuccessResponse('visit', visit, profileData);
     response.people_upsert = peopleUpsertSuccess;
+    response.company_upsert = companyUpsertSuccess;
+    response.location_upsert = locationUpsertSuccess;
     response.duplicate = isDuplicate;
 
     res.status(200).json(response);
