@@ -13,6 +13,40 @@
 const mongoose = require('mongoose');
 const logger = require('../src/utils/logger');
 
+const indexCache = new Map();
+
+function keysEqual(a, b) {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(key => a[key] === b[key]);
+}
+
+async function getIndexes(collection) {
+  const name = collection.collectionName;
+  if (!indexCache.has(name)) {
+    indexCache.set(name, await collection.indexes());
+  }
+  return indexCache.get(name);
+}
+
+async function ensureIndex(collection, key, options, label) {
+  const indexes = await getIndexes(collection);
+  const existing = indexes.find(idx => keysEqual(idx.key, key));
+
+  if (existing) {
+    if (options?.unique && !existing.unique) {
+      throw new Error(`Existing index for ${label} is not unique`);
+    }
+    console.log(`  ✓ ${label} (exists)`);
+    return;
+  }
+
+  await collection.createIndex(key, options);
+  indexCache.delete(collection.collectionName);
+  console.log(`  ✓ ${label}`);
+}
+
 async function createIndexes() {
   console.log('📊 Starting index creation...\n');
 
@@ -28,139 +62,158 @@ async function createIndexes() {
     console.log('Creating Person indexes...');
     const peopleCollection = db.collection('people');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { 'aliases.value': 1 },
-      { name: 'aliases_value_1', background: true }
+      { name: 'aliases_value_1', background: true },
+      'aliases.value (multikey)'
     );
-    console.log('  ✓ aliases.value (multikey)');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { 'aliases.type': 1, 'aliases.value': 1 },
-      { name: 'aliases_type_1_value_1', background: true }
+      { name: 'aliases_type_1_value_1', background: true },
+      'aliases.type + aliases.value (compound)'
     );
-    console.log('  ✓ aliases.type + aliases.value (compound)');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { canonical_id: 1 },
-      { name: 'canonical_id_1', unique: true, background: true }
+      { name: 'canonical_id_1', unique: true, background: true },
+      'canonical_id (unique)'
     );
-    console.log('  ✓ canonical_id (unique)');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { 'meta.last_observed_at': -1 },
-      { name: 'meta_last_observed_at_-1', background: true }
+      { name: 'meta_last_observed_at_-1', background: true },
+      'meta.last_observed_at (descending)'
     );
-    console.log('  ✓ meta.last_observed_at (descending)');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { 'meta.observations_count': -1 },
-      { name: 'meta_observations_count_-1', background: true }
+      { name: 'meta_observations_count_-1', background: true },
+      'meta.observations_count (descending)'
     );
-    console.log('  ✓ meta.observations_count (descending)');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { 'snapshot.fullName': 1 },
-      { name: 'snapshot_fullName_1', background: true }
+      { name: 'snapshot_fullName_1', background: true },
+      'snapshot.fullName'
     );
-    console.log('  ✓ snapshot.fullName');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { 'snapshot.currentCompany': 1 },
-      { name: 'snapshot_currentCompany_1', background: true }
+      { name: 'snapshot_currentCompany_1', background: true },
+      'snapshot.currentCompany'
     );
-    console.log('  ✓ snapshot.currentCompany');
 
-    await peopleCollection.createIndex(
+    await ensureIndex(
+      peopleCollection,
       { createdAt: -1 },
-      { name: 'createdAt_-1', background: true }
+      { name: 'createdAt_-1', background: true },
+      'createdAt (descending)'
     );
-    console.log('  ✓ createdAt (descending)');
 
     // Visit Collection Indexes
     console.log('\nCreating Visit indexes...');
     const visitsCollection = db.collection('visits');
 
-    await visitsCollection.createIndex(
+    await ensureIndex(
+      visitsCollection,
       { event_key: 1 },
-      { name: 'event_key_1', unique: true, sparse: true, background: true }
+      { name: 'event_key_1', unique: true, sparse: true, background: true },
+      'event_key (unique, sparse)'
     );
-    console.log('  ✓ event_key (unique, sparse)');
 
     // Scan Collection Indexes
     console.log('\nCreating Scan indexes...');
     const scansCollection = db.collection('scans');
 
-    await scansCollection.createIndex(
+    await ensureIndex(
+      scansCollection,
       { event_key: 1 },
-      { name: 'event_key_1', unique: true, sparse: true, background: true }
+      { name: 'event_key_1', unique: true, sparse: true, background: true },
+      'event_key (unique, sparse)'
     );
-    console.log('  ✓ event_key (unique, sparse)');
 
     // DeadLetter Collection Indexes
     console.log('\nCreating DeadLetter indexes...');
     const deadLettersCollection = db.collection('deadletters');
 
-    await deadLettersCollection.createIndex(
+    await ensureIndex(
+      deadLettersCollection,
       { observation_id: 1 },
-      { name: 'observation_id_1', unique: true, background: true }
+      { name: 'observation_id_1', unique: true, background: true },
+      'observation_id (unique)'
     );
-    console.log('  ✓ observation_id (unique)');
 
-    await deadLettersCollection.createIndex(
+    await ensureIndex(
+      deadLettersCollection,
       { status: 1, createdAt: -1 },
-      { name: 'status_1_createdAt_-1', background: true }
+      { name: 'status_1_createdAt_-1', background: true },
+      'status + createdAt (compound)'
     );
-    console.log('  ✓ status + createdAt (compound)');
 
-    await deadLettersCollection.createIndex(
+    await ensureIndex(
+      deadLettersCollection,
       { sourceType: 1, status: 1 },
-      { name: 'sourceType_1_status_1', background: true }
+      { name: 'sourceType_1_status_1', background: true },
+      'sourceType + status (compound)'
     );
-    console.log('  ✓ sourceType + status (compound)');
 
     // Merge Collection Indexes
     console.log('\nCreating Merge indexes...');
     const mergesCollection = db.collection('merges');
 
-    await mergesCollection.createIndex(
+    await ensureIndex(
+      mergesCollection,
       { winner_id: 1, timestamp: -1 },
-      { name: 'winner_id_1_timestamp_-1', background: true }
+      { name: 'winner_id_1_timestamp_-1', background: true },
+      'winner_id + timestamp (compound)'
     );
-    console.log('  ✓ winner_id + timestamp (compound)');
 
-    await mergesCollection.createIndex(
+    await ensureIndex(
+      mergesCollection,
       { loser_ids: 1 },
-      { name: 'loser_ids_1', background: true }
+      { name: 'loser_ids_1', background: true },
+      'loser_ids'
     );
-    console.log('  ✓ loser_ids');
 
-    await mergesCollection.createIndex(
+    await ensureIndex(
+      mergesCollection,
       { timestamp: -1 },
-      { name: 'timestamp_-1', background: true }
+      { name: 'timestamp_-1', background: true },
+      'timestamp (descending)'
     );
-    console.log('  ✓ timestamp (descending)');
 
     // Company Collection Indexes
     console.log('\nCreating Company indexes...');
     const companiesCollection = db.collection('companies');
 
-    await companiesCollection.createIndex(
+    await ensureIndex(
+      companiesCollection,
       { 'aliases.value': 1 },
-      { name: 'aliases_value_1', background: true }
+      { name: 'aliases_value_1', background: true },
+      'aliases.value (multikey)'
     );
-    console.log('  ✓ aliases.value (multikey)');
 
-    await companiesCollection.createIndex(
+    await ensureIndex(
+      companiesCollection,
       { 'snapshot.name': 1 },
-      { name: 'snapshot_name_1', background: true }
+      { name: 'snapshot_name_1', background: true },
+      'snapshot.name'
     );
-    console.log('  ✓ snapshot.name');
 
-    await companiesCollection.createIndex(
+    await ensureIndex(
+      companiesCollection,
       { createdAt: -1 },
-      { name: 'createdAt_-1', background: true }
+      { name: 'createdAt_-1', background: true },
+      'createdAt (descending)'
     );
-    console.log('  ✓ createdAt (descending)');
 
     console.log('\n✅ All indexes created successfully!');
 
