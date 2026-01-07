@@ -193,6 +193,8 @@ Instant rollback via env change.
 ```bash
 node scripts/replayDeadLetters.js
 node scripts/rebuildPeople.js
+node scripts/rebuildCompanies.js
+node scripts/rebuildLocations.js
 node scripts/linkIdentities.js
 node scripts/backfillCanonicalId.js --dry-run
 node scripts/backfillCompanyCanonicalId.js --dry-run
