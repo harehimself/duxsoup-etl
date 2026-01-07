@@ -124,7 +124,6 @@ companySchema.index({ 'aliases.value': 1 });
 companySchema.index({ 'snapshot.name': 1 });
 companySchema.index({ 'snapshot.lastObservedAt': -1 });
 companySchema.index({ createdAt: -1 });
-companySchema.index({ canonical_id: 1 });
 companySchema.index({ 'meta.last_observed_at': -1 });
 companySchema.index({ 'meta.observations_count': -1 });
 
