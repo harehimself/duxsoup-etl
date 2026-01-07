@@ -230,6 +230,10 @@ async function upsertFromObservation(observationDoc, sourceType) {
       return null;
     }
 
+    if (!identity.canonical_id || !identity.primary_id_type) {
+      throw new Error('Missing canonical identity for observation');
+    }
+
     logger.info('Upserting person from observation', {
       person_id: identity.person_id,
       observation_id: observationDoc._id,

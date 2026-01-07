@@ -184,6 +184,32 @@ describe('Identity Resolution Utility', () => {
       );
     });
 
+    it('should compute canonical_id for sales nav identity', () => {
+      const webhookData = {
+        SalesProfile: 'https://www.linkedin.com/sales/lead/ACwAAA_TEST123',
+      };
+
+      const result = resolvePersonIdentity(webhookData);
+
+      expect(result.canonical_id).toBeTruthy();
+      expect(result.canonical_key).toBe('salesNavId:ACwAAA_TEST123');
+      expect(result.primary_id_type).toBe('salesNavId');
+    });
+
+    it('should compute same canonical_id across equivalent sales nav sources', () => {
+      const bySalesProfile = resolvePersonIdentity({
+        SalesProfile: 'https://www.linkedin.com/sales/lead/ACwAAA_SHARED',
+      });
+
+      const byProfile = resolvePersonIdentity({
+        Profile: 'https://www.linkedin.com/sales/lead/ACwAAA_SHARED',
+      });
+
+      expect(bySalesProfile.canonical_id).toBe(byProfile.canonical_id);
+      expect(bySalesProfile.canonical_key).toBe('salesNavId:ACwAAA_SHARED');
+      expect(byProfile.canonical_key).toBe('salesNavId:ACwAAA_SHARED');
+    });
+
     it('should return null person_id when no identifiers present', () => {
       const webhookData = {
         'First Name': 'John',

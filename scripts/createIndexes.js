@@ -41,6 +41,12 @@ async function createIndexes() {
     console.log('  ✓ aliases.type + aliases.value (compound)');
 
     await peopleCollection.createIndex(
+      { canonical_id: 1 },
+      { name: 'canonical_id_1', unique: true, background: true }
+    );
+    console.log('  ✓ canonical_id (unique)');
+
+    await peopleCollection.createIndex(
       { 'meta.last_observed_at': -1 },
       { name: 'meta_last_observed_at_-1', background: true }
     );
