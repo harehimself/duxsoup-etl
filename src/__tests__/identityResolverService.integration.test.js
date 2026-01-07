@@ -1,7 +1,11 @@
 const identityResolverService = require('../services/identityResolverService');
 const Person = require('../models/person');
 const Merge = require('../models/merge');
+const mongoose = require('mongoose');
+const { buildCanonicalKey, computeCanonicalId } = require('../utils/identityResolver');
 const { connect, closeDatabase, clearDatabase } = require('./helpers/db');
+
+const canonicalIdFor = (type, value) => computeCanonicalId(buildCanonicalKey(type, value));
 
 describe('IdentityResolverService', () => {
   beforeAll(async () => {
@@ -22,6 +26,7 @@ describe('IdentityResolverService', () => {
       const person = await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [
           { type: 'salesNavId', value: 'ACwAAABCDEF' },
           { type: 'publicUrl', value: 'linkedin.com/in/johndoe' },
@@ -44,6 +49,7 @@ describe('IdentityResolverService', () => {
       await Person.create({
         _id: '12345678',
         person_id: '12345678',
+        canonical_id: canonicalIdFor('numericId', '12345678'),
         aliases: [
           { type: 'numericId', value: '12345678' },
           { type: 'publicUrl', value: 'linkedin.com/in/janedoe' },
@@ -66,6 +72,7 @@ describe('IdentityResolverService', () => {
       await Person.create({
         _id: 'ACwAAAXYZ',
         person_id: 'ACwAAAXYZ',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAAXYZ'),
         aliases: [
           { type: 'salesNavId', value: 'ACwAAAXYZ' },
           { type: 'publicUrl', value: 'linkedin.com/in/johndoe' },
@@ -90,6 +97,7 @@ describe('IdentityResolverService', () => {
       await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [{ type: 'salesNavId', value: 'ACwAAABCDEF' }],
         snapshot: {},
       });
@@ -97,6 +105,7 @@ describe('IdentityResolverService', () => {
       await Person.create({
         _id: 'ACwAAAXYZ',
         person_id: 'ACwAAAXYZ',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAAXYZ'),
         aliases: [{ type: 'salesNavId', value: 'ACwAAAXYZ' }],
         snapshot: {},
       });
@@ -131,6 +140,7 @@ describe('IdentityResolverService', () => {
       const person = await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [{ type: 'salesNavId', value: 'ACwAAABCDEF' }],
         snapshot: {},
       });
@@ -155,6 +165,7 @@ describe('IdentityResolverService', () => {
       const person = await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [
           { type: 'salesNavId', value: 'ACwAAABCDEF' },
           { type: 'publicUrl', value: 'linkedin.com/in/johndoe' },
@@ -272,6 +283,7 @@ describe('IdentityResolverService', () => {
       const winner = await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [{ type: 'salesNavId', value: 'ACwAAABCDEF' }],
         snapshot: { fullName: 'John Doe' },
         observations: { visits: [], scans: [] },
@@ -280,6 +292,7 @@ describe('IdentityResolverService', () => {
       const loser = await Person.create({
         _id: 'linkedin.com/in/johndoe',
         person_id: 'linkedin.com/in/johndoe',
+        canonical_id: canonicalIdFor('publicUrl', 'linkedin.com/in/johndoe'),
         aliases: [{ type: 'publicUrl', value: 'linkedin.com/in/johndoe' }],
         snapshot: { fullName: 'John Doe' },
         observations: { visits: [], scans: [] },
@@ -306,30 +319,40 @@ describe('IdentityResolverService', () => {
 
     it('should combine observations from all merged people', async () => {
       // Arrange
+      const visit1 = new mongoose.Types.ObjectId();
+      const scan1 = new mongoose.Types.ObjectId();
+      const visit2 = new mongoose.Types.ObjectId();
+      const scan2 = new mongoose.Types.ObjectId();
+
       const winner = await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [{ type: 'salesNavId', value: 'ACwAAABCDEF' }],
         snapshot: {},
-        observations: { visits: ['visit1'], scans: ['scan1'] },
+        observations: { visits: [visit1], scans: [scan1] },
       });
 
       const loser = await Person.create({
         _id: '12345678',
         person_id: '12345678',
+        canonical_id: canonicalIdFor('numericId', '12345678'),
         aliases: [{ type: 'numericId', value: '12345678' }],
         snapshot: {},
-        observations: { visits: ['visit2'], scans: ['scan2'] },
+        observations: { visits: [visit2], scans: [scan2] },
       });
 
       // Act
       const result = await identityResolverService.mergePeople(winner, [loser]);
 
       // Assert
-      expect(result.observations.visits).toHaveLength(2);
-      expect(result.observations.scans).toHaveLength(2);
-      expect(result.observations.visits).toContain('visit1');
-      expect(result.observations.visits).toContain('visit2');
+      const visitIds = result.observations.visits.map(id => id.toString());
+      const scanIds = result.observations.scans.map(id => id.toString());
+
+      expect(visitIds).toHaveLength(2);
+      expect(scanIds).toHaveLength(2);
+      expect(visitIds).toContain(visit1.toString());
+      expect(visitIds).toContain(visit2.toString());
     });
   });
 
@@ -339,6 +362,7 @@ describe('IdentityResolverService', () => {
       const existing = await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [{ type: 'salesNavId', value: 'ACwAAABCDEF' }],
         snapshot: {},
       });
@@ -347,6 +371,7 @@ describe('IdentityResolverService', () => {
         person_id: 'ACwAAABCDEF',
         aliases: [{ type: 'salesNavId', value: 'ACwAAABCDEF' }],
         source: 'salesNavId',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
       };
 
       // Act
@@ -362,6 +387,7 @@ describe('IdentityResolverService', () => {
         person_id: 'ACwAAANEW',
         aliases: [{ type: 'salesNavId', value: 'ACwAAANEW' }],
         source: 'salesNavId',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAANEW'),
       };
 
       // Act
@@ -381,18 +407,20 @@ describe('IdentityResolverService', () => {
       await Person.create({
         _id: 'ACwAAABCDEF',
         person_id: 'ACwAAABCDEF',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAABCDEF'),
         aliases: [
           { type: 'salesNavId', value: 'ACwAAABCDEF' },
           { type: 'publicUrl', value: 'linkedin.com/in/johndoe' },
         ],
         snapshot: {},
-        observations: { visits: ['v1'], scans: [] },
+        observations: { visits: [new mongoose.Types.ObjectId()], scans: [] },
         updatedAt: new Date('2024-01-15'),
       });
 
       await Person.create({
         _id: '12345678',
         person_id: '12345678',
+        canonical_id: canonicalIdFor('numericId', '12345678'),
         aliases: [
           { type: 'numericId', value: '12345678' },
           { type: 'publicUrl', value: 'linkedin.com/in/johndoe' }, // Same public URL!
@@ -406,6 +434,7 @@ describe('IdentityResolverService', () => {
         person_id: 'linkedin.com/in/johndoe',
         aliases: [{ type: 'publicUrl', value: 'linkedin.com/in/johndoe' }],
         source: 'publicUrl',
+        canonical_id: canonicalIdFor('publicUrl', 'linkedin.com/in/johndoe'),
       };
 
       // Act

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const logger = require('./logger');
 
 /**
@@ -70,7 +71,7 @@ function extractPublicProfileUrl(url) {
   try {
     // Remove protocol and domain, normalize
     const normalized = url
-      .replace(/^https?:\/\/(www\.)?linkedin\.com/, '')
+      .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, '')
       .replace(/\/$/, '')
       .trim();
 
@@ -101,6 +102,53 @@ function extractCompanyId(companyId) {
   return match ? match[1] : null;
 }
 
+const CANONICAL_ID_NAMESPACE = process.env.CANONICAL_ID_NAMESPACE || '9a6c1cf1-5f9f-4f7e-9b5d-3a0d8d8c0f1a';
+
+function uuidToBytes(uuid) {
+  const hex = uuid.replace(/-/g, '');
+  if (hex.length !== 32) {
+    throw new Error(`Invalid UUID namespace: ${uuid}`);
+  }
+  return Buffer.from(hex, 'hex');
+}
+
+function bytesToUuid(buffer) {
+  const hex = buffer.toString('hex');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
+
+function buildCanonicalKey(primaryIdType, primaryIdValue) {
+  if (!primaryIdType || !primaryIdValue) {
+    return null;
+  }
+
+  return `${primaryIdType}:${primaryIdValue}`;
+}
+
+function computeCanonicalId(canonicalKey, namespace = CANONICAL_ID_NAMESPACE) {
+  if (!canonicalKey) {
+    return null;
+  }
+
+  const namespaceBytes = uuidToBytes(namespace);
+  const nameBytes = Buffer.from(canonicalKey, 'utf8');
+  const hash = crypto
+    .createHash('sha1')
+    .update(Buffer.concat([namespaceBytes, nameBytes]))
+    .digest();
+
+  hash[6] = (hash[6] & 0x0f) | 0x50;
+  hash[8] = (hash[8] & 0x3f) | 0x80;
+
+  return bytesToUuid(hash.slice(0, 16));
+}
+
 /**
  * Resolve person identity from webhook data
  * Returns the best available canonical identifier and all aliases
@@ -112,6 +160,7 @@ function resolvePersonIdentity(webhookData) {
   const aliases = [];
   let person_id = null;
   let source = null;
+  let primaryIdType = null;
 
   // Priority 1: Extract Sales Navigator ID from SalesProfile
   if (webhookData.SalesProfile) {
@@ -119,6 +168,7 @@ function resolvePersonIdentity(webhookData) {
     if (salesNavId) {
       person_id = salesNavId;
       source = 'salesNavId';
+      primaryIdType = 'salesNavId';
       aliases.push({ type: 'salesNavId', value: salesNavId });
       aliases.push({ type: 'salesUrl', value: webhookData.SalesProfile });
     }
@@ -130,6 +180,7 @@ function resolvePersonIdentity(webhookData) {
     if (recruiterId) {
       person_id = recruiterId;
       source = 'recruiterUrl';
+      primaryIdType = 'salesNavId';
       aliases.push({ type: 'salesNavId', value: recruiterId });
       aliases.push({ type: 'recruiterUrl', value: webhookData.RecruiterProfile });
     }
@@ -143,6 +194,7 @@ function resolvePersonIdentity(webhookData) {
     if (salesNavId) {
       person_id = salesNavId;
       source = 'salesNavId';
+      primaryIdType = 'salesNavId';
       aliases.push({ type: 'salesNavId', value: salesNavId });
       aliases.push({ type: 'salesUrl', value: webhookData.Profile });
     } else {
@@ -151,6 +203,7 @@ function resolvePersonIdentity(webhookData) {
       if (numericId) {
         person_id = numericId;
         source = 'numericId';
+        primaryIdType = 'numericId';
         aliases.push({ type: 'numericId', value: numericId });
       }
     }
@@ -164,6 +217,7 @@ function resolvePersonIdentity(webhookData) {
     if (normalizedUrl) {
       person_id = normalizedUrl; // Temporary ID
       source = 'publicUrl';
+      primaryIdType = 'publicUrl';
       aliases.push({ type: 'publicUrl', value: normalizedUrl });
 
       logger.warn('Using unstable public URL as person_id - no stable ID found', {
@@ -192,10 +246,16 @@ function resolvePersonIdentity(webhookData) {
     }
   }
 
+  const canonical_key = buildCanonicalKey(primaryIdType, person_id);
+  const canonical_id = computeCanonicalId(canonical_key);
+
   return {
     person_id,
     aliases,
     source,
+    primary_id_type: primaryIdType,
+    canonical_key,
+    canonical_id,
   };
 }
 
@@ -244,6 +304,8 @@ module.exports = {
   extractNumericId,
   extractPublicProfileUrl,
   extractCompanyId,
+  buildCanonicalKey,
+  computeCanonicalId,
   resolvePersonIdentity,
   resolveCompanyIdentity,
 };

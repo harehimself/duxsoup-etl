@@ -61,6 +61,14 @@ const personSchema = new mongoose.Schema({
     required: true,
   },
 
+  // Canonical internal ID (deterministic UUID derived from best stable identifier)
+  canonical_id: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true,
+  },
+
   // Explicit person_id field (redundant but clear)
   person_id: {
     type: String,

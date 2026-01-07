@@ -179,7 +179,10 @@ Instant rollback via env change.
 node scripts/replayDeadLetters.js
 node scripts/rebuildPeople.js
 node scripts/linkIdentities.js
+node scripts/backfillCanonicalId.js --dry-run
 ```
+
+Set `CANONICAL_ID_NAMESPACE` in your environment before running the backfill to keep UUIDs stable across deployments.
 
 <br><br>
 

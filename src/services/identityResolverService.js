@@ -1,4 +1,5 @@
 const Person = require('../models/person');
+const { computeCanonicalId, buildCanonicalKey } = require('../utils/identityResolver');
 const logger = require('../utils/logger');
 
 /**
@@ -119,8 +120,9 @@ class IdentityResolverService {
 
     return people.reduce((winner, candidate) => {
       // Rule 1: Prefer Sales Nav ID format
-      const winnerHasSalesNav = winner._id.startsWith('ACwAAA');
-      const candidateHasSalesNav = candidate._id.startsWith('ACwAAA');
+      const salesNavPattern = /^(ACwAAA|ACoAAA)/;
+      const winnerHasSalesNav = salesNavPattern.test(winner._id);
+      const candidateHasSalesNav = salesNavPattern.test(candidate._id);
 
       if (candidateHasSalesNav && !winnerHasSalesNav) {
         return candidate;
@@ -297,9 +299,17 @@ class IdentityResolverService {
       throw new Error('Identity must include person_id');
     }
 
+    const canonicalKey = identity.canonical_key
+      || buildCanonicalKey(identity.primary_id_type, identity.person_id);
+    const canonicalId = identity.canonical_id || computeCanonicalId(canonicalKey);
+
+    if (!canonicalId) {
+      throw new Error('Identity must include canonical_id');
+    }
+
     try {
-      // Step 1: Check if person exists by exact _id (fastest path)
-      let person = await Person.findById(identity.person_id);
+      // Step 1: Check if person exists by canonical_id (fastest path)
+      let person = await Person.findOne({ canonical_id: canonicalId });
 
       if (person) {
         // Found exact match - merge any new aliases
@@ -322,6 +332,7 @@ class IdentityResolverService {
         person = await Person.create({
           _id: identity.person_id,
           person_id: identity.person_id,
+          canonical_id: canonicalId,
           aliases: identity.aliases || [],
           snapshot: {},
           observations: { visits: [], scans: [] },
@@ -337,7 +348,19 @@ class IdentityResolverService {
           matched_alias: identity.aliases?.[0]?.value,
         });
 
-        person = await this.mergeAliases(matches[0], identity.aliases || []);
+        person = matches[0];
+        if (!person.canonical_id) {
+          person.canonical_id = canonicalId;
+          await person.save();
+        } else if (person.canonical_id !== canonicalId) {
+          logger.warn('Canonical ID mismatch on alias match', {
+            person_id: person._id,
+            existing_canonical_id: person.canonical_id,
+            incoming_canonical_id: canonicalId,
+          });
+        }
+
+        person = await this.mergeAliases(person, identity.aliases || []);
         return person;
       }
 
@@ -348,8 +371,22 @@ class IdentityResolverService {
         matched_ids: matches.map(m => m._id),
       });
 
-      const winner = this.determineWinner(matches);
+      const canonicalMatches = matches.filter(m => m.canonical_id === canonicalId);
+      const winner = canonicalMatches.length > 0
+        ? this.determineWinner(canonicalMatches)
+        : this.determineWinner(matches);
       const losers = matches.filter(m => m._id !== winner._id);
+
+      if (!winner.canonical_id) {
+        winner.canonical_id = canonicalId;
+        await winner.save();
+      } else if (winner.canonical_id !== canonicalId) {
+        logger.warn('Canonical ID mismatch on merge winner', {
+          winner_id: winner._id,
+          existing_canonical_id: winner.canonical_id,
+          incoming_canonical_id: canonicalId,
+        });
+      }
 
       person = await this.mergePeople(winner, losers, {
         reason: mergeReason.reason || 'alias_conflict_detected',

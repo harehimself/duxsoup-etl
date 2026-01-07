@@ -279,6 +279,7 @@ router.post('/run-linking', async (req, res) => {
         const salesNavAlias = person.aliases.find(a => a.type === 'salesNavId');
         const numericAlias = person.aliases.find(a => a.type === 'numericId');
         const stableId = salesNavAlias?.value || numericAlias?.value;
+        const { buildCanonicalKey, computeCanonicalId } = require('../utils/identityResolver');
 
         if (!stableId) {
           stats.skipped++;
@@ -289,6 +290,13 @@ router.post('/run-linking', async (req, res) => {
         let canonicalPerson = await Person.findById(stableId);
 
         if (canonicalPerson) {
+          if (!canonicalPerson.canonical_id) {
+            const canonicalKey = buildCanonicalKey(salesNavAlias ? 'salesNavId' : 'numericId', stableId);
+            const canonicalId = computeCanonicalId(canonicalKey);
+            canonicalPerson.canonical_id = canonicalId;
+            await canonicalPerson.save();
+          }
+
           // Canonical person already exists - check if it's the same as URL person
           if (canonicalPerson._id === person._id) {
             stats.alreadyLinked++;
@@ -309,9 +317,13 @@ router.post('/run-linking', async (req, res) => {
           });
         } else {
           // Canonical person doesn't exist - create it and merge URL person into it
+          const canonicalKey = buildCanonicalKey(salesNavAlias ? 'salesNavId' : 'numericId', stableId);
+          const canonicalId = computeCanonicalId(canonicalKey);
+
           canonicalPerson = await Person.create({
             _id: stableId,
             person_id: stableId,
+            canonical_id: canonicalId,
             aliases: [{ type: salesNavAlias ? 'salesNavId' : 'numericId', value: stableId }],
             snapshot: {},
             observations: { visits: [], scans: [] },

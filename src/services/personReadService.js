@@ -70,7 +70,7 @@ async function findPersonById(personId) {
   }
 
   // Try people collection first
-  const person = await Person.findById(personId);
+  const person = await Person.findOne({ canonical_id: personId }) || await Person.findById(personId);
 
   if (person) {
     metrics.people_read_success++;
