@@ -249,7 +249,16 @@ async function createIndexes() {
     ];
 
     for (const { name, collection } of collections) {
-      const indexes = await collection.indexes();
+      let indexes;
+      try {
+        indexes = await collection.indexes();
+      } catch (error) {
+        if (error.codeName === 'NamespaceNotFound' || /ns does not exist/i.test(error.message)) {
+          console.log(`${name} (skipped, collection missing)\n`);
+          continue;
+        }
+        throw error;
+      }
       console.log(`${name} (${indexes.length} indexes):`);
       indexes.forEach(idx => {
         const keys = Object.keys(idx.key).map(k => `${k}: ${idx.key[k]}`).join(', ');
