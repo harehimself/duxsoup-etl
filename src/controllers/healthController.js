@@ -259,6 +259,46 @@ async function getCoverageBreakdown(req, res) {
 }
 
 /**
+ * GET /health/canonical-coverage
+ * Coverage of canonical_id across people
+ */
+async function getCanonicalCoverage(req, res) {
+  try {
+    const [totalPeople, missingCanonical] = await Promise.all([
+      Person.countDocuments(),
+      Person.countDocuments({
+        $or: [
+          { canonical_id: { $exists: false } },
+          { canonical_id: null },
+          { canonical_id: '' },
+        ],
+      }),
+    ]);
+
+    const covered = totalPeople - missingCanonical;
+    const coverageRatio = totalPeople > 0 ? covered / totalPeople : 1;
+
+    res.json({
+      total_people: totalPeople,
+      canonical_id_present: covered,
+      canonical_id_missing: missingCanonical,
+      coverage_ratio: Math.round(coverageRatio * 10000) / 10000,
+      coverage_percent: Math.round(coverageRatio * 100 * 100) / 100,
+    });
+  } catch (error) {
+    logger.error('Failed to get canonical coverage', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      error: 'Failed to compute canonical coverage',
+      message: error.message,
+    });
+  }
+}
+
+/**
  * GET /health/metrics
  * Combined health metrics for dashboards
  */
@@ -333,4 +373,5 @@ module.exports = {
   getParityHealth,
   getMetrics,
   getCoverageBreakdown,
+  getCanonicalCoverage,
 };

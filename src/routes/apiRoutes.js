@@ -7,6 +7,7 @@ const {
   getParityHealth,
   getMetrics,
   getCoverageBreakdown,
+  getCanonicalCoverage,
 } = require('../controllers/healthController');
 const {
   getPersonById,
@@ -51,6 +52,7 @@ router.get('/health/ingestion', getIngestionHealth);
 router.get('/health/parity', getParityHealth);
 router.get('/health/metrics', getMetrics);
 router.get('/health/coverage-breakdown', getCoverageBreakdown);
+router.get('/health/canonical-coverage', getCanonicalCoverage);
 
 // Person read endpoints (hybrid cutover)
 router.get('/people/metrics', getReadMetrics);

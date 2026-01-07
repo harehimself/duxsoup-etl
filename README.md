@@ -136,6 +136,7 @@ Read-path metrics.
 - `/api/health/ingestion`
 - `/api/health/parity`
 - `/api/health/coverage-breakdown`
+- `/api/health/canonical-coverage`
 - `/api/health/metrics`
 
 <br><br>
@@ -183,6 +184,7 @@ node scripts/backfillCanonicalId.js --dry-run
 ```
 
 Set `CANONICAL_ID_NAMESPACE` in your environment before running the backfill to keep UUIDs stable across deployments.
+The same value should be used across all environments to keep canonical IDs consistent.
 
 <br><br>
 
