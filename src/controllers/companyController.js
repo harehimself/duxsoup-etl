@@ -73,7 +73,6 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   company.snapshot = company.snapshot || {};
   applySnapshotValue(company.snapshot, 'name', webhookData.Company);
   applySnapshotValue(company.snapshot, 'industry', webhookData.Industry);
-  applySnapshotValue(company.snapshot, 'location', webhookData.Location);
   applySnapshotValue(company.snapshot, 'companyProfileUrl', webhookData.CompanyProfile);
   applySnapshotValue(company.snapshot, 'website', webhookData.CompanyWebsite);
   applySnapshotValue(company.snapshot, 'lastObservedAt', observedAt);
