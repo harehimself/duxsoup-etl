@@ -8,12 +8,22 @@ const {
   getMetrics,
   getCoverageBreakdown,
   getCanonicalCoverage,
+  getCompanyCoverage,
+  getLocationCoverage,
 } = require('../controllers/healthController');
 const {
   getPersonById,
   getPersonByAlias,
   getReadMetrics,
 } = require('../controllers/personReadController');
+const {
+  getCompanyById,
+  getCompanyByAlias,
+} = require('../controllers/companyReadController');
+const {
+  getLocationById,
+  getLocationByAlias,
+} = require('../controllers/locationReadController');
 const adminRoutes = require('./adminRoutes');
 
 const router = express.Router();
@@ -53,11 +63,21 @@ router.get('/health/parity', getParityHealth);
 router.get('/health/metrics', getMetrics);
 router.get('/health/coverage-breakdown', getCoverageBreakdown);
 router.get('/health/canonical-coverage', getCanonicalCoverage);
+router.get('/health/company-coverage', getCompanyCoverage);
+router.get('/health/location-coverage', getLocationCoverage);
 
 // Person read endpoints (hybrid cutover)
 router.get('/people/metrics', getReadMetrics);
 router.get('/people/:id', getPersonById);
 router.get('/people/by-alias/:value', getPersonByAlias);
+
+// Company read endpoints
+router.get('/companies/:id', getCompanyById);
+router.get('/companies/by-alias/:value', getCompanyByAlias);
+
+// Location read endpoints
+router.get('/locations/:id', getLocationById);
+router.get('/locations/by-alias/:value', getLocationByAlias);
 
 // Main webhook endpoint
 router.post('/webhook', (req, res) => {

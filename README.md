@@ -131,12 +131,26 @@ Resolve person by any alias.
 ### GET /api/people/metrics
 Read-path metrics.
 
+### GET /api/companies/:id
+Fetch canonical company by ID.
+
+### GET /api/companies/by-alias/:value
+Resolve company by alias (CompanyID, profile URL, or name).
+
+### GET /api/locations/:id
+Fetch canonical location by ID.
+
+### GET /api/locations/by-alias/:value
+Resolve location by alias (raw or normalized).
+
 ### Health
 - `/health`
 - `/api/health/ingestion`
 - `/api/health/parity`
 - `/api/health/coverage-breakdown`
 - `/api/health/canonical-coverage`
+- `/api/health/company-coverage`
+- `/api/health/location-coverage`
 - `/api/health/metrics`
 
 <br><br>

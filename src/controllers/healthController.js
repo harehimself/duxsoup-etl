@@ -299,6 +299,88 @@ async function getCanonicalCoverage(req, res) {
 }
 
 /**
+ * GET /health/company-coverage
+ * Coverage of canonical_id across companies
+ */
+async function getCompanyCoverage(req, res) {
+  const Company = require('../models/company');
+  try {
+    const [totalCompanies, missingCanonical] = await Promise.all([
+      Company.countDocuments(),
+      Company.countDocuments({
+        $or: [
+          { canonical_id: { $exists: false } },
+          { canonical_id: null },
+          { canonical_id: '' },
+        ],
+      }),
+    ]);
+
+    const covered = totalCompanies - missingCanonical;
+    const coverageRatio = totalCompanies > 0 ? covered / totalCompanies : 1;
+
+    res.json({
+      total_companies: totalCompanies,
+      canonical_id_present: covered,
+      canonical_id_missing: missingCanonical,
+      coverage_ratio: Math.round(coverageRatio * 10000) / 10000,
+      coverage_percent: Math.round(coverageRatio * 100 * 100) / 100,
+    });
+  } catch (error) {
+    logger.error('Failed to get company coverage', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      error: 'Failed to compute company coverage',
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * GET /health/location-coverage
+ * Coverage of canonical_id across locations
+ */
+async function getLocationCoverage(req, res) {
+  const Location = require('../models/location');
+  try {
+    const [totalLocations, missingCanonical] = await Promise.all([
+      Location.countDocuments(),
+      Location.countDocuments({
+        $or: [
+          { canonical_id: { $exists: false } },
+          { canonical_id: null },
+          { canonical_id: '' },
+        ],
+      }),
+    ]);
+
+    const covered = totalLocations - missingCanonical;
+    const coverageRatio = totalLocations > 0 ? covered / totalLocations : 1;
+
+    res.json({
+      total_locations: totalLocations,
+      canonical_id_present: covered,
+      canonical_id_missing: missingCanonical,
+      coverage_ratio: Math.round(coverageRatio * 10000) / 10000,
+      coverage_percent: Math.round(coverageRatio * 100 * 100) / 100,
+    });
+  } catch (error) {
+    logger.error('Failed to get location coverage', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      error: 'Failed to compute location coverage',
+      message: error.message,
+    });
+  }
+}
+
+/**
  * GET /health/metrics
  * Combined health metrics for dashboards
  */
@@ -374,4 +456,6 @@ module.exports = {
   getMetrics,
   getCoverageBreakdown,
   getCanonicalCoverage,
+  getCompanyCoverage,
+  getLocationCoverage,
 };

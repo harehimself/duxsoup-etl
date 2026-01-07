@@ -5,6 +5,8 @@ const logger = require('../utils/logger');
 const { getConfig } = require('../utils/env');
 const { computeEventKey } = require('../utils/eventKey');
 const { upsertFromObservation } = require('../controllers/personController');
+const { upsertCompanyFromObservation } = require('../controllers/companyController');
+const { upsertLocationFromObservation } = require('../controllers/locationController');
 const DeadLetter = require('../models/deadLetter');
 const { resolvePersonIdentity } = require('../utils/identityResolver');
 
@@ -15,6 +17,8 @@ jest.mock('../utils/validation');
 jest.mock('../utils/env');
 jest.mock('../utils/eventKey');
 jest.mock('../controllers/personController');
+jest.mock('../controllers/companyController');
+jest.mock('../controllers/locationController');
 jest.mock('../models/deadLetter');
 jest.mock('../utils/identityResolver');
 
@@ -67,6 +71,8 @@ describe('visitController', () => {
 
     // Mock person controller
     upsertFromObservation.mockResolvedValue({});
+    upsertCompanyFromObservation.mockResolvedValue({});
+    upsertLocationFromObservation.mockResolvedValue({});
 
     // Mock dead letter
     DeadLetter.createFromFailure = jest.fn().mockResolvedValue({});
