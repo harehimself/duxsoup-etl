@@ -14,6 +14,7 @@ const mongoose = require('mongoose');
 const logger = require('../src/utils/logger');
 
 const indexCache = new Map();
+const fixNonUnique = process.argv.includes('--fix-non-unique');
 
 function keysEqual(a, b) {
   const aKeys = Object.keys(a);
@@ -36,7 +37,14 @@ async function ensureIndex(collection, key, options, label) {
 
   if (existing) {
     if (options?.unique && !existing.unique) {
-      throw new Error(`Existing index for ${label} is not unique`);
+      if (!fixNonUnique) {
+        throw new Error(`Existing index for ${label} is not unique`);
+      }
+      await collection.dropIndex(existing.name);
+      indexCache.delete(collection.collectionName);
+      await collection.createIndex(key, options);
+      console.log(`  ✓ ${label} (recreated as unique)`);
+      return;
     }
     console.log(`  ✓ ${label} (exists)`);
     return;
