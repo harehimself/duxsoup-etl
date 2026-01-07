@@ -26,13 +26,24 @@ function keysEqual(a, b) {
 async function getIndexes(collection) {
   const name = collection.collectionName;
   if (!indexCache.has(name)) {
-    indexCache.set(name, await collection.indexes());
+    try {
+      indexCache.set(name, await collection.indexes());
+    } catch (error) {
+      if (error.codeName === 'NamespaceNotFound' || /ns does not exist/i.test(error.message)) {
+        return null;
+      }
+      throw error;
+    }
   }
   return indexCache.get(name);
 }
 
 async function ensureIndex(collection, key, options, label) {
   const indexes = await getIndexes(collection);
+  if (!indexes) {
+    console.log(`  - ${label} (skipped, collection missing)`);
+    return;
+  }
   const existing = indexes.find(idx => keysEqual(idx.key, key));
 
   if (existing) {
