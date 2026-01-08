@@ -9,6 +9,11 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
   const identity = resolveLocationIdentity(locationValue);
 
   if (!identity.location_id || !identity.canonical_id) {
+    logger.info('Cannot upsert location without stable ID', {
+      observation_id: observationDoc._id,
+      sourceType,
+      location_value: locationValue || 'empty',
+    });
     return null;
   }
 

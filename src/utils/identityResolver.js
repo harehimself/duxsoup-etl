@@ -346,17 +346,21 @@ function resolveCompanyIdentity(webhookData) {
 function normalizeLocationName(value) {
   if (!value || typeof value !== 'string') return null;
 
+  // Normalize whitespace but preserve accents, periods, commas
   return value
     .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s\-.,]/g, '');
+    .replace(/\s+/g, ' ');
 }
 
 function slugifyLocation(value) {
   if (!value) return null;
+
+  // Create slug for ID purposes: lowercase, no accents, hyphens for spaces
+  // But we keep the normalized form with accents in the snapshot
   return value
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove accents for ID
+    .replace(/[^\w\s-]/g, '') // Remove special chars
     .trim()
     .replace(/\s+/g, '-');
 }

@@ -76,15 +76,31 @@ const visitSchema = new mongoose.Schema(
     // rawData should capture the entire original webhook payload
     rawData: {
       type: mongoose.Schema.Types.Mixed,
-      required: false, // It's good to store raw data, but maybe not *always* required if you process other fields
+      required: false,
+      validate: {
+        validator: function(v) {
+          if (!v) return true; // Allow null/undefined
+          try {
+            const size = JSON.stringify(v).length;
+            return size <= 1000000; // Max 1MB serialized size
+          } catch (e) {
+            return false; // Invalid JSON
+          }
+        },
+        message: 'rawData exceeds maximum size of 1MB'
+      }
     },
 
     // Idempotency key to prevent duplicate observations
     // Computed from: sha1(userid + type + time + id)
+    //
+    // Note: sparse index allows null values for backwards compatibility with legacy data.
+    // Future consideration: Run migration to backfill missing event_key values and remove sparse flag.
+    // Until then, multiple documents can have event_key: null (breaks idempotency for those records).
     event_key: {
       type: String,
       unique: true,
-      sparse: true, // Allow null for backwards compatibility
+      sparse: true,
     },
   },
   {

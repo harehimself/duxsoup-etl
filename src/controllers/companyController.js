@@ -16,6 +16,11 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   const identity = resolveCompanyIdentity(webhookData);
 
   if (!identity.company_id || !identity.canonical_id) {
+    logger.info('Cannot upsert company without stable ID', {
+      observation_id: observationDoc._id,
+      sourceType,
+      company_name: webhookData.Company || 'unknown',
+    });
     return null;
   }
 
