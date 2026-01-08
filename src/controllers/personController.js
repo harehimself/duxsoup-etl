@@ -247,15 +247,18 @@ async function upsertFromObservation(observationDoc, sourceType) {
       sourceObservationId: observationDoc._id,
     });
 
-    // Step 3: Attach observation reference
+    // Step 3: Attach observation reference (using $addToSet for atomic uniqueness)
     const observationRef = observationDoc._id;
     const observedAt = webhookData.VisitTime || webhookData.ScanTime || new Date();
 
-    if (sourceType === 'visit' && !person.observations.visits.includes(observationRef)) {
-      person.observations.visits.push(observationRef);
-    } else if (sourceType === 'scan' && !person.observations.scans.includes(observationRef)) {
-      person.observations.scans.push(observationRef);
-    }
+    const observationField = sourceType === 'visit' ? 'observations.visits' : 'observations.scans';
+    await Person.updateOne(
+      { _id: person._id },
+      { $addToSet: { [observationField]: observationRef } }
+    );
+
+    // Reload to get updated observations count
+    person = await Person.findById(person._id);
 
     // Step 4: Update metadata
     person.meta = person.meta || {};

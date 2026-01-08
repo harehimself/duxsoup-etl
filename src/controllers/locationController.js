@@ -37,12 +37,15 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
     location.snapshot.name = identity.normalized || location.snapshot.name;
   }
 
-  if (sourceType === 'visit' && !location.observations.visits.includes(observationId)) {
-    location.observations.visits.push(observationId);
-  }
-  if (sourceType === 'scan' && !location.observations.scans.includes(observationId)) {
-    location.observations.scans.push(observationId);
-  }
+  // Use $addToSet for atomic uniqueness on observation references
+  const observationField = sourceType === 'visit' ? 'observations.visits' : 'observations.scans';
+  await Location.updateOne(
+    { _id: location._id },
+    { $addToSet: { [observationField]: observationId } }
+  );
+
+  // Reload to get updated observations count
+  location = await Location.findById(location._id);
 
   location.meta = location.meta || {};
   location.meta.lastObservedAt = observedAt;

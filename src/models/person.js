@@ -59,14 +59,22 @@ const personSchema = new mongoose.Schema({
   _id: {
     type: String,
     required: true,
+    validate: {
+      validator: function(v) {
+        // Accept Sales Nav IDs (ACwAAA* or ACoAAA*), numeric IDs (8+ digits), or normalized URLs
+        return /^(ACwAAA|ACoAAA)[A-Za-z0-9_-]+$/.test(v) ||
+               /^\d{8,}$/.test(v) ||
+               /^linkedin\.com\/in\/[\w-]+$/.test(v);
+      },
+      message: props => `Invalid person ID format: ${props.value}. Must be Sales Nav ID (ACwAAA*/ACoAAA*), numeric ID (8+ digits), or normalized URL (linkedin.com/in/*)`
+    }
   },
 
   // Canonical internal ID (deterministic UUID derived from best stable identifier)
   canonical_id: {
     type: String,
     required: true,
-    unique: true,
-    index: true,
+    unique: true,  // unique constraint already creates an index
   },
 
   // All known aliases for this person
@@ -74,7 +82,6 @@ const personSchema = new mongoose.Schema({
   aliases: {
     type: [aliasSchema],
     default: [],
-    index: true,
   },
 
   // Snapshot: Current canonical state of the person
@@ -127,6 +134,13 @@ const personSchema = new mongoose.Schema({
 
     // Connection degree
     degree: String,
+
+    // Provenance metadata - tracks source of each field value
+    // Structure: { fieldName: { value, observedAt, source, observationId } }
+    _meta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
 
   // References to observation records (visits/scans)

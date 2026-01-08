@@ -28,19 +28,24 @@ const locationSchema = new mongoose.Schema({
   _id: {
     type: String,
     required: true,
+    validate: {
+      validator: function(v) {
+        // Accept normalized location slugs (lowercase with hyphens)
+        return /^[a-z0-9-]+$/.test(v) && v.length >= 2;
+      },
+      message: props => `Invalid location ID format: ${props.value}. Must be normalized slug (lowercase-with-hyphens, min 2 chars)`
+    }
   },
 
   canonical_id: {
     type: String,
     required: true,
-    unique: true,
-    index: true,
+    unique: true,  // unique constraint already creates an index
   },
 
   aliases: {
     type: [locationAliasSchema],
     default: [],
-    index: true,
   },
 
   snapshot: {

@@ -23,10 +23,10 @@ const scanSchema = new mongoose.Schema({
     index: true
   },
   // Matches "Profile" from Dux-Soup webhook
+  // Note: Profile URLs are UNSTABLE and can change - not used for identity
   Profile: {
     type: String,
-    required: true,
-    index: true
+    required: false
   },
   // Matches "First Name" from Dux-Soup webhook (requires quotes)
   'First Name': {

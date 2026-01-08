@@ -54,7 +54,7 @@ const handleVisit = async (req, res) => {
     model: Visit,
     type: 'visit',
     timeField: 'VisitTime',
-    requiredFields: ["VisitTime", "Profile", "Degree", "First Name"],
+    requiredFields: ["VisitTime", "Degree", "First Name"],
     dataMapper: mapVisitData,
   };
 

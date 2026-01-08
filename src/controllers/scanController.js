@@ -41,7 +41,7 @@ const handleScan = async (req, res) => {
     model: Scan,
     type: 'scan',
     timeField: 'ScanTime',
-    requiredFields: ["ScanTime", "Profile", "First Name", "Last Name"],
+    requiredFields: ["ScanTime", "First Name", "Last Name"],
     dataMapper: mapScanData,
   };
 

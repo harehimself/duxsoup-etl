@@ -38,12 +38,15 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     company.aliases = mergedAliases;
   }
 
-  if (sourceType === 'visit' && !company.observations.visits.includes(observationId)) {
-    company.observations.visits.push(observationId);
-  }
-  if (sourceType === 'scan' && !company.observations.scans.includes(observationId)) {
-    company.observations.scans.push(observationId);
-  }
+  // Use $addToSet for atomic uniqueness on observation references
+  const observationField = sourceType === 'visit' ? 'observations.visits' : 'observations.scans';
+  await Company.updateOne(
+    { _id: company._id },
+    { $addToSet: { [observationField]: observationId } }
+  );
+
+  // Reload to get updated observations count
+  company = await Company.findById(company._id);
 
   company.meta = company.meta || {};
   company.meta.lastObservedAt = observedAt;

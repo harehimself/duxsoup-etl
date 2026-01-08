@@ -29,7 +29,8 @@ function extractSalesNavId(url) {
   if (!url || typeof url !== 'string') return null;
 
   // Pattern: Match BOTH ACwAAA and ACoAAA followed by base64-like characters
-  const salesNavPattern = /(A[Cc][owA][AAA][A-Za-z0-9_-]+)/;
+  // Use explicit alternation to avoid character class ambiguity
+  const salesNavPattern = /((?:ACwAAA|ACoAAA)[A-Za-z0-9_-]+)/;
   const match = url.match(salesNavPattern);
 
   return match ? match[1] : null;
