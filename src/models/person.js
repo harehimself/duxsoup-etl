@@ -69,14 +69,6 @@ const personSchema = new mongoose.Schema({
     index: true,
   },
 
-  // Explicit person_id field (redundant but clear)
-  person_id: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
-  },
-
   // All known aliases for this person
   // Used to match incoming webhooks and prevent duplicates
   aliases: {
@@ -135,9 +127,6 @@ const personSchema = new mongoose.Schema({
 
     // Connection degree
     degree: String,
-
-    // Last updated from observation
-    lastObservedAt: Date,
   },
 
   // References to observation records (visits/scans)
@@ -155,16 +144,16 @@ const personSchema = new mongoose.Schema({
 
   // Metadata for tracking updates
   meta: {
-    last_observed_at: Date,
-    last_observation: {
+    lastObservedAt: Date,
+    lastObservation: {
       type: {
         type: String,
         enum: ['visit', 'scan'],
       },
       id: mongoose.Schema.Types.ObjectId,
-      observed_at: Date,
+      observedAt: Date,
     },
-    observations_count: {
+    observationsCount: {
       type: Number,
       default: 0,
     },
@@ -172,18 +161,8 @@ const personSchema = new mongoose.Schema({
 
   // Derived metrics (computed from roles)
   derived: {
-    avg_tenure_months: Number,
-    years_at_current_company: Number,
-  },
-
-  // Metadata
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
+    avgTenureMonths: Number,
+    yearsAtCurrentCompany: Number,
   },
 }, {
   timestamps: true,
@@ -197,8 +176,8 @@ personSchema.index({ 'aliases.value': 1 });
 personSchema.index({ 'aliases.type': 1, 'aliases.value': 1 });
 
 // Metadata indexes for sorting and tie-breaking
-personSchema.index({ 'meta.last_observed_at': -1 });
-personSchema.index({ 'meta.observations_count': -1 });
+personSchema.index({ 'meta.lastObservedAt': -1 });
+personSchema.index({ 'meta.observationsCount': -1 });
 
 // Search and analysis indexes
 personSchema.index({ 'snapshot.fullName': 1 });
@@ -207,13 +186,5 @@ personSchema.index({ createdAt: -1 });
 
 // Note: DO NOT add uniqueness constraint on aliases.value
 // Multiple people can temporarily share aliases during merges
-
-// Pre-save hook to ensure person_id matches _id
-personSchema.pre('save', function(next) {
-  if (this.isNew || this.isModified('_id')) {
-    this.person_id = this._id;
-  }
-  next();
-});
 
 module.exports = mongoose.model('Person', personSchema);

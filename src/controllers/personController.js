@@ -18,8 +18,8 @@ const logger = require('../utils/logger');
 /**
  * Determine if incoming value should overwrite existing snapshot value
  *
- * @param {Object} existingMeta - { value, observed_at, source, observation_id }
- * @param {Object} incomingMeta - { value, observed_at, source, observation_id }
+ * @param {Object} existingMeta - { value, observedAt, source, observationId }
+ * @param {Object} incomingMeta - { value, observedAt, source, observationId }
  * @returns {boolean} True if incoming should overwrite existing
  */
 function shouldOverwrite(existingMeta, incomingMeta) {
@@ -47,8 +47,8 @@ function shouldOverwrite(existingMeta, incomingMeta) {
   }
 
   // Same precedence: newer wins
-  const existingTime = new Date(existingMeta.observed_at).getTime();
-  const incomingTime = new Date(incomingMeta.observed_at).getTime();
+  const existingTime = new Date(existingMeta.observedAt).getTime();
+  const incomingTime = new Date(incomingMeta.observedAt).getTime();
 
   return incomingTime >= existingTime;
 }
@@ -59,7 +59,7 @@ function shouldOverwrite(existingMeta, incomingMeta) {
  * @param {Object} snapshot - Current snapshot object
  * @param {string} fieldPath - Dot-notation field path (e.g., 'firstName')
  * @param {*} incomingValue - New value from observation
- * @param {Object} observationMeta - { observed_at, source, observation_id }
+ * @param {Object} observationMeta - { observedAt, source, observationId }
  * @returns {boolean} True if value was updated
  */
 function normalizeField(snapshot, fieldPath, incomingValue, observationMeta) {
@@ -69,9 +69,9 @@ function normalizeField(snapshot, fieldPath, incomingValue, observationMeta) {
 
   const incomingMeta = {
     value: incomingValue,
-    observed_at: observationMeta.observed_at,
+    observedAt: observationMeta.observedAt,
     source: observationMeta.source,
-    observation_id: observationMeta.observation_id,
+    observationId: observationMeta.observationId,
   };
 
   if (shouldOverwrite(existingMeta, incomingMeta)) {
@@ -259,13 +259,13 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     // Step 4: Update metadata
     person.meta = person.meta || {};
-    person.meta.last_observed_at = observedAt;
-    person.meta.last_observation = {
+    person.meta.lastObservedAt = observedAt;
+    person.meta.lastObservation = {
       type: sourceType,
       id: observationRef,
-      observed_at: observedAt,
+      observedAt: observedAt,
     };
-    person.meta.observations_count = (person.observations.visits.length || 0) + (person.observations.scans.length || 0);
+    person.meta.observationsCount = (person.observations.visits.length || 0) + (person.observations.scans.length || 0);
 
     // Step 5: Merge aliases (already done by resolveOrCreate, but ensure latest)
     if (identity.aliases && identity.aliases.length > 0) {
@@ -276,9 +276,9 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     // Step 6: Update normalized fields with precedence
     const observationMeta = {
-      observed_at: observedAt,
+      observedAt: observedAt,
       source: sourceType,
-      observation_id: observationRef,
+      observationId: observationRef,
     };
 
     // Initialize metadata structure if needed

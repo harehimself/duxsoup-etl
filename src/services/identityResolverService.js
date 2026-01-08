@@ -331,7 +331,6 @@ class IdentityResolverService {
 
         person = await Person.create({
           _id: identity.person_id,
-          person_id: identity.person_id,
           canonical_id: canonicalId,
           aliases: identity.aliases || [],
           snapshot: {},

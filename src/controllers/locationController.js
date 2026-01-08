@@ -1,21 +1,7 @@
 const Location = require('../models/location');
 const logger = require('../utils/logger');
 const { resolveLocationIdentity } = require('../utils/identityResolver');
-
-function dedupeAliases(aliases = []) {
-  const seen = new Set();
-  const unique = [];
-
-  aliases.forEach(alias => {
-    if (!alias?.type || !alias?.value) return;
-    const key = `${alias.type}:${alias.value}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    unique.push(alias);
-  });
-
-  return unique;
-}
+const { dedupeAliases } = require('../utils/aliasHelpers');
 
 async function upsertLocationFromObservation(observationDoc, sourceType) {
   const webhookData = observationDoc.rawData || observationDoc;
@@ -59,13 +45,13 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
   }
 
   location.meta = location.meta || {};
-  location.meta.last_observed_at = observedAt;
-  location.meta.last_observation = {
+  location.meta.lastObservedAt = observedAt;
+  location.meta.lastObservation = {
     type: sourceType,
     id: observationId,
-    observed_at: observedAt,
+    observedAt: observedAt,
   };
-  location.meta.observations_count =
+  location.meta.observationsCount =
     (location.observations.visits.length || 0) + (location.observations.scans.length || 0);
 
   await location.save();

@@ -1,21 +1,7 @@
 const Company = require('../models/company');
 const logger = require('../utils/logger');
 const { resolveCompanyIdentity } = require('../utils/identityResolver');
-
-function dedupeAliases(aliases = []) {
-  const seen = new Set();
-  const unique = [];
-
-  aliases.forEach(alias => {
-    if (!alias?.type || !alias?.value) return;
-    const key = `${alias.type}:${alias.value}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    unique.push(alias);
-  });
-
-  return unique;
-}
+const { dedupeAliases } = require('../utils/aliasHelpers');
 
 function applySnapshotValue(snapshot, field, value) {
   if (value === undefined || value === null) return false;
@@ -41,7 +27,6 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   if (!company) {
     company = await Company.create({
       _id: identity.company_id,
-      company_id: identity.company_id,
       canonical_id: identity.canonical_id,
       aliases: dedupeAliases(identity.aliases),
       snapshot: {},
@@ -61,13 +46,13 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   }
 
   company.meta = company.meta || {};
-  company.meta.last_observed_at = observedAt;
-  company.meta.last_observation = {
+  company.meta.lastObservedAt = observedAt;
+  company.meta.lastObservation = {
     type: sourceType,
     id: observationId,
-    observed_at: observedAt,
+    observedAt: observedAt,
   };
-  company.meta.observations_count =
+  company.meta.observationsCount =
     (company.observations.visits.length || 0) + (company.observations.scans.length || 0);
 
   company.snapshot = company.snapshot || {};
@@ -75,7 +60,6 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   applySnapshotValue(company.snapshot, 'industry', webhookData.Industry);
   applySnapshotValue(company.snapshot, 'companyProfileUrl', webhookData.CompanyProfile);
   applySnapshotValue(company.snapshot, 'website', webhookData.CompanyWebsite);
-  applySnapshotValue(company.snapshot, 'lastObservedAt', observedAt);
 
   await company.save();
 

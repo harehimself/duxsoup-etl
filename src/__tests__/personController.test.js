@@ -14,7 +14,7 @@ describe('PersonController', () => {
       const existingMeta = null;
       const incomingMeta = {
         value: 'John Doe',
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
 
@@ -26,12 +26,12 @@ describe('PersonController', () => {
     it('should reject empty incoming value', () => {
       const existingMeta = {
         value: 'John Doe',
-        observed_at: new Date('2024-01-01'),
+        observedAt: new Date('2024-01-01'),
         source: 'scan',
       };
       const incomingMeta = {
         value: '',
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
 
@@ -43,12 +43,12 @@ describe('PersonController', () => {
     it('should allow visit to override scan (higher precedence)', () => {
       const existingMeta = {
         value: 'San Francisco',
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'scan',
       };
       const incomingMeta = {
         value: 'New York',
-        observed_at: new Date('2024-01-10'), // Older
+        observedAt: new Date('2024-01-10'), // Older
         source: 'visit', // Higher precedence
       };
 
@@ -60,12 +60,12 @@ describe('PersonController', () => {
     it('should reject scan when visit exists (lower precedence)', () => {
       const existingMeta = {
         value: 'New York',
-        observed_at: new Date('2024-01-10'),
+        observedAt: new Date('2024-01-10'),
         source: 'visit',
       };
       const incomingMeta = {
         value: 'San Francisco',
-        observed_at: new Date('2024-01-15'), // Newer
+        observedAt: new Date('2024-01-15'), // Newer
         source: 'scan', // Lower precedence
       };
 
@@ -77,12 +77,12 @@ describe('PersonController', () => {
     it('should allow newer visit to override older visit (same precedence)', () => {
       const existingMeta = {
         value: 'Engineer',
-        observed_at: new Date('2024-01-01'),
+        observedAt: new Date('2024-01-01'),
         source: 'visit',
       };
       const incomingMeta = {
         value: 'Senior Engineer',
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
 
@@ -94,12 +94,12 @@ describe('PersonController', () => {
     it('should reject older visit when newer exists', () => {
       const existingMeta = {
         value: 'Senior Engineer',
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
       const incomingMeta = {
         value: 'Engineer',
-        observed_at: new Date('2024-01-01'), // Older
+        observedAt: new Date('2024-01-01'), // Older
         source: 'visit',
       };
 
@@ -116,14 +116,14 @@ describe('PersonController', () => {
         _meta: {
           location: {
             value: 'San Francisco',
-            observed_at: new Date('2024-01-01'),
+            observedAt: new Date('2024-01-01'),
             source: 'scan',
           },
         },
       };
 
       const observationMeta = {
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
         observation_id: 'obs123',
       };
@@ -141,14 +141,14 @@ describe('PersonController', () => {
         _meta: {
           location: {
             value: 'New York',
-            observed_at: new Date('2024-01-15'),
+            observedAt: new Date('2024-01-15'),
             source: 'visit',
           },
         },
       };
 
       const observationMeta = {
-        observed_at: new Date('2024-01-20'),
+        observedAt: new Date('2024-01-20'),
         source: 'scan',
         observation_id: 'obs123',
       };
@@ -165,14 +165,14 @@ describe('PersonController', () => {
         _meta: {
           email: {
             value: 'john@example.com',
-            observed_at: new Date('2024-01-01'),
+            observedAt: new Date('2024-01-01'),
             source: 'scan',
           },
         },
       };
 
       const observationMeta = {
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
         observation_id: 'obs123',
       };
@@ -285,7 +285,7 @@ describe('PersonController', () => {
       };
 
       const observationMeta = {
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
 
@@ -321,7 +321,7 @@ describe('PersonController', () => {
       };
 
       const observationMeta = {
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
 
@@ -352,7 +352,7 @@ describe('PersonController', () => {
       };
 
       const observationMeta = {
-        observed_at: new Date('2024-01-15'),
+        observedAt: new Date('2024-01-15'),
         source: 'visit',
       };
 

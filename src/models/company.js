@@ -43,14 +43,6 @@ const companySchema = new mongoose.Schema({
     index: true,
   },
 
-  // Explicit company_id field (redundant but clear)
-  company_id: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
-  },
-
   // All known aliases for this company
   aliases: {
     type: [companyAliasSchema],
@@ -73,9 +65,6 @@ const companySchema = new mongoose.Schema({
     // Metadata
     employeeCount: String,
     founded: String,
-
-    // Last updated from observation
-    lastObservedAt: Date,
   },
 
   // References to observations where this company appeared
@@ -91,29 +80,19 @@ const companySchema = new mongoose.Schema({
   },
 
   meta: {
-    last_observed_at: Date,
-    last_observation: {
+    lastObservedAt: Date,
+    lastObservation: {
       type: {
         type: String,
         enum: ['visit', 'scan'],
       },
       id: mongoose.Schema.Types.ObjectId,
-      observed_at: Date,
+      observedAt: Date,
     },
-    observations_count: {
+    observationsCount: {
       type: Number,
       default: 0,
     },
-  },
-
-  // Metadata
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
   },
 }, {
   timestamps: true,
@@ -122,17 +101,8 @@ const companySchema = new mongoose.Schema({
 // Indexes for efficient queries
 companySchema.index({ 'aliases.value': 1 });
 companySchema.index({ 'snapshot.name': 1 });
-companySchema.index({ 'snapshot.lastObservedAt': -1 });
 companySchema.index({ createdAt: -1 });
-companySchema.index({ 'meta.last_observed_at': -1 });
-companySchema.index({ 'meta.observations_count': -1 });
-
-// Pre-save hook to ensure company_id matches _id
-companySchema.pre('save', function(next) {
-  if (this.isNew || this.isModified('_id')) {
-    this.company_id = this._id;
-  }
-  next();
-});
+companySchema.index({ 'meta.lastObservedAt': -1 });
+companySchema.index({ 'meta.observationsCount': -1 });
 
 module.exports = mongoose.model('Company', companySchema);

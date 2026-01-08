@@ -63,28 +63,19 @@ const locationSchema = new mongoose.Schema({
   },
 
   meta: {
-    last_observed_at: Date,
-    last_observation: {
+    lastObservedAt: Date,
+    lastObservation: {
       type: {
         type: String,
         enum: ['visit', 'scan'],
       },
       id: mongoose.Schema.Types.ObjectId,
-      observed_at: Date,
+      observedAt: Date,
     },
-    observations_count: {
+    observationsCount: {
       type: Number,
       default: 0,
     },
-  },
-
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
   },
 }, {
   timestamps: true,
@@ -92,7 +83,7 @@ const locationSchema = new mongoose.Schema({
 
 locationSchema.index({ 'aliases.value': 1 });
 locationSchema.index({ 'snapshot.normalized': 1 });
-locationSchema.index({ 'meta.last_observed_at': -1 });
+locationSchema.index({ 'meta.lastObservedAt': -1 });
 locationSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Location', locationSchema);
