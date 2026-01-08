@@ -38,7 +38,10 @@ const visitSchema = new mongoose.Schema(
     "Last Name": String, // Not required by the logs, but present in sample
 
     // Matches "Degree" from Dux-Soup webhook
-    Degree: String, // Changed from 'degree' to 'Degree'. Not in "missingFields", so keep optional.
+    Degree: {
+      type: String,
+      required: true,
+    },
 
     // All other fields from your sample, matching their exact casing
     SalesProfile: String,
@@ -82,12 +85,17 @@ const visitSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true, // Allow null for backwards compatibility
-      index: true,
     },
   },
   {
     timestamps: true, // Keep this for createdAt and updatedAt
   }
 );
+
+// Compound indexes for common query patterns
+visitSchema.index({ userid: 1, VisitTime: -1 }); // User-specific queries sorted by time
+visitSchema.index({ Company: 1 }); // Company extraction queries
+visitSchema.index({ Location: 1 }); // Location extraction queries
+visitSchema.index({ event_key: 1 }); // Idempotency checks (remove redundant inline index)
 
 module.exports = mongoose.model("Visit", visitSchema);

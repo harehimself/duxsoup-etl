@@ -60,18 +60,18 @@ const companySchema = new mongoose.Schema({
   // Snapshot: Current canonical state of the company
   snapshot: {
     // Basic info
-    name: String,
-    industry: String,
-    location: String,
-    description: String,
+    name: { type: String, maxlength: 200 },
+    industry: { type: String, maxlength: 100 },
+    location: { type: String, maxlength: 200 },
+    description: { type: String, maxlength: 5000 },
 
     // URLs
-    companyProfileUrl: String,
-    website: String,
+    companyProfileUrl: { type: String, maxlength: 2000 },
+    website: { type: String, maxlength: 2000 },
 
     // Metadata
-    employeeCount: String,
-    founded: String,
+    employeeCount: { type: String, maxlength: 50 },
+    founded: { type: String, maxlength: 50 },
   },
 
   // References to observations where this company appeared

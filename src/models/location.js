@@ -49,11 +49,11 @@ const locationSchema = new mongoose.Schema({
   },
 
   snapshot: {
-    name: String,
-    normalized: String,
-    country: String,
-    region: String,
-    city: String,
+    name: { type: String, maxlength: 200 },
+    normalized: { type: String, maxlength: 200 },
+    country: { type: String, maxlength: 100 },
+    region: { type: String, maxlength: 100 },
+    city: { type: String, maxlength: 100 },
   },
 
   observations: {

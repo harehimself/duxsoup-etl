@@ -38,7 +38,19 @@ const roleSchema = new mongoose.Schema({
   location: String,
   description: String,
   startDate: Date,
-  endDate: Date,
+  endDate: {
+    type: Date,
+    validate: {
+      validator: function(endDate) {
+        // If endDate is provided and startDate exists, ensure endDate > startDate
+        if (endDate && this.startDate) {
+          return endDate >= this.startDate;
+        }
+        return true;
+      },
+      message: 'endDate must be after or equal to startDate'
+    }
+  },
   isCurrent: {
     type: Boolean,
     default: false,
@@ -87,28 +99,28 @@ const personSchema = new mongoose.Schema({
   // Snapshot: Current canonical state of the person
   snapshot: {
     // Basic info
-    firstName: String,
-    middleName: String,
-    lastName: String,
-    fullName: String,
+    firstName: { type: String, maxlength: 100 },
+    middleName: { type: String, maxlength: 100 },
+    lastName: { type: String, maxlength: 100 },
+    fullName: { type: String, maxlength: 300 },
 
     // Current position
-    currentTitle: String,
-    currentCompany: String,
+    currentTitle: { type: String, maxlength: 200 },
+    currentCompany: { type: String, maxlength: 200 },
     currentCompanyId: String,
 
     // Contact & profile
-    location: String,
-    industry: String,
-    connections: String,
-    summary: String,
-    email: String,
-    phone: String,
-    twitter: String,
+    location: { type: String, maxlength: 200 },
+    industry: { type: String, maxlength: 100 },
+    connections: { type: String, maxlength: 50 },
+    summary: { type: String, maxlength: 5000 },
+    email: { type: String, maxlength: 254 },
+    phone: { type: String, maxlength: 50 },
+    twitter: { type: String, maxlength: 100 },
 
     // Profile images
-    profilePicture: String,
-    thumbnail: String,
+    profilePicture: { type: String, maxlength: 2000 },
+    thumbnail: { type: String, maxlength: 2000 },
 
     // Professional history
     roles: {
@@ -129,11 +141,11 @@ const personSchema = new mongoose.Schema({
     },
 
     // Websites
-    personalWebsite: String,
-    companyWebsite: String,
+    personalWebsite: { type: String, maxlength: 2000 },
+    companyWebsite: { type: String, maxlength: 2000 },
 
     // Connection degree
-    degree: String,
+    degree: { type: String, maxlength: 20 },
 
     // Provenance metadata - tracks source of each field value
     // Structure: { fieldName: { value, observedAt, source, observationId } }

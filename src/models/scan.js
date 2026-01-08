@@ -67,10 +67,15 @@ const scanSchema = new mongoose.Schema({
     type: String,
     unique: true,
     sparse: true, // Allow null for backwards compatibility
-    index: true,
   },
 }, {
   timestamps: true
 });
+
+// Compound indexes for common query patterns
+scanSchema.index({ userid: 1, ScanTime: -1 }); // User-specific queries sorted by time
+scanSchema.index({ Company: 1 }); // Company extraction queries
+scanSchema.index({ Location: 1 }); // Location extraction queries
+scanSchema.index({ event_key: 1 }); // Idempotency checks (remove redundant inline index)
 
 module.exports = mongoose.model('Scan', scanSchema);
