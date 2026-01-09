@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const logger = require("./logger");
 const identityMatcher = require("./identityMatcher");
+const { parseLocation } = require("./location-parser");
 
 /**
  * Identity Resolution Utility
@@ -440,11 +441,15 @@ function resolveLocationIdentity(locationValue) {
       primary_id_type: null,
       canonical_key: null,
       canonical_id: null,
+      parsed: null,
     };
   }
 
   const slug = slugifyLocation(normalized);
   const canonicalKey = buildCanonicalKey("location", slug);
+
+  // Parse the location into structured components
+  const parsed = parseLocation(locationValue);
 
   return {
     location_id: slug,
@@ -457,6 +462,7 @@ function resolveLocationIdentity(locationValue) {
     canonical_key: canonicalKey,
     canonical_id: computeCanonicalId(canonicalKey),
     normalized,
+    parsed, // Include parsed location components
   };
 }
 module.exports = {

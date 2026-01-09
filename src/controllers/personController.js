@@ -1,7 +1,10 @@
-const Person = require('../models/person');
-const identityResolverService = require('../services/identityResolverService');
-const { resolvePersonIdentity, resolveCompanyIdentity } = require('../utils/identityResolver');
-const logger = require('../utils/logger');
+const Person = require("../models/person");
+const identityResolverService = require("../services/identityResolverService");
+const {
+  resolvePersonIdentity,
+  resolveCompanyIdentity,
+} = require("../utils/identityResolver");
+const logger = require("../utils/logger");
 
 /**
  * Person Controller
@@ -29,7 +32,7 @@ function shouldOverwrite(existingMeta, incomingMeta) {
   }
 
   // Never overwrite with empty/blank incoming
-  if (!incomingMeta.value || incomingMeta.value.trim() === '') {
+  if (!incomingMeta.value || incomingMeta.value.trim() === "") {
     return false;
   }
 
@@ -109,12 +112,17 @@ function computeDerivedMetrics(roles) {
   let roleCount = 0;
   let currentCompanyYears = null;
 
-  roles.forEach(role => {
+  roles.forEach((role) => {
     const startDate = role.startDate ? new Date(role.startDate) : null;
-    const endDate = role.endDate ? new Date(role.endDate) : (role.isCurrent ? now : null);
+    const endDate = role.endDate
+      ? new Date(role.endDate)
+      : role.isCurrent
+        ? now
+        : null;
 
     if (startDate && endDate) {
-      const tenureMonths = (endDate - startDate) / (1000 * 60 * 60 * 24 * 30.44); // Average month
+      const tenureMonths =
+        (endDate - startDate) / (1000 * 60 * 60 * 24 * 30.44); // Average month
       totalTenureMonths += tenureMonths;
       roleCount++;
 
@@ -129,8 +137,12 @@ function computeDerivedMetrics(roles) {
   });
 
   return {
-    avg_tenure_months: roleCount > 0 ? Math.round(totalTenureMonths / roleCount) : null,
-    years_at_current_company: currentCompanyYears !== null ? Math.round(currentCompanyYears * 10) / 10 : null,
+    avg_tenure_months:
+      roleCount > 0 ? Math.round(totalTenureMonths / roleCount) : null,
+    years_at_current_company:
+      currentCompanyYears !== null
+        ? Math.round(currentCompanyYears * 10) / 10
+        : null,
   };
 }
 
@@ -149,18 +161,20 @@ function updateRolesTimeline(person, observationData, observationMeta) {
   const positions = observationData.extended?.positions || [];
   const currentRole = observationData.Title || observationData.title;
   const currentCompany = observationData.Company || observationData.company;
-  const currentCompanyId = observationData.CompanyID || observationData.companyId;
+  const currentCompanyId =
+    observationData.CompanyID || observationData.companyId;
 
   // If we have extended positions, process them
   if (positions.length > 0) {
-    positions.forEach(pos => {
+    positions.forEach((pos) => {
       const roleKey = `${pos.Title}|${pos.Company}|${pos.From}`;
 
       // Check if role already exists
-      const existingRole = person.snapshot.roles.find(r =>
-        r.title === pos.Title &&
-        r.companyName === pos.Company &&
-        r.startDate?.toString() === new Date(pos.From).toString()
+      const existingRole = person.snapshot.roles.find(
+        (r) =>
+          r.title === pos.Title &&
+          r.companyName === pos.Company &&
+          r.startDate?.toString() === new Date(pos.From).toString(),
       );
 
       if (!existingRole) {
@@ -172,18 +186,19 @@ function updateRolesTimeline(person, observationData, observationMeta) {
           location: pos.Location,
           description: pos.Description,
           startDate: pos.From ? new Date(pos.From) : null,
-          endDate: pos.To && pos.To !== 'Present' ? new Date(pos.To) : null,
-          isCurrent: pos.To === 'Present' || !pos.To,
+          endDate: pos.To && pos.To !== "Present" ? new Date(pos.To) : null,
+          isCurrent: pos.To === "Present" || !pos.To,
         });
         updated = true;
       }
     });
   } else if (currentRole && currentCompany) {
     // Single current role from scan/visit
-    const existingCurrentRole = person.snapshot.roles.find(r =>
-      r.title === currentRole &&
-      r.companyName === currentCompany &&
-      r.isCurrent
+    const existingCurrentRole = person.snapshot.roles.find(
+      (r) =>
+        r.title === currentRole &&
+        r.companyName === currentCompany &&
+        r.isCurrent,
     );
 
     if (!existingCurrentRole) {
@@ -223,7 +238,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
     const identity = resolvePersonIdentity(webhookData);
 
     if (!identity.person_id) {
-      logger.warn('Cannot upsert person without stable ID', {
+      logger.warn("Cannot upsert person without stable ID", {
         observation_id: observationDoc._id,
         sourceType,
       });
@@ -231,10 +246,10 @@ async function upsertFromObservation(observationDoc, sourceType) {
     }
 
     if (!identity.canonical_id || !identity.primary_id_type) {
-      throw new Error('Missing canonical identity for observation');
+      throw new Error("Missing canonical identity for observation");
     }
 
-    logger.info('Upserting person from observation', {
+    logger.info("Upserting person from observation", {
       person_id: identity.person_id,
       observation_id: observationDoc._id,
       sourceType,
@@ -242,19 +257,21 @@ async function upsertFromObservation(observationDoc, sourceType) {
     });
 
     // Step 2: Resolve or create canonical person
-    const person = await identityResolverService.resolveOrCreate(identity, {
+    let person = await identityResolverService.resolveOrCreate(identity, {
       reason: `${sourceType}_observation`,
       sourceObservationId: observationDoc._id,
     });
 
     // Step 3: Attach observation reference (using $addToSet for atomic uniqueness)
     const observationRef = observationDoc._id;
-    const observedAt = webhookData.VisitTime || webhookData.ScanTime || new Date();
+    const observedAt =
+      webhookData.VisitTime || webhookData.ScanTime || new Date();
 
-    const observationField = sourceType === 'visit' ? 'observations.visits' : 'observations.scans';
+    const observationField =
+      sourceType === "visit" ? "observations.visits" : "observations.scans";
     await Person.updateOne(
       { _id: person._id },
-      { $addToSet: { [observationField]: observationRef } }
+      { $addToSet: { [observationField]: observationRef } },
     );
 
     // Reload to get updated observations count
@@ -268,12 +285,16 @@ async function upsertFromObservation(observationDoc, sourceType) {
       id: observationRef,
       observedAt: observedAt,
     };
-    person.meta.observationsCount = (person.observations.visits.length || 0) + (person.observations.scans.length || 0);
+    person.meta.observationsCount =
+      (person.observations.visits.length || 0) +
+      (person.observations.scans.length || 0);
 
     // Step 5: Merge aliases (already done by resolveOrCreate, but ensure latest)
     if (identity.aliases && identity.aliases.length > 0) {
-      const existingValues = new Set(person.aliases.map(a => a.value));
-      const newAliases = identity.aliases.filter(a => !existingValues.has(a.value));
+      const existingValues = new Set(person.aliases.map((a) => a.value));
+      const newAliases = identity.aliases.filter(
+        (a) => !existingValues.has(a.value),
+      );
       person.aliases.push(...newAliases);
     }
 
@@ -290,9 +311,24 @@ async function upsertFromObservation(observationDoc, sourceType) {
     }
 
     // Normalize basic fields
-    normalizeField(person.snapshot, 'firstName', webhookData['First Name'], observationMeta);
-    normalizeField(person.snapshot, 'middleName', webhookData['Middle Name'], observationMeta);
-    normalizeField(person.snapshot, 'lastName', webhookData['Last Name'], observationMeta);
+    normalizeField(
+      person.snapshot,
+      "firstName",
+      webhookData["First Name"],
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "middleName",
+      webhookData["Middle Name"],
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "lastName",
+      webhookData["Last Name"],
+      observationMeta,
+    );
 
     // Compute full name if we have components
     if (person.snapshot.firstName || person.snapshot.lastName) {
@@ -300,31 +336,108 @@ async function upsertFromObservation(observationDoc, sourceType) {
         person.snapshot.firstName,
         person.snapshot.middleName,
         person.snapshot.lastName,
-      ].filter(Boolean).join(' ');
-      normalizeField(person.snapshot, 'fullName', fullName, observationMeta);
+      ]
+        .filter(Boolean)
+        .join(" ");
+      normalizeField(person.snapshot, "fullName", fullName, observationMeta);
     }
 
-    normalizeField(person.snapshot, 'currentTitle', webhookData.Title, observationMeta);
-    normalizeField(person.snapshot, 'currentCompany', webhookData.Company, observationMeta);
-    normalizeField(person.snapshot, 'currentCompanyId', webhookData.CompanyID, observationMeta);
-    normalizeField(person.snapshot, 'location', webhookData.Location, observationMeta);
-    normalizeField(person.snapshot, 'industry', webhookData.Industry, observationMeta);
-    normalizeField(person.snapshot, 'connections', webhookData.Connections, observationMeta);
-    normalizeField(person.snapshot, 'summary', webhookData.Summary, observationMeta);
-    normalizeField(person.snapshot, 'degree', webhookData.Degree || webhookData['Connection Degree'], observationMeta);
+    normalizeField(
+      person.snapshot,
+      "currentTitle",
+      webhookData.Title,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "currentCompany",
+      webhookData.Company,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "currentCompanyId",
+      webhookData.CompanyID,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "location",
+      webhookData.Location,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "industry",
+      webhookData.Industry,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "connections",
+      webhookData.Connections,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "summary",
+      webhookData.Summary,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "degree",
+      webhookData.Degree || webhookData["Connection Degree"],
+      observationMeta,
+    );
 
     // Contact fields
-    normalizeField(person.snapshot, 'email', webhookData.Email, observationMeta);
-    normalizeField(person.snapshot, 'phone', webhookData.Phone, observationMeta);
-    normalizeField(person.snapshot, 'twitter', webhookData.Twitter, observationMeta);
+    normalizeField(
+      person.snapshot,
+      "email",
+      webhookData.Email,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "phone",
+      webhookData.Phone,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "twitter",
+      webhookData.Twitter,
+      observationMeta,
+    );
 
     // Profile images
-    normalizeField(person.snapshot, 'profilePicture', webhookData.Picture, observationMeta);
-    normalizeField(person.snapshot, 'thumbnail', webhookData.Thumbnail, observationMeta);
+    normalizeField(
+      person.snapshot,
+      "profilePicture",
+      webhookData.Picture,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "thumbnail",
+      webhookData.Thumbnail,
+      observationMeta,
+    );
 
     // Websites
-    normalizeField(person.snapshot, 'personalWebsite', webhookData.PersonalWebsite, observationMeta);
-    normalizeField(person.snapshot, 'companyWebsite', webhookData.CompanyWebsite, observationMeta);
+    normalizeField(
+      person.snapshot,
+      "personalWebsite",
+      webhookData.PersonalWebsite,
+      observationMeta,
+    );
+    normalizeField(
+      person.snapshot,
+      "companyWebsite",
+      webhookData.CompanyWebsite,
+      observationMeta,
+    );
 
     // Step 7: Update roles timeline
     if (!person.snapshot.roles) {
@@ -333,16 +446,20 @@ async function upsertFromObservation(observationDoc, sourceType) {
     updateRolesTimeline(person, webhookData, observationMeta);
 
     // Step 8: Update education if present
-    if (webhookData.extended?.schools && webhookData.extended.schools.length > 0) {
+    if (
+      webhookData.extended?.schools &&
+      webhookData.extended.schools.length > 0
+    ) {
       if (!person.snapshot.education) {
         person.snapshot.education = [];
       }
 
-      webhookData.extended.schools.forEach(school => {
-        const exists = person.snapshot.education.find(e =>
-          e.school === school.Name &&
-          e.degree === school.Degree &&
-          e.field === school.Field
+      webhookData.extended.schools.forEach((school) => {
+        const exists = person.snapshot.education.find(
+          (e) =>
+            e.school === school.Name &&
+            e.degree === school.Degree &&
+            e.field === school.Field,
         );
 
         if (!exists) {
@@ -358,13 +475,16 @@ async function upsertFromObservation(observationDoc, sourceType) {
     }
 
     // Step 9: Update skills if present
-    if (webhookData.extended?.skills && webhookData.extended.skills.length > 0) {
+    if (
+      webhookData.extended?.skills &&
+      webhookData.extended.skills.length > 0
+    ) {
       if (!person.snapshot.skills) {
         person.snapshot.skills = [];
       }
 
       const existingSkills = new Set(person.snapshot.skills);
-      webhookData.extended.skills.forEach(skill => {
+      webhookData.extended.skills.forEach((skill) => {
         if (!existingSkills.has(skill)) {
           person.snapshot.skills.push(skill);
         }
@@ -377,7 +497,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
     // Step 11: Save and return
     await person.save();
 
-    logger.info('Successfully upserted person from observation', {
+    logger.info("Successfully upserted person from observation", {
       person_id: person._id,
       observation_id: observationRef,
       sourceType,
@@ -386,7 +506,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     return person;
   } catch (error) {
-    logger.error('Failed to upsert person from observation', {
+    logger.error("Failed to upsert person from observation", {
       observation_id: observationDoc._id,
       sourceType,
       error: error.message,
