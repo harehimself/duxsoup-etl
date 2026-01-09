@@ -179,33 +179,71 @@ async function migrateCompanyIds() {
 
     for (const item of canExtract) {
       try {
-        // Create new company with numeric ID
-        const newCompany = {
-          ...item.company,
-          _id: item.newId,
-        };
+        // Check if a company with the numeric ID already exists
+        const existingCompany = await companies.findOne({ _id: item.newId });
 
-        // Add old ID to aliases if not already there
-        if (!newCompany.aliases) {
-          newCompany.aliases = [];
+        if (existingCompany) {
+          // Merge: Update existing company with aliases from the URL-based record
+          const oldIdAlias = {
+            type: "profileUrl",
+            value: item.currentId,
+            addedAt: new Date(),
+          };
+
+          // Merge aliases from both records
+          const mergedAliases = existingCompany.aliases || [];
+
+          // Add old URL as alias if not already there
+          if (!mergedAliases.find((a) => a.value === item.currentId)) {
+            mergedAliases.push(oldIdAlias);
+          }
+
+          // Add any aliases from the URL-based record
+          if (item.company.aliases) {
+            item.company.aliases.forEach((alias) => {
+              if (!mergedAliases.find((a) => a.value === alias.value)) {
+                mergedAliases.push(alias);
+              }
+            });
+          }
+
+          // Update existing company with merged aliases
+          await companies.updateOne(
+            { _id: item.newId },
+            { $set: { aliases: mergedAliases } },
+          );
+
+          // Delete the old URL-based record
+          await companies.deleteOne({ _id: item.currentId });
+        } else {
+          // No conflict: Create new company with numeric ID
+          const newCompany = {
+            ...item.company,
+            _id: item.newId,
+          };
+
+          // Add old ID to aliases if not already there
+          if (!newCompany.aliases) {
+            newCompany.aliases = [];
+          }
+
+          const oldIdAlias = {
+            type: "profileUrl",
+            value: item.currentId,
+            addedAt: new Date(),
+          };
+
+          // Only add if not already in aliases
+          if (!newCompany.aliases.find((a) => a.value === item.currentId)) {
+            newCompany.aliases.push(oldIdAlias);
+          }
+
+          // Insert new record
+          await companies.insertOne(newCompany);
+
+          // Delete old record
+          await companies.deleteOne({ _id: item.currentId });
         }
-
-        const oldIdAlias = {
-          type: "profileUrl",
-          value: item.currentId,
-          addedAt: new Date(),
-        };
-
-        // Only add if not already in aliases
-        if (!newCompany.aliases.find((a) => a.value === item.currentId)) {
-          newCompany.aliases.push(oldIdAlias);
-        }
-
-        // Insert new record
-        await companies.insertOne(newCompany);
-
-        // Delete old record
-        await companies.deleteOne({ _id: item.currentId });
 
         migratedCount++;
 
