@@ -1,17 +1,24 @@
-const crypto = require('crypto');
-const logger = require('./logger');
+const crypto = require("crypto");
+const logger = require("./logger");
+const identityMatcher = require("./identityMatcher");
 
 /**
  * Identity Resolution Utility
  *
- * Extracts canonical identifiers from LinkedIn URLs and webhook data.
+ * NOW USES CENTRALIZED IDENTITY MATCHER (src/utils/identityMatcher.js)
  *
- * Priority:
- * 1. Sales Navigator person ID (ACwAAABCDEF format) - MOST STABLE
- * 2. LinkedIn numeric member ID (e.g., 12345678) - STABLE
- * 3. Public profile URL (e.g., /in/username) - UNSTABLE (can change)
+ * This file maintains backward compatibility with existing code
+ * while using the new waterfall identity matching logic internally.
  *
- * NEVER use profile URLs as primary identity - they change when users rename profiles.
+ * Waterfall Priority (from identityMatcher.js):
+ * 1. LinkedIn Username (stable across Sales Nav + Regular LinkedIn)
+ * 2. Sales Navigator ID (ACwAAA/ACoAAA)
+ * 3. Normalized Profile URL
+ * 4. Public Profile / Recruiter Profile
+ * 5. DuxSoup ID (last resort)
+ *
+ * MIGRATION NOTE: New code should use identityMatcher.js directly.
+ * This file exists for backward compatibility with existing controllers.
  */
 
 /**
@@ -26,7 +33,7 @@ const logger = require('./logger');
  * @returns {string|null} Sales Navigator person ID or null
  */
 function extractSalesNavId(url) {
-  if (!url || typeof url !== 'string') return null;
+  if (!url || typeof url !== "string") return null;
 
   // Pattern: Match BOTH ACwAAA and ACoAAA followed by base64-like characters
   // Use explicit alternation to avoid character class ambiguity
@@ -47,7 +54,7 @@ function extractSalesNavId(url) {
  * @returns {string|null} Numeric member ID or null
  */
 function extractNumericId(url) {
-  if (!url || typeof url !== 'string') return null;
+  if (!url || typeof url !== "string") return null;
 
   // Pattern: /profile/[numeric_id] or similar
   const numericPattern = /\/profile\/(\d{8,})/;
@@ -67,13 +74,13 @@ function extractNumericId(url) {
  * @returns {string|null} Profile username or null
  */
 function extractPublicProfileUrl(url) {
-  if (!url || typeof url !== 'string') return null;
+  if (!url || typeof url !== "string") return null;
 
   try {
     // Remove protocol and domain, normalize
     const normalized = url
-      .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, '')
-      .replace(/\/$/, '')
+      .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, "")
+      .replace(/\/$/, "")
       .trim();
 
     // Pattern: /in/username or /pub/username
@@ -82,7 +89,10 @@ function extractPublicProfileUrl(url) {
 
     return match ? `linkedin.com${match[0]}` : null;
   } catch (error) {
-    logger.warn('Failed to extract public profile URL', { url, error: error.message });
+    logger.warn("Failed to extract public profile URL", {
+      url,
+      error: error.message,
+    });
     return null;
   }
 }
@@ -94,7 +104,7 @@ function extractPublicProfileUrl(url) {
  * @returns {string|null} Company numeric ID or null
  */
 function extractCompanyId(companyId) {
-  if (!companyId || typeof companyId !== 'string') return null;
+  if (!companyId || typeof companyId !== "string") return null;
 
   // Company IDs are typically numeric
   const numericPattern = /^(\d+)$/;
@@ -103,13 +113,39 @@ function extractCompanyId(companyId) {
   return match ? match[1] : null;
 }
 
+/**
+ * Extract company numeric ID from LinkedIn company profile URL
+ * Example: "https://linkedin.com/company/82978333" → "82978333"
+ *
+ * @param {string} url - Company profile URL
+ * @returns {string|null} Numeric company ID or null
+ */
+function extractCompanyIdFromUrl(url) {
+  if (!url || typeof url !== "string") return null;
+
+  try {
+    // Extract numeric ID from company URL
+    // Pattern: /company/12345678 or /company/12345678/
+    const numericPattern = /\/company\/(\d+)/;
+    const match = url.match(numericPattern);
+
+    return match ? match[1] : null;
+  } catch (error) {
+    logger.warn("Failed to extract company ID from URL", {
+      url,
+      error: error.message,
+    });
+    return null;
+  }
+}
+
 function extractCompanyProfileUrl(url) {
-  if (!url || typeof url !== 'string') return null;
+  if (!url || typeof url !== "string") return null;
 
   try {
     const normalized = url
-      .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, '')
-      .replace(/\/$/, '')
+      .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, "")
+      .replace(/\/$/, "")
       .trim();
 
     const companyPattern = /^\/company\/([^\/\?]+)/;
@@ -117,29 +153,33 @@ function extractCompanyProfileUrl(url) {
 
     return match ? `linkedin.com${match[0]}` : null;
   } catch (error) {
-    logger.warn('Failed to extract company profile URL', { url, error: error.message });
+    logger.warn("Failed to extract company profile URL", {
+      url,
+      error: error.message,
+    });
     return null;
   }
 }
-const CANONICAL_ID_NAMESPACE = process.env.CANONICAL_ID_NAMESPACE || '9a6c1cf1-5f9f-4f7e-9b5d-3a0d8d8c0f1a';
+const CANONICAL_ID_NAMESPACE =
+  process.env.CANONICAL_ID_NAMESPACE || "9a6c1cf1-5f9f-4f7e-9b5d-3a0d8d8c0f1a";
 
 function uuidToBytes(uuid) {
-  const hex = uuid.replace(/-/g, '');
+  const hex = uuid.replace(/-/g, "");
   if (hex.length !== 32) {
     throw new Error(`Invalid UUID namespace: ${uuid}`);
   }
-  return Buffer.from(hex, 'hex');
+  return Buffer.from(hex, "hex");
 }
 
 function bytesToUuid(buffer) {
-  const hex = buffer.toString('hex');
+  const hex = buffer.toString("hex");
   return [
     hex.slice(0, 8),
     hex.slice(8, 12),
     hex.slice(12, 16),
     hex.slice(16, 20),
     hex.slice(20, 32),
-  ].join('-');
+  ].join("-");
 }
 
 function buildCanonicalKey(primaryIdType, primaryIdValue) {
@@ -156,9 +196,9 @@ function computeCanonicalId(canonicalKey, namespace = CANONICAL_ID_NAMESPACE) {
   }
 
   const namespaceBytes = uuidToBytes(namespace);
-  const nameBytes = Buffer.from(canonicalKey, 'utf8');
+  const nameBytes = Buffer.from(canonicalKey, "utf8");
   const hash = crypto
-    .createHash('sha1')
+    .createHash("sha1")
     .update(Buffer.concat([namespaceBytes, nameBytes]))
     .digest();
 
@@ -172,97 +212,109 @@ function computeCanonicalId(canonicalKey, namespace = CANONICAL_ID_NAMESPACE) {
  * Resolve person identity from webhook data
  * Returns the best available canonical identifier and all aliases
  *
+ * NOW USES CENTRALIZED IDENTITY MATCHER (identityMatcher.js)
+ *
  * @param {Object} webhookData - Visit or Scan webhook payload
- * @returns {Object} { person_id, aliases, source }
+ * @returns {Object} { person_id, aliases, source, primary_id_type, canonical_key, canonical_id }
  */
 function resolvePersonIdentity(webhookData) {
+  // Use centralized identity matcher for extraction
+  const identifiers = identityMatcher.extractIdentifiers(webhookData);
+  const primary = identityMatcher.getPrimaryIdentifier(identifiers);
+
   const aliases = [];
   let person_id = null;
   let source = null;
   let primaryIdType = null;
 
-  // Priority 1: Extract Sales Navigator ID from SalesProfile
+  if (!primary) {
+    logger.warn("No identifier found in webhook data", {
+      webhookData: {
+        Profile: webhookData.Profile,
+        PublicProfile: webhookData.PublicProfile,
+        SalesProfile: webhookData.SalesProfile,
+        id: webhookData.id,
+      },
+    });
+
+    return {
+      person_id: null,
+      aliases: [],
+      source: null,
+      primary_id_type: null,
+      canonical_key: null,
+      canonical_id: null,
+    };
+  }
+
+  // Map the primary identifier to person_id
+  person_id = primary.value;
+  primaryIdType = primary.type;
+
+  // Map identifier types to source names for backward compatibility
+  const sourceMapping = {
+    linkedInUsername: "linkedInUsername",
+    salesNavId: "salesNavId",
+    profileUrl: "profileUrl",
+    publicProfile: "publicUrl",
+    recruiterProfile: "recruiterUrl",
+    duxsoupId: "duxsoupId",
+  };
+
+  source = sourceMapping[primary.type] || primary.type;
+
+  // Build aliases from all extracted identifiers
+  if (identifiers.linkedInUsername) {
+    aliases.push({
+      type: "linkedInUsername",
+      value: identifiers.linkedInUsername,
+    });
+  }
+
+  if (identifiers.salesNavId) {
+    aliases.push({ type: "salesNavId", value: identifiers.salesNavId });
+  }
+
+  if (identifiers.duxsoupId) {
+    aliases.push({ type: "duxsoupId", value: identifiers.duxsoupId });
+  }
+
+  if (identifiers.profileUrl) {
+    aliases.push({ type: "profileUrl", value: identifiers.profileUrl });
+  }
+
+  if (identifiers.publicProfile) {
+    aliases.push({ type: "publicUrl", value: identifiers.publicProfile });
+  }
+
+  if (identifiers.recruiterProfile) {
+    aliases.push({ type: "recruiterUrl", value: identifiers.recruiterProfile });
+  }
+
+  // Add original URL fields as aliases
   if (webhookData.SalesProfile) {
-    const salesNavId = extractSalesNavId(webhookData.SalesProfile);
-    if (salesNavId) {
-      person_id = salesNavId;
-      source = 'salesNavId';
-      primaryIdType = 'salesNavId';
-      aliases.push({ type: 'salesNavId', value: salesNavId });
-      aliases.push({ type: 'salesUrl', value: webhookData.SalesProfile });
-    }
+    aliases.push({ type: "salesUrl", value: webhookData.SalesProfile });
   }
 
-  // Priority 2: Try RecruiterProfile if SalesProfile not available
-  if (!person_id && webhookData.RecruiterProfile) {
-    const recruiterId = extractSalesNavId(webhookData.RecruiterProfile);
-    if (recruiterId) {
-      person_id = recruiterId;
-      source = 'recruiterUrl';
-      primaryIdType = 'salesNavId';
-      aliases.push({ type: 'salesNavId', value: recruiterId });
-      aliases.push({ type: 'recruiterUrl', value: webhookData.RecruiterProfile });
-    }
+  if (webhookData.RecruiterProfile) {
+    aliases.push({ type: "recruiterUrl", value: webhookData.RecruiterProfile });
   }
 
-  // Priority 3: Try to extract Sales Nav ID or numeric ID from Profile field
-  // (DuxSoup sometimes puts Sales Nav URLs in Profile field instead of SalesProfile)
-  if (!person_id && webhookData.Profile) {
-    // First try Sales Nav ID extraction
-    const salesNavId = extractSalesNavId(webhookData.Profile);
-    if (salesNavId) {
-      person_id = salesNavId;
-      source = 'salesNavId';
-      primaryIdType = 'salesNavId';
-      aliases.push({ type: 'salesNavId', value: salesNavId });
-      aliases.push({ type: 'salesUrl', value: webhookData.Profile });
-    } else {
-      // Fallback to numeric ID extraction
-      const numericId = extractNumericId(webhookData.Profile);
-      if (numericId) {
-        person_id = numericId;
-        source = 'numericId';
-        primaryIdType = 'numericId';
-        aliases.push({ type: 'numericId', value: numericId });
-      }
-    }
-  }
-
-  // Priority 4: Fallback to public profile URL (UNSTABLE)
-  if (!person_id && (webhookData.PublicProfile || webhookData['Profile URL'] || webhookData.Profile)) {
-    const publicUrl = webhookData.PublicProfile || webhookData['Profile URL'] || webhookData.Profile;
-    const normalizedUrl = extractPublicProfileUrl(publicUrl);
-
-    if (normalizedUrl) {
-      person_id = normalizedUrl; // Temporary ID
-      source = 'publicUrl';
-      primaryIdType = 'publicUrl';
-      aliases.push({ type: 'publicUrl', value: normalizedUrl });
-
-      logger.warn('Using unstable public URL as person_id - no stable ID found', {
-        publicUrl: normalizedUrl,
+  // Log warning if using unstable identifier
+  if (primary.type === "profileUrl" || primary.type === "publicProfile") {
+    logger.warn(
+      "Using unstable profile URL as person_id - no stable ID found",
+      {
+        identifierType: primary.type,
+        identifierValue: primary.value,
         webhookData: {
           Profile: webhookData.Profile,
           PublicProfile: webhookData.PublicProfile,
           SalesProfile: webhookData.SalesProfile,
+          id: webhookData.id,
         },
-      });
-    }
-  }
-
-  // Add all profile URLs as aliases
-  if (webhookData.Profile && !aliases.find(a => a.value === webhookData.Profile)) {
-    const profileUrl = extractPublicProfileUrl(webhookData.Profile);
-    if (profileUrl) {
-      aliases.push({ type: 'publicUrl', value: profileUrl });
-    }
-  }
-
-  if (webhookData.PublicProfile && !aliases.find(a => a.value === webhookData.PublicProfile)) {
-    const publicUrl = extractPublicProfileUrl(webhookData.PublicProfile);
-    if (publicUrl) {
-      aliases.push({ type: 'publicUrl', value: publicUrl });
-    }
+      },
+    );
   }
 
   const canonical_key = buildCanonicalKey(primaryIdType, person_id);
@@ -281,6 +333,11 @@ function resolvePersonIdentity(webhookData) {
 /**
  * Resolve company identity from webhook data
  *
+ * Priority:
+ * 1. CompanyID field (numeric ID) - MOST STABLE
+ * 2. Extract numeric ID from CompanyProfile URL
+ * 3. Company name as last resort
+ *
  * @param {Object} webhookData - Visit or Scan webhook payload
  * @returns {Object} { company_id, aliases, source }
  */
@@ -290,43 +347,52 @@ function resolveCompanyIdentity(webhookData) {
   let source = null;
   let primaryIdType = null;
 
-  // Priority 1: CompanyID field (numeric ID)
+  // Priority 1: CompanyID field (numeric ID from DuxSoup)
   if (webhookData.CompanyID) {
     const numericId = extractCompanyId(webhookData.CompanyID);
     if (numericId) {
       company_id = numericId;
-      source = 'numericId';
-      primaryIdType = 'numericId';
-      aliases.push({ type: 'numericId', value: numericId });
+      source = "numericId";
+      primaryIdType = "numericId";
+      aliases.push({ type: "numericId", value: numericId });
     }
   }
 
-  // Priority 2: Company profile URL as fallback
+  // Priority 2: Extract numeric ID from CompanyProfile URL
+  // Example: "linkedin.com/company/82978333" → "82978333"
+  if (!company_id && webhookData.CompanyProfile) {
+    const numericIdFromUrl = extractCompanyIdFromUrl(
+      webhookData.CompanyProfile,
+    );
+    if (numericIdFromUrl) {
+      company_id = numericIdFromUrl;
+      source = "numericId";
+      primaryIdType = "numericId";
+      aliases.push({ type: "numericId", value: numericIdFromUrl });
+    }
+  }
+
+  // Always add CompanyProfile URL as alias (if available)
   if (webhookData.CompanyProfile) {
-    const profileUrl = extractCompanyProfileUrl(webhookData.CompanyProfile) || webhookData.CompanyProfile;
-    if (!company_id && profileUrl) {
-      company_id = profileUrl;
-      source = 'profileUrl';
-      primaryIdType = 'profileUrl';
-    }
-    if (profileUrl) {
-      aliases.push({ type: 'profileUrl', value: profileUrl });
+    const profileUrl = extractCompanyProfileUrl(webhookData.CompanyProfile);
+    if (profileUrl && !aliases.find((a) => a.value === profileUrl)) {
+      aliases.push({ type: "profileUrl", value: profileUrl });
     }
   }
 
-  // Priority 3: Company name as fallback
+  // Priority 3: Company name as last resort (if no numeric ID found)
   if (!company_id && webhookData.Company) {
     const name = webhookData.Company.trim();
     if (name) {
       company_id = name;
-      source = 'name';
-      primaryIdType = 'name';
-      aliases.push({ type: 'name', value: name });
+      source = "name";
+      primaryIdType = "name";
+      aliases.push({ type: "name", value: name });
     }
   } else if (webhookData.Company) {
     const name = webhookData.Company.trim();
-    if (name && !aliases.find(a => a.value === name)) {
-      aliases.push({ type: 'name', value: name });
+    if (name && !aliases.find((a) => a.value === name)) {
+      aliases.push({ type: "name", value: name });
     }
   }
 
@@ -344,12 +410,10 @@ function resolveCompanyIdentity(webhookData) {
 }
 
 function normalizeLocationName(value) {
-  if (!value || typeof value !== 'string') return null;
+  if (!value || typeof value !== "string") return null;
 
   // Normalize whitespace but preserve accents, periods, commas
-  return value
-    .trim()
-    .replace(/\s+/g, ' ');
+  return value.trim().replace(/\s+/g, " ");
 }
 
 function slugifyLocation(value) {
@@ -359,10 +423,11 @@ function slugifyLocation(value) {
   // But we keep the normalized form with accents in the snapshot
   return value
     .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove accents for ID
-    .replace(/[^\w\s-]/g, '') // Remove special chars
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents for ID
+    .replace(/[^\w\s-]/g, "") // Remove special chars
     .trim()
-    .replace(/\s+/g, '-');
+    .replace(/\s+/g, "-");
 }
 
 function resolveLocationIdentity(locationValue) {
@@ -379,16 +444,16 @@ function resolveLocationIdentity(locationValue) {
   }
 
   const slug = slugifyLocation(normalized);
-  const canonicalKey = buildCanonicalKey('location', slug);
+  const canonicalKey = buildCanonicalKey("location", slug);
 
   return {
     location_id: slug,
     aliases: [
-      { type: 'raw', value: locationValue },
-      { type: 'normalized', value: normalized },
+      { type: "raw", value: locationValue },
+      { type: "normalized", value: normalized },
     ],
-    source: 'normalized',
-    primary_id_type: 'location',
+    source: "normalized",
+    primary_id_type: "location",
     canonical_key: canonicalKey,
     canonical_id: computeCanonicalId(canonicalKey),
     normalized,
@@ -399,6 +464,7 @@ module.exports = {
   extractNumericId,
   extractPublicProfileUrl,
   extractCompanyId,
+  extractCompanyIdFromUrl,
   extractCompanyProfileUrl,
   buildCanonicalKey,
   computeCanonicalId,
