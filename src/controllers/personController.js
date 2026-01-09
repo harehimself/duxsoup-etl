@@ -234,7 +234,9 @@ function updateRolesTimeline(person, observationData, observationMeta) {
 async function upsertFromObservation(observationDoc, sourceType) {
   try {
     // Step 1: Resolve identity
-    const webhookData = observationDoc.rawData || observationDoc;
+    // Extract data from nested rawData.data structure if present, otherwise use top-level fields
+    const webhookData =
+      observationDoc.rawData?.data || observationDoc.rawData || observationDoc;
     const identity = resolvePersonIdentity(webhookData);
 
     if (!identity.person_id) {
