@@ -92,15 +92,22 @@ const personSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (v) {
-          // Accept Sales Nav IDs (ACwAAA* or ACoAAA*), numeric IDs (8+ digits), or normalized URLs
+          if (!v || typeof v !== "string") return false;
+
+          // Accept:
+          // 1. Sales Nav IDs: AC[wo]AA[A-Z][rest] (case-insensitive)
+          // 2. Numeric IDs: 8+ digits
+          // 3. LinkedIn URLs: linkedin.com/in/username
+          // 4. Bare usernames: 3-100 chars, alphanumeric/dash/underscore only (no @, no spaces)
           return (
-            /^(ACwAAA|ACoAAA)[A-Za-z0-9_-]+$/.test(v) ||
+            /^AC[wo]AA[A-Z][A-Za-z0-9_-]+$/i.test(v) ||
             /^\d{8,}$/.test(v) ||
-            /^linkedin\.com\/in\/[\w-]+$/.test(v)
+            /^linkedin\.com\/in\/[\w-]+$/i.test(v) ||
+            (/^[\w-]{3,100}$/.test(v) && !/[@\s]/.test(v))
           );
         },
         message: (props) =>
-          `Invalid person ID format: ${props.value}. Must be Sales Nav ID (ACwAAA*/ACoAAA*), numeric ID (8+ digits), or normalized URL (linkedin.com/in/*)`,
+          `Invalid person ID format: ${props.value}. Must be Sales Nav ID, numeric ID (8+ digits), LinkedIn URL, or username`,
       },
     },
 
