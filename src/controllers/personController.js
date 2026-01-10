@@ -5,6 +5,7 @@ const {
   resolveCompanyIdentity,
 } = require("../utils/identityResolver");
 const logger = require("../utils/logger");
+const { parseSafeDate } = require("../utils/date-parser");
 
 /**
  * Person Controller
@@ -113,9 +114,9 @@ function computeDerivedMetrics(roles) {
   let currentCompanyYears = null;
 
   roles.forEach((role) => {
-    const startDate = role.startDate ? new Date(role.startDate) : null;
+    const startDate = parseSafeDate(role.startDate);
     const endDate = role.endDate
-      ? new Date(role.endDate)
+      ? parseSafeDate(role.endDate)
       : role.isCurrent
         ? now
         : null;
@@ -170,11 +171,12 @@ function updateRolesTimeline(person, observationData, observationMeta) {
       const roleKey = `${pos.Title}|${pos.Company}|${pos.From}`;
 
       // Check if role already exists
+      const parsedFromDate = parseSafeDate(pos.From);
       const existingRole = person.snapshot.roles.find(
         (r) =>
           r.title === pos.Title &&
           r.companyName === pos.Company &&
-          r.startDate?.toString() === new Date(pos.From).toString(),
+          r.startDate?.toString() === parsedFromDate?.toString(),
       );
 
       if (!existingRole) {
@@ -185,8 +187,9 @@ function updateRolesTimeline(person, observationData, observationMeta) {
           companyName: pos.Company,
           location: pos.Location,
           description: pos.Description,
-          startDate: pos.From ? new Date(pos.From) : null,
-          endDate: pos.To && pos.To !== "Present" ? new Date(pos.To) : null,
+          startDate: parseSafeDate(pos.From),
+          endDate:
+            pos.To && pos.To !== "Present" ? parseSafeDate(pos.To) : null,
           isCurrent: pos.To === "Present" || !pos.To,
         });
         updated = true;
@@ -469,8 +472,8 @@ async function upsertFromObservation(observationDoc, sourceType) {
             school: school.Name,
             degree: school.Degree,
             field: school.Field,
-            startDate: school.From ? new Date(school.From) : null,
-            endDate: school.To ? new Date(school.To) : null,
+            startDate: parseSafeDate(school.From),
+            endDate: parseSafeDate(school.To),
           });
         }
       });

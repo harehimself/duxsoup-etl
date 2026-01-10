@@ -108,6 +108,58 @@ const US_STATE_NAME_TO_CODE = Object.entries(US_STATES).reduce(
   {},
 );
 
+// Major US cities to state mapping (for inferring state from city name)
+const MAJOR_US_CITIES = {
+  "los angeles": { state: "California", stateCode: "CA" },
+  "san francisco": { state: "California", stateCode: "CA" },
+  "san diego": { state: "California", stateCode: "CA" },
+  "san jose": { state: "California", stateCode: "CA" },
+  "new york": { state: "New York", stateCode: "NY" },
+  chicago: { state: "Illinois", stateCode: "IL" },
+  houston: { state: "Texas", stateCode: "TX" },
+  dallas: { state: "Texas", stateCode: "TX" },
+  austin: { state: "Texas", stateCode: "TX" },
+  phoenix: { state: "Arizona", stateCode: "AZ" },
+  philadelphia: { state: "Pennsylvania", stateCode: "PA" },
+  seattle: { state: "Washington", stateCode: "WA" },
+  boston: { state: "Massachusetts", stateCode: "MA" },
+  atlanta: { state: "Georgia", stateCode: "GA" },
+  miami: { state: "Florida", stateCode: "FL" },
+  tampa: { state: "Florida", stateCode: "FL" },
+  denver: { state: "Colorado", stateCode: "CO" },
+  portland: { state: "Oregon", stateCode: "OR" },
+  detroit: { state: "Michigan", stateCode: "MI" },
+  minneapolis: { state: "Minnesota", stateCode: "MN" },
+  "las vegas": { state: "Nevada", stateCode: "NV" },
+  nashville: { state: "Tennessee", stateCode: "TN" },
+  baltimore: { state: "Maryland", stateCode: "MD" },
+  charlotte: { state: "North Carolina", stateCode: "NC" },
+  orlando: { state: "Florida", stateCode: "FL" },
+  "salt lake city": { state: "Utah", stateCode: "UT" },
+  raleigh: { state: "North Carolina", stateCode: "NC" },
+  sacramento: { state: "California", stateCode: "CA" },
+  "kansas city": { state: "Missouri", stateCode: "MO" },
+  "st. louis": { state: "Missouri", stateCode: "MO" },
+  pittsburgh: { state: "Pennsylvania", stateCode: "PA" },
+  indianapolis: { state: "Indiana", stateCode: "IN" },
+  columbus: { state: "Ohio", stateCode: "OH" },
+  cleveland: { state: "Ohio", stateCode: "OH" },
+  cincinnati: { state: "Ohio", stateCode: "OH" },
+  milwaukee: { state: "Wisconsin", stateCode: "WI" },
+  "tampa bay": { state: "Florida", stateCode: "FL" },
+  "san antonio": { state: "Texas", stateCode: "TX" },
+};
+
+/**
+ * Infer state from city name for major US metropolitan areas
+ * @param {string} cityName - The city name
+ * @returns {object|null} State information or null
+ */
+function inferStateFromCity(cityName) {
+  if (!cityName) return null;
+  return MAJOR_US_CITIES[cityName.toLowerCase()] || null;
+}
+
 /**
  * Parse a LinkedIn location string into structured components
  * @param {string} rawLocation - The raw location string from LinkedIn
@@ -137,17 +189,66 @@ function parseLocation(rawLocation) {
   for (const pattern of METRO_PATTERNS) {
     const match = rawLocation.match(pattern);
     if (match) {
-      location.region = match[1].trim();
+      const coreLocation = match[1].trim();
+      location.region = coreLocation;
       location.locationType = "metropolitan";
-      // Try to extract country if present
-      const parts = rawLocation.split(",").map((p) => p.trim());
-      if (parts.length > 1) {
-        const lastPart = parts[parts.length - 1];
-        if (COUNTRY_CODES[lastPart]) {
-          location.country = lastPart;
-          location.countryCode = COUNTRY_CODES[lastPart];
+
+      // Parse the core location (e.g., "Los Angeles" from "Los Angeles Metropolitan Area")
+      // to extract city, state, country information
+      const coreParts = coreLocation.split(",").map((p) => p.trim());
+
+      if (coreParts.length === 1) {
+        // Single part metro area (e.g., "Los Angeles")
+        // Try to match known US cities to infer state
+        location.city = coreParts[0];
+        // For major US metro areas, infer the state
+        const inferredState = inferStateFromCity(coreParts[0]);
+        if (inferredState) {
+          location.state = inferredState.state;
+          location.stateCode = inferredState.stateCode;
+          location.country = "United States";
+          location.countryCode = "US";
+        }
+      } else if (coreParts.length === 2) {
+        // Two parts (e.g., "Los Angeles, California" or "Tampa Bay, FL")
+        location.city = coreParts[0];
+        const secondPart = coreParts[1];
+
+        // Check if second part is a US state
+        if (US_STATES[secondPart.toUpperCase()]) {
+          location.stateCode = secondPart.toUpperCase();
+          location.state = US_STATES[location.stateCode];
+          location.country = "United States";
+          location.countryCode = "US";
+        } else if (US_STATE_NAME_TO_CODE[secondPart.toLowerCase()]) {
+          location.state = secondPart;
+          location.stateCode = US_STATE_NAME_TO_CODE[secondPart.toLowerCase()];
+          location.country = "United States";
+          location.countryCode = "US";
+        } else {
+          // Assume country
+          location.country = secondPart;
+          location.countryCode = COUNTRY_CODES[secondPart] || null;
+        }
+      } else if (coreParts.length >= 3) {
+        // Three or more parts (e.g., "Los Angeles, California, United States")
+        location.city = coreParts[0];
+        const stateOrProvince = coreParts[1];
+        location.country = coreParts[coreParts.length - 1];
+        location.countryCode = COUNTRY_CODES[location.country] || null;
+
+        if (US_STATES[stateOrProvince.toUpperCase()]) {
+          location.stateCode = stateOrProvince.toUpperCase();
+          location.state = US_STATES[location.stateCode];
+        } else if (US_STATE_NAME_TO_CODE[stateOrProvince.toLowerCase()]) {
+          location.state = stateOrProvince;
+          location.stateCode =
+            US_STATE_NAME_TO_CODE[stateOrProvince.toLowerCase()];
+        } else {
+          location.province = stateOrProvince;
         }
       }
+
       return location;
     }
   }
