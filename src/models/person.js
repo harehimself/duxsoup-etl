@@ -69,8 +69,16 @@ const roleSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { _id: false },
+  { _id: false, toJSON: { virtuals: true }, toObject: { virtuals: true } },
 );
+
+// Virtual field: Compute company LinkedIn URL from companyId
+roleSchema.virtual("companyUrl").get(function () {
+  if (this.companyId) {
+    return `www.linkedin.com/company/${this.companyId}`;
+  }
+  return null;
+});
 
 const educationSchema = new mongoose.Schema(
   {
@@ -137,6 +145,7 @@ const personSchema = new mongoose.Schema(
       currentTitle: { type: String, maxlength: 200 },
       currentCompany: { type: String, maxlength: 200 },
       currentCompanyId: String,
+      currentCompanyUrl: String, // Computed from currentCompanyId
 
       // Contact & profile
       location: { type: String, maxlength: 200 },

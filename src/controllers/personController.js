@@ -366,6 +366,18 @@ async function upsertFromObservation(observationDoc, sourceType) {
       webhookData.CompanyID,
       observationMeta,
     );
+
+    // Compute currentCompanyUrl from currentCompanyId
+    if (person.snapshot.currentCompanyId) {
+      const companyUrl = `www.linkedin.com/company/${person.snapshot.currentCompanyId}`;
+      normalizeField(
+        person.snapshot,
+        "currentCompanyUrl",
+        companyUrl,
+        observationMeta,
+      );
+    }
+
     normalizeField(
       person.snapshot,
       "location",
