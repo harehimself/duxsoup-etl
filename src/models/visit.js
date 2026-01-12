@@ -61,6 +61,17 @@ const visitSchema = new mongoose.Schema(
     IM: String,
     Twitter: String,
     Location: String,
+
+    // Structured location fields (parsed from Location string)
+    city: { type: String, maxlength: 100 },
+    state: { type: String, maxlength: 100 },
+    stateCode: { type: String, maxlength: 10 },
+    country: { type: String, maxlength: 100 },
+    countryCode: { type: String, maxlength: 10 },
+    province: { type: String, maxlength: 100 },
+    region: { type: String, maxlength: 100 },
+    locationType: { type: String, maxlength: 50 },
+
     Industry: String,
     "My Tags": [String], // Array of strings, note the space
     extended: mongoose.Schema.Types.Mixed, // For nested complex data like positions, skills, schools

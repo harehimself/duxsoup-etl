@@ -140,6 +140,17 @@ const personSchema = new mongoose.Schema(
 
       // Contact & profile
       location: { type: String, maxlength: 200 },
+
+      // Structured location fields (parsed from location string)
+      city: { type: String, maxlength: 100 },
+      state: { type: String, maxlength: 100 },
+      stateCode: { type: String, maxlength: 10 },
+      country: { type: String, maxlength: 100 },
+      countryCode: { type: String, maxlength: 10 },
+      province: { type: String, maxlength: 100 },
+      region: { type: String, maxlength: 100 },
+      locationType: { type: String, maxlength: 50 },
+
       industry: { type: String, maxlength: 100 },
       connections: { type: String, maxlength: 50 },
       summary: { type: String, maxlength: 5000 },

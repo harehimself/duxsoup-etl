@@ -6,6 +6,7 @@ const {
 } = require("../utils/identityResolver");
 const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
+const { parseLocation } = require("../utils/location-parser");
 
 /**
  * Person Controller
@@ -371,6 +372,60 @@ async function upsertFromObservation(observationDoc, sourceType) {
       webhookData.Location,
       observationMeta,
     );
+
+    // Parse and normalize structured location fields
+    if (webhookData.Location) {
+      const parsedLocation = parseLocation(webhookData.Location);
+      normalizeField(
+        person.snapshot,
+        "city",
+        parsedLocation.city,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "state",
+        parsedLocation.state,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "stateCode",
+        parsedLocation.stateCode,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "country",
+        parsedLocation.country,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "countryCode",
+        parsedLocation.countryCode,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "province",
+        parsedLocation.province,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "region",
+        parsedLocation.region,
+        observationMeta,
+      );
+      normalizeField(
+        person.snapshot,
+        "locationType",
+        parsedLocation.locationType,
+        observationMeta,
+      );
+    }
+
     normalizeField(
       person.snapshot,
       "industry",

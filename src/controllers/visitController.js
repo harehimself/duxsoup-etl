@@ -1,11 +1,16 @@
 const Visit = require("../models/visit");
 const { handleObservation } = require("./observationHandler");
+const { parseLocation } = require("../utils/location-parser");
 
 /**
  * Visit-specific data mapper
  * Maps webhook profileData to Visit document structure
  */
 function mapVisitData(profileData, payload, eventKey) {
+  // Parse location into structured fields
+  const locationStr = profileData.Location || "";
+  const parsedLocation = parseLocation(locationStr);
+
   return {
     id: profileData.id,
     VisitTime: new Date(profileData.VisitTime),
@@ -29,7 +34,16 @@ function mapVisitData(profileData, payload, eventKey) {
     Phone: profileData.Phone || "",
     IM: profileData.IM || "",
     Twitter: profileData.Twitter || "",
-    Location: profileData.Location || "",
+    Location: locationStr,
+    // Structured location fields
+    city: parsedLocation.city,
+    state: parsedLocation.state,
+    stateCode: parsedLocation.stateCode,
+    country: parsedLocation.country,
+    countryCode: parsedLocation.countryCode,
+    province: parsedLocation.province,
+    region: parsedLocation.region,
+    locationType: parsedLocation.locationType,
     Industry: profileData.Industry || "",
     "My Tags": profileData["My Tags"] || [],
     extended: profileData.extended,

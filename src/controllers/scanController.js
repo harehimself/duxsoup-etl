@@ -1,11 +1,16 @@
 const Scan = require("../models/scan");
 const { handleObservation } = require("./observationHandler");
+const { parseLocation } = require("../utils/location-parser");
 
 /**
  * Scan-specific data mapper
  * Maps webhook profileData to Scan document structure
  */
 function mapScanData(profileData, payload, eventKey) {
+  // Parse location into structured fields
+  const locationStr = profileData.Location || "";
+  const parsedLocation = parseLocation(locationStr);
+
   return {
     id: profileData.id,
     ScanTime: new Date(profileData.ScanTime),
@@ -16,7 +21,16 @@ function mapScanData(profileData, payload, eventKey) {
     Company: profileData.Company || "",
     CompanyID: profileData.CompanyID || "",
     Title: profileData.Title || "",
-    Location: profileData.Location || "",
+    Location: locationStr,
+    // Structured location fields
+    city: parsedLocation.city,
+    state: parsedLocation.state,
+    stateCode: parsedLocation.stateCode,
+    country: parsedLocation.country,
+    countryCode: parsedLocation.countryCode,
+    province: parsedLocation.province,
+    region: parsedLocation.region,
+    locationType: parsedLocation.locationType,
     Industry: profileData.Industry || "",
     "Connection Degree": profileData["Connection Degree"] || "",
     "Profile URL": profileData["Profile URL"] || "",
