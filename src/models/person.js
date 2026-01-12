@@ -142,7 +142,7 @@ const personSchema = new mongoose.Schema(
       fullName: { type: String, maxlength: 300 },
 
       // Current position
-      currentTitle: { type: String, maxlength: 200 },
+      currentTitle: { type: String, maxlength: 1000 }, // Increased for keyword-rich titles
       currentCompany: { type: String, maxlength: 200 },
       currentCompanyId: String,
       currentCompanyUrl: String, // Computed from currentCompanyId
@@ -169,7 +169,7 @@ const personSchema = new mongoose.Schema(
 
       // Profile images
       profilePicture: { type: String, maxlength: 2000 },
-      thumbnail: { type: String, maxlength: 2000 },
+      thumbnail: { type: String, maxlength: 5000 }, // Increased for complex profile images
 
       // Professional history
       roles: {
