@@ -19,7 +19,7 @@ const deadLetterSchema = new mongoose.Schema({
   observation_id: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    index: true,
+    // Note: unique index is created by schema.index() below
   },
 
   // Source type: 'visit' or 'scan'

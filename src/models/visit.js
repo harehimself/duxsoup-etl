@@ -123,6 +123,6 @@ const visitSchema = new mongoose.Schema(
 visitSchema.index({ userid: 1, VisitTime: -1 }); // User-specific queries sorted by time
 visitSchema.index({ Company: 1 }); // Company extraction queries
 visitSchema.index({ Location: 1 }); // Location extraction queries
-visitSchema.index({ event_key: 1 }); // Idempotency checks (remove redundant inline index)
+// Note: event_key index is created by unique: true in field definition above
 
 module.exports = mongoose.model("Visit", visitSchema);

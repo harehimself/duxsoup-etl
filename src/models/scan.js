@@ -103,6 +103,6 @@ const scanSchema = new mongoose.Schema({
 scanSchema.index({ userid: 1, ScanTime: -1 }); // User-specific queries sorted by time
 scanSchema.index({ Company: 1 }); // Company extraction queries
 scanSchema.index({ Location: 1 }); // Location extraction queries
-scanSchema.index({ event_key: 1 }); // Idempotency checks (remove redundant inline index)
+// Note: event_key index is created by unique: true in field definition above
 
 module.exports = mongoose.model('Scan', scanSchema);
