@@ -292,13 +292,23 @@ function resolvePersonIdentity(webhookData) {
     aliases.push({ type: "recruiterUrl", value: identifiers.recruiterProfile });
   }
 
-  // Add original URL fields as aliases
+  // Add original URL fields as aliases (normalized)
   if (webhookData.SalesProfile) {
-    aliases.push({ type: "salesUrl", value: webhookData.SalesProfile });
+    const normalizedSalesUrl = identityMatcher.normalizeUrl(
+      webhookData.SalesProfile,
+    );
+    if (normalizedSalesUrl) {
+      aliases.push({ type: "salesUrl", value: normalizedSalesUrl });
+    }
   }
 
   if (webhookData.RecruiterProfile) {
-    aliases.push({ type: "recruiterUrl", value: webhookData.RecruiterProfile });
+    const normalizedRecruiterUrl = identityMatcher.normalizeUrl(
+      webhookData.RecruiterProfile,
+    );
+    if (normalizedRecruiterUrl) {
+      aliases.push({ type: "recruiterUrl", value: normalizedRecruiterUrl });
+    }
   }
 
   // Log warning if using unstable identifier
