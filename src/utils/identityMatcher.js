@@ -191,8 +191,8 @@ function extractIdentifiers(data) {
  * Get the primary identifier using waterfall approach
  *
  * Priority Order:
- * 1. LinkedIn Username (works across Sales Nav + Regular LinkedIn)
- * 2. Sales Navigator ID (stable, but only in Sales Nav)
+ * 1. Sales Navigator ID (most stable, never changes)
+ * 2. LinkedIn Username (works across Sales Nav + Regular LinkedIn)
  * 3. Normalized Profile URL (fallback for profiles without custom username)
  * 4. Public Profile / Recruiter Profile (rare)
  * 5. DuxSoup ID (last resort - changes between scan sources)
@@ -201,11 +201,11 @@ function extractIdentifiers(data) {
  * @returns {Object|null} - { type: string, value: string } or null
  */
 function getPrimaryIdentifier(identifiers) {
-  if (identifiers.linkedInUsername) {
-    return { type: "linkedInUsername", value: identifiers.linkedInUsername };
-  }
   if (identifiers.salesNavId) {
     return { type: "salesNavId", value: identifiers.salesNavId };
+  }
+  if (identifiers.linkedInUsername) {
+    return { type: "linkedInUsername", value: identifiers.linkedInUsername };
   }
   if (identifiers.profileUrl) {
     return { type: "profileUrl", value: identifiers.profileUrl };
