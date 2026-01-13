@@ -1,12 +1,11 @@
-# /debug-person - Find and inspect a person by any identifier
+---
+name: debug-person
+description: Find and inspect a person in the database using any identifier (username, Sales Nav ID, numeric ID, profile URL, or name). Use when debugging person records, looking up specific people, inspecting aliases and observations, or investigating identity issues.
+---
 
-**Usage:** `/debug-person <identifier>`
-
-**Description:** Quickly find a person in the database using any identifier (username, Sales Nav ID, numeric ID, profile URL, name) and display their complete record with observations.
+# Debug Person
 
 **Purpose:** Streamlines the common debugging task of finding and inspecting person records.
-
----
 
 ## Instructions for Claude
 

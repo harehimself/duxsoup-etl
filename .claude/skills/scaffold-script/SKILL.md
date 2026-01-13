@@ -1,12 +1,11 @@
-# /scaffold-script - Generate a new data script
+---
+name: scaffold-script
+description: Generate a new data script with proper boilerplate, database connection, error handling, and project conventions. Use when creating new analysis scripts, building migration scripts, implementing data quality checks, or importing external data.
+---
 
-**Usage:** `/scaffold-script <script-name> <description>`
-
-**Description:** Scaffolds a new script in the `scripts/` directory with proper boilerplate, database connection, error handling, and project conventions.
+# Scaffold Script
 
 **Purpose:** Quickly create new analysis or migration scripts following project patterns.
-
----
 
 ## Instructions for Claude
 
@@ -43,8 +42,6 @@ When this skill is invoked:
 
    // Import models as needed
    const Person = require('../src/models/person');
-   // const Visit = require('../src/models/visit');
-   // const Company = require('../src/models/company');
 
    /**
     * [Script Name]
@@ -69,20 +66,6 @@ When this skill is invoked:
 
      // TODO: Implement script logic here
 
-     // Example: Query data
-     const count = await Person.countDocuments({});
-     console.log(`Total people: ${count}`);
-
-     // Example: Update data (respecting dry-run)
-     if (!dryRun) {
-       // await Person.updateMany(...);
-       console.log('\n✓ Changes saved to database');
-     } else {
-       console.log('\n✓ Dry run complete - no changes made');
-     }
-
-     console.log('\n========================================\n');
-
      await database.disconnect();
    }
 
@@ -98,41 +81,18 @@ When this skill is invoked:
    - If "import": add file reading, CSV parsing if needed
    - If "backfill": include batch processing, progress tracking
 
-5. **Add to package.json scripts** if it's a common operation:
-   ```json
-   "script-name": "node scripts/[script-name].js --dry-run"
-   ```
+5. **Add to package.json scripts** and create permission in `.claude/settings.local.json`
 
-6. **Create corresponding permission** in `.claude/settings.local.json`:
-   ```json
-   "Bash(node scripts/[script-name].js:*)"
+6. **Output to user:**
    ```
-
-7. **Output to user:**
-   ```
-   SCAFFOLD SCRIPT
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
    ✓ Created: scripts/[script-name].js
-
-   Description: [description]
-
-   Template includes:
-   • Database connection boilerplate
-   • Error handling
-   • Dry-run support
-   • Project conventions
+   ✓ Added npm script: npm run [script-name]
+   ✓ Added permission to .claude/settings.local.json
 
    Next steps:
    1. Edit scripts/[script-name].js
    2. Implement your logic in the main() function
    3. Test with: node scripts/[script-name].js --dry-run
-   4. Run for real: node scripts/[script-name].js
-
-   ✓ Added npm script: npm run [script-name]
-   ✓ Added permission to .claude/settings.local.json
-
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ```
 
 ## Examples
@@ -140,12 +100,9 @@ When this skill is invoked:
 ```bash
 /scaffold-script checkMissingEmails "Find people without email addresses"
 /scaffold-script migrateTitles "Normalize job titles to standard format"
-/scaffold-script importLinkedInData "Import external LinkedIn data from CSV"
-/scaffold-script analyzeCompanyGrowth "Track company headcount over time"
 ```
 
 ## Error Handling
 
 - If script already exists: ask whether to overwrite
 - If invalid script name: suggest valid format (camelCase, no spaces)
-- Show the created file path and guide next steps

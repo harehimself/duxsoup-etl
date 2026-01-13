@@ -1,12 +1,11 @@
-# /check-health - Run comprehensive data health checks
+---
+name: check-health
+description: Run comprehensive data health checks on the database, reporting on data quality issues, dead letters, duplicates, and anomalies. Use when you need to assess overall data quality, identify issues requiring attention, or perform daily data quality monitoring.
+---
 
-**Usage:** `/check-health [--detailed]`
-
-**Description:** Runs a comprehensive health check on the database, reporting on data quality issues, dead letters, duplicates, and anomalies.
+# Check Health
 
 **Purpose:** Quickly assess overall data quality and identify issues requiring attention.
-
----
 
 ## Instructions for Claude
 

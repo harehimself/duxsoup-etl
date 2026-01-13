@@ -1,12 +1,11 @@
-# /replay-dead-letters - Replay failed observations
+---
+name: replay-dead-letters
+description: Replay failed observations after bug fixes or database issues. Shows which observations succeed and fail, helping recover from failures and validate fixes work on real data.
+---
 
-**Usage:** `/replay-dead-letters [--limit N] [--dry-run] [--filter TYPE]`
-
-**Description:** Replays dead letter observations after bug fixes or DB issues. Shows which ones succeed and fail.
+# Replay Dead Letters
 
 **Purpose:** Operational task for recovering from failures and validating fixes.
-
----
 
 ## Instructions for Claude
 
@@ -69,44 +68,11 @@ When this skill is invoked:
    ✓ Successful:  [Y]  ([Y/X * 100]%)
    ✗ Still failing: [Z]  ([Z/X * 100]%)
 
-   ✓ SUCCESSFUL REPLAYS:
-   • [observation_id] → [person canonical_id] ([name])
-   • [observation_id] → [person canonical_id] ([name])
-
-   ✗ STILL FAILING:
-   • [observation_id] - Error: [new error message]
-     Identity hints: [sales_nav_id, numeric_id, etc.]
-
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
    NEXT ACTIONS:
    1. Investigate still-failing observations
    2. Fix root cause of [most common error]
    3. Run /replay-dead-letters again
-
-   [If all successful]:
-   ✅ All dead letters replayed successfully!
    ```
-
-4. **Safety features:**
-   - Dry run mode shows what would happen without committing
-   - Transaction support (rollback on failure)
-   - Backup dead letter status before marking replayed
-   - Limit replay count to prevent overwhelming DB
-
-5. **Integration with existing scripts:**
-   - Use existing `scripts/replayDeadLetters.js` if available
-   - Otherwise, implement inline following same pattern
-   - Follow PersonController.upsertFromObservation() logic
-
-## Examples
-
-```bash
-/replay-dead-letters                    # Replay all pending
-/replay-dead-letters --limit 10         # Replay first 10
-/replay-dead-letters --dry-run          # Simulate only
-/replay-dead-letters --filter scan      # Only scan dead letters
-```
 
 ## Error Handling
 

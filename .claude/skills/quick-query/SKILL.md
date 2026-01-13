@@ -1,12 +1,11 @@
-# /quick-query - Run ad-hoc MongoDB queries
+---
+name: quick-query
+description: Run ad-hoc MongoDB queries in natural language. Translates natural language queries into MongoDB queries and executes them. Use for quick data exploration, answering "how many" questions, finding specific records, or aggregating statistics.
+---
 
-**Usage:** `/quick-query <natural language query>`
-
-**Description:** Translates natural language into MongoDB queries and executes them, showing results in a readable format.
+# Quick Query
 
 **Purpose:** Quick data exploration without writing scripts.
-
----
 
 ## Instructions for Claude
 
@@ -41,9 +40,6 @@ When this skill is invoked:
    Input: "What are the most common job titles?"
    → `Person.aggregate([{ $group: { _id: '$snapshot.currentTitle', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }])`
 
-   Input: "Show recent visits"
-   → `Visit.find({}).sort({ createdAt: -1 }).limit(10)`
-
 5. **Output format:**
    ```
    QUICK QUERY
@@ -63,37 +59,9 @@ When this skill is invoked:
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ```
 
-   Or for list results:
-   ```
-   QUICK QUERY
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-   Query: Show me people added in the last 7 days
-
-   ✓ Found 15 results (showing first 10)
-
-   ┌───┬────────────────────────┬──────────────────────┬─────────────────┐
-   │ # │ Name                   │ Company              │ Added           │
-   ├───┼────────────────────────┼──────────────────────┼─────────────────┤
-   │ 1 │ John Doe               │ Google               │ 2 days ago      │
-   │ 2 │ Jane Smith             │ Microsoft            │ 3 days ago      │
-   │ 3 │ Bob Johnson            │ Amazon               │ 5 days ago      │
-   └───┴────────────────────────┴──────────────────────┴─────────────────┘
-
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   ```
-
-6. **Supported query types:**
-   - Counts: "how many...", "count..."
-   - Filters: "people at...", "visits from...", "without..."
-   - Aggregations: "most common...", "average...", "group by..."
-   - Recent: "recent...", "latest...", "last N..."
-   - Search: "find...", "show...", "list..."
-
-7. **Safety limits:**
+6. **Safety limits:**
    - Default limit: 20 results (prevent overwhelming output)
    - For counts: no limit
-   - User can override: "show all people at Google" → no limit
    - Warn if query might be slow
 
 ## Examples
@@ -103,8 +71,6 @@ When this skill is invoked:
 /quick-query show people at Microsoft
 /quick-query most common companies
 /quick-query recent dead letters
-/quick-query people in San Francisco
-/quick-query visits in the last 24 hours
 ```
 
 ## Error Handling

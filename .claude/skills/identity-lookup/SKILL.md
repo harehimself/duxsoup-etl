@@ -1,12 +1,11 @@
-# /identity-lookup - Resolve LinkedIn identity from any identifier
+---
+name: identity-lookup
+description: Resolve LinkedIn identity from any identifier (URL, username, Sales Nav ID, numeric ID) to canonical form, showing all known aliases and suggesting the best stable identifier to use. Use when investigating identity resolution, understanding which identifier to use in code, or troubleshooting duplicate person records.
+---
 
-**Usage:** `/identity-lookup <identifier>`
-
-**Description:** Resolves a LinkedIn identity to its canonical form, showing all known aliases and suggesting the best stable identifier to use.
+# Identity Lookup
 
 **Purpose:** Helps understand identity resolution and find the canonical ID for a person.
-
----
 
 ## Instructions for Claude
 
@@ -66,18 +65,7 @@ When this skill is invoked:
    const PERSON_ID = '[best stable ID]';
 
    Reason: [why this ID is best]
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ```
-
-5. **Handle edge cases:**
-   - If not found: suggest possible matches
-   - If multiple matches: warn about potential duplicate issue
-   - If using unstable ID: warn and suggest stable alternative
-
-6. **Educational output:**
-   - Explain why certain IDs are preferred
-   - Show what happens when URLs change
-   - Reference the Observation-Snapshot pattern from CLAUDE.md
 
 ## Error Handling
 
