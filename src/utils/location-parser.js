@@ -68,10 +68,13 @@ const US_STATES = {
 
 // Common metropolitan area patterns
 const METRO_PATTERNS = [
-  /^greater\s+(.+?)\s+area$/i,
-  /^(.+?)\s+metropolitan\s+area$/i,
-  /^(.+?)\s+metro\s+area$/i,
-  /^(.+?)\s+bay\s+area$/i,
+  /^greater\s+(.+?)\s+area$/i, // Greater Tampa Bay Area
+  /^greater\s+(.+)$/i, // Greater Boston, Greater Philadelphia
+  /^(.+?)\s+metropolitan\s+area$/i, // New York City Metropolitan Area
+  /^(.+?)\s+metro\s+area$/i, // Denver Metro Area
+  /^(.+?)\s+metro$/i, // Charlotte Metro
+  /^(.+?)\s+metroplex$/i, // Dallas-Fort Worth Metroplex
+  /^(.+?)\s+bay\s+area$/i, // San Francisco Bay Area
 ];
 
 // Country name standardization
@@ -115,9 +118,12 @@ const MAJOR_US_CITIES = {
   "san diego": { state: "California", stateCode: "CA" },
   "san jose": { state: "California", stateCode: "CA" },
   "new york": { state: "New York", stateCode: "NY" },
+  "new york city": { state: "New York", stateCode: "NY" },
   chicago: { state: "Illinois", stateCode: "IL" },
   houston: { state: "Texas", stateCode: "TX" },
   dallas: { state: "Texas", stateCode: "TX" },
+  "fort worth": { state: "Texas", stateCode: "TX" },
+  "dallas-fort worth": { state: "Texas", stateCode: "TX" },
   austin: { state: "Texas", stateCode: "TX" },
   phoenix: { state: "Arizona", stateCode: "AZ" },
   philadelphia: { state: "Pennsylvania", stateCode: "PA" },
@@ -125,18 +131,24 @@ const MAJOR_US_CITIES = {
   boston: { state: "Massachusetts", stateCode: "MA" },
   atlanta: { state: "Georgia", stateCode: "GA" },
   miami: { state: "Florida", stateCode: "FL" },
+  "fort lauderdale": { state: "Florida", stateCode: "FL" },
+  "miami-fort lauderdale": { state: "Florida", stateCode: "FL" },
   tampa: { state: "Florida", stateCode: "FL" },
   denver: { state: "Colorado", stateCode: "CO" },
   portland: { state: "Oregon", stateCode: "OR" },
   detroit: { state: "Michigan", stateCode: "MI" },
   minneapolis: { state: "Minnesota", stateCode: "MN" },
+  "minneapolis-st. paul": { state: "Minnesota", stateCode: "MN" },
   "las vegas": { state: "Nevada", stateCode: "NV" },
   nashville: { state: "Tennessee", stateCode: "TN" },
   baltimore: { state: "Maryland", stateCode: "MD" },
+  "washington dc-baltimore": { state: "Maryland", stateCode: "MD" },
   charlotte: { state: "North Carolina", stateCode: "NC" },
   orlando: { state: "Florida", stateCode: "FL" },
   "salt lake city": { state: "Utah", stateCode: "UT" },
   raleigh: { state: "North Carolina", stateCode: "NC" },
+  "raleigh-durham": { state: "North Carolina", stateCode: "NC" },
+  "raleigh-durham-chapel hill": { state: "North Carolina", stateCode: "NC" },
   sacramento: { state: "California", stateCode: "CA" },
   "kansas city": { state: "Missouri", stateCode: "MO" },
   "st. louis": { state: "Missouri", stateCode: "MO" },
@@ -148,6 +160,11 @@ const MAJOR_US_CITIES = {
   milwaukee: { state: "Wisconsin", stateCode: "WI" },
   "tampa bay": { state: "Florida", stateCode: "FL" },
   "san antonio": { state: "Texas", stateCode: "TX" },
+  syracuse: { state: "New York", stateCode: "NY" },
+  "syracuse-auburn": { state: "New York", stateCode: "NY" },
+  buffalo: { state: "New York", stateCode: "NY" },
+  "buffalo-niagara falls": { state: "New York", stateCode: "NY" },
+  brooklyn: { state: "New York", stateCode: "NY" },
 };
 
 /**
