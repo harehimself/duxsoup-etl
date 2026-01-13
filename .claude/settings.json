@@ -36,18 +36,6 @@
     "NODE_ENV": "development"
   },
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx prettier --write",
-            "description": "Auto-format code with Prettier"
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
