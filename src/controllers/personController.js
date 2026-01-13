@@ -21,6 +21,65 @@ const { parseLocation } = require("../utils/location-parser");
  */
 
 /**
+ * Parse connections string to number
+ * Handles: "500", "1234", "500+" (strips +)
+ * @param {string|number} value - Connection count from webhook
+ * @returns {number|null} Parsed number or null if invalid
+ */
+function parseConnections(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+
+  const str = String(value).trim();
+  if (str === '') return null;
+
+  // Remove "+" suffix if present
+  const cleaned = str.replace(/\+$/, '');
+
+  const num = parseInt(cleaned, 10);
+  if (isNaN(num) || num < 0) {
+    logger.warn('Invalid connections value', { value });
+    return null;
+  }
+
+  return num;
+}
+
+/**
+ * Parse degree string to number
+ * Handles: "1", "2", "3", "1st", "2nd", "3rd"
+ * @param {string|number} value - Connection degree from webhook
+ * @returns {number|null} Parsed number (1-3) or null if invalid
+ */
+function parseDegree(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+
+  const str = String(value).trim().toLowerCase();
+  if (str === '') return null;
+
+  // Handle "1st", "2nd", "3rd" format
+  const ordinalMatch = str.match(/^(\d+)(st|nd|rd|th)?$/);
+  if (ordinalMatch) {
+    const num = parseInt(ordinalMatch[1], 10);
+    if (num >= 1 && num <= 3) {
+      return num;
+    }
+    logger.warn('Degree out of range (1-3)', { value });
+    return null;
+  }
+
+  // Handle plain numbers
+  const num = parseInt(str, 10);
+  if (!isNaN(num) && num >= 1 && num <= 3) {
+    return num;
+  }
+
+  logger.warn('Invalid degree value', { value });
+  return null;
+}
+
+/**
  * Determine if incoming value should overwrite existing snapshot value
  *
  * @param {Object} existingMeta - { value, observedAt, source, observationId }
@@ -447,7 +506,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
     normalizeField(
       person.snapshot,
       "connections",
-      webhookData.Connections,
+      parseConnections(webhookData.Connections),
       observationMeta,
     );
     normalizeField(
@@ -459,7 +518,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
     normalizeField(
       person.snapshot,
       "degree",
-      webhookData.Degree || webhookData["Connection Degree"],
+      parseDegree(webhookData.Degree || webhookData["Connection Degree"]),
       observationMeta,
     );
 

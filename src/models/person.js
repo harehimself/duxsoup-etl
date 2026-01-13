@@ -83,7 +83,7 @@ roleSchema.virtual("companyUrl").get(function () {
 const educationSchema = new mongoose.Schema(
   {
     school: String,
-    degree: String,
+    degree: String, // Educational degree (e.g., "Bachelor's", "Master's")
     field: String,
     startDate: Date,
     endDate: Date,
@@ -161,7 +161,7 @@ const personSchema = new mongoose.Schema(
       locationType: { type: String, maxlength: 50 },
 
       industry: { type: String, maxlength: 100 },
-      connections: { type: String, maxlength: 50 },
+      connections: { type: Number, min: 0 },
       summary: { type: String, maxlength: 5000 },
       email: { type: String, maxlength: 254 },
       phone: { type: String, maxlength: 50 },
@@ -193,8 +193,8 @@ const personSchema = new mongoose.Schema(
       personalWebsite: { type: String, maxlength: 2000 },
       companyWebsite: { type: String, maxlength: 2000 },
 
-      // Connection degree
-      degree: { type: String, maxlength: 20 },
+      // Connection degree (1 = 1st, 2 = 2nd, 3 = 3rd)
+      degree: { type: Number, min: 1, max: 3 },
 
       // Provenance metadata - tracks source of each field value
       // Structure: { fieldName: { value, observedAt, source, observationId } }
