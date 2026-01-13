@@ -20,6 +20,7 @@ function mapScanData(profileData, payload, eventKey) {
     "Middle Name": profileData["Middle Name"] || "",
     Company: profileData.Company || "",
     CompanyID: profileData.CompanyID || "",
+    CompanyProfile: profileData.CompanyProfile || "",
     Title: profileData.Title || "",
     Location: locationStr,
     // Structured location fields

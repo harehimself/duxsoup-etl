@@ -425,8 +425,14 @@ async function upsertFromObservation(observationDoc, sourceType) {
       webhookData.CompanyID,
       observationMeta,
     );
+    normalizeField(
+      person.snapshot,
+      "currentCompanyProfile",
+      webhookData.CompanyProfile,
+      observationMeta,
+    );
 
-    // Compute currentCompanyUrl from currentCompanyId
+    // Compute currentCompanyUrl from currentCompanyId (priority 1)
     if (person.snapshot.currentCompanyId) {
       const companyUrl = `www.linkedin.com/company/${person.snapshot.currentCompanyId}`;
       normalizeField(
@@ -435,6 +441,20 @@ async function upsertFromObservation(observationDoc, sourceType) {
         companyUrl,
         observationMeta,
       );
+    } else if (person.snapshot.currentCompanyProfile) {
+      // Fallback to normalized CompanyProfile if no numeric ID
+      const { extractCompanyProfileUrl } = require("../utils/identityResolver");
+      const normalizedUrl = extractCompanyProfileUrl(
+        person.snapshot.currentCompanyProfile,
+      );
+      if (normalizedUrl) {
+        normalizeField(
+          person.snapshot,
+          "currentCompanyUrl",
+          normalizedUrl,
+          observationMeta,
+        );
+      }
     }
 
     normalizeField(

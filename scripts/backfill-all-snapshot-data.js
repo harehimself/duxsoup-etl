@@ -32,6 +32,7 @@ function extractDataFromVisit(visit) {
     currentCompany: visit.Company || '',
     currentCompanyId: visit.CompanyProfile ?
       visit.CompanyProfile.match(/\/company\/(\d+)/)?.[1] || '' : '',
+    currentCompanyProfile: visit.CompanyProfile || '',
     location: visit.Location || '',
     city: visit.city || '',
     state: visit.state || '',

@@ -42,6 +42,7 @@ const scanSchema = new mongoose.Schema({
   'Middle Name': String,
   Company: String,
   CompanyID: String,
+  CompanyProfile: String,
   Title: String,
   Location: String,
 

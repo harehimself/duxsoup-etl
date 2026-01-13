@@ -146,6 +146,7 @@ const personSchema = new mongoose.Schema(
       currentCompany: { type: String, maxlength: 200 },
       currentCompanyId: String,
       currentCompanyUrl: String, // Computed from currentCompanyId
+      currentCompanyProfile: String, // LinkedIn company profile URL from observation
 
       // Contact & profile
       location: { type: String, maxlength: 200 },
