@@ -264,7 +264,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     // Step 2: Resolve or create canonical person
     let person = await identityResolverService.resolveOrCreate(identity, {
-      reason: `${sourceType}_observation`,
+      reason: 'duplicate_detection', // Valid enum value for when merge is needed
       sourceObservationId: observationDoc._id,
     });
 
