@@ -239,6 +239,23 @@ const personSchema = new mongoose.Schema(
     derived: {
       avgTenureMonths: Number,
       yearsAtCurrentCompany: Number,
+      // Lead scoring fields
+      leadScore: {
+        type: Number,
+        min: 0,
+        max: 100,
+      },
+      segment: {
+        type: String,
+        enum: [
+          'high_value',
+          'decision_maker',
+          'warm_lead',
+          'needs_enrichment',
+          'standard',
+        ],
+      },
+      scoreUpdatedAt: Date,
     },
   },
   {
@@ -261,6 +278,23 @@ personSchema.index({ "meta.observationsCount": -1 });
 personSchema.index({ "snapshot.fullName": 1 });
 personSchema.index({ "snapshot.currentCompany": 1 });
 personSchema.index({ createdAt: -1 });
+
+// Full-text search index (weighted by relevance)
+personSchema.index(
+  {
+    "snapshot.fullName": "text",
+    "snapshot.currentTitle": "text",
+    "snapshot.currentCompany": "text",
+  },
+  {
+    weights: {
+      "snapshot.fullName": 10, // Names are most important
+      "snapshot.currentTitle": 5, // Titles are moderately important
+      "snapshot.currentCompany": 3, // Companies are least important
+    },
+    name: "person_text_search",
+  },
+);
 
 // Note: DO NOT add uniqueness constraint on aliases.value
 // Multiple people can temporarily share aliases during merges

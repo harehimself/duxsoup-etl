@@ -25,6 +25,11 @@ const {
   getLocationByAlias,
 } = require('../controllers/locationReadController');
 const adminRoutes = require('./adminRoutes');
+const queryRoutes = require('./queryRoutes');
+const searchRoutes = require('./searchRoutes');
+const exportRoutes = require('./exportRoutes');
+const changeRoutes = require('./changeRoutes');
+const segmentRoutes = require('./segmentRoutes');
 
 const router = express.Router();
 
@@ -108,5 +113,20 @@ router.post('/webhook', (req, res) => {
 
 // Admin endpoints (one-time migrations, etc.)
 router.use('/admin', adminRoutes);
+
+// Query endpoints (search and filter people/companies)
+router.use('/query', queryRoutes);
+
+// Search endpoints (full-text search)
+router.use('/search', searchRoutes);
+
+// Export endpoints (CSV/JSON export)
+router.use('/export', exportRoutes);
+
+// Change endpoints (job changes, promotions, title changes)
+router.use('/changes', changeRoutes);
+
+// Segment endpoints (high-value, decision-makers, warm-leads, etc.)
+router.use('/segments', segmentRoutes);
 
 module.exports = router;

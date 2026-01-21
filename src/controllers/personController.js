@@ -7,6 +7,8 @@ const {
 const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
+const { detectChanges } = require("../services/changeDetectionService");
+const { updatePersonScore } = require("../services/scoringService");
 
 /**
  * Person Controller
@@ -375,6 +377,9 @@ async function upsertFromObservation(observationDoc, sourceType) {
       person.snapshot._meta = {};
     }
 
+    // Capture old snapshot for change detection (deep clone)
+    const oldSnapshot = person.snapshot ? JSON.parse(JSON.stringify(person.snapshot)) : null;
+
     // Normalize basic fields
     normalizeField(
       person.snapshot,
@@ -644,6 +649,50 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     // Step 10: Compute derived metrics
     person.derived = computeDerivedMetrics(person.snapshot.roles);
+
+    // Step 10.5: Detect changes (job changes, promotions, title changes)
+    let detectedChanges = [];
+    try {
+      const changes = await detectChanges(
+        person,
+        oldSnapshot,
+        person.snapshot,
+        observationRef
+      );
+
+      if (changes && changes.length > 0) {
+        detectedChanges = changes;
+        logger.info("Changes detected during person update", {
+          person_id: person._id,
+          changeCount: changes.length,
+          changeTypes: changes.map((c) => c.type),
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail the entire upsert
+      logger.error("Failed to detect changes", {
+        person_id: person._id,
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+
+    // Step 10.6: Update lead score and segment
+    try {
+      await updatePersonScore(person, detectedChanges);
+      logger.debug("Lead score updated", {
+        person_id: person._id,
+        leadScore: person.derived?.leadScore,
+        segment: person.derived?.segment,
+      });
+    } catch (error) {
+      // Log error but don't fail the entire upsert
+      logger.error("Failed to update lead score", {
+        person_id: person._id,
+        error: error.message,
+        stack: error.stack,
+      });
+    }
 
     // Step 11: Save and return
     await person.save();

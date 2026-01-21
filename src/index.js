@@ -72,6 +72,14 @@ async function startServer() {
     // Start the server
     app.listen(config.port, () => {
       logger.info(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
+
+      // Start background job scheduler (if enabled)
+      if (process.env.ENABLE_SCHEDULER !== 'false') {
+        const { startScheduler } = require('./workers/scheduler');
+        startScheduler();
+      } else {
+        logger.info('Background scheduler disabled (ENABLE_SCHEDULER=false)');
+      }
     });
   } catch (error) {
     logger.error("Failed to start server:", error);
@@ -82,12 +90,30 @@ async function startServer() {
 // Handle graceful shutdown
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
+
+  // Stop scheduler
+  try {
+    const { stopScheduler } = require('./workers/scheduler');
+    stopScheduler();
+  } catch (err) {
+    logger.error("Error stopping scheduler:", err);
+  }
+
   await database.disconnect();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
+
+  // Stop scheduler
+  try {
+    const { stopScheduler } = require('./workers/scheduler');
+    stopScheduler();
+  } catch (err) {
+    logger.error("Error stopping scheduler:", err);
+  }
+
   await database.disconnect();
   process.exit(0);
 });
