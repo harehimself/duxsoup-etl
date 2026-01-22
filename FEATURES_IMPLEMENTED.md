@@ -99,14 +99,19 @@ ENABLE_SCHEDULER=true  # Enable/disable scheduler
 **Features:**
 - Automated health checks every 6 hours
 - Checks canonical ID coverage, dead letter backlog
-- Logs critical issues and warnings
+- Email + SMS alerts for issues
 
 **Alert Conditions:**
 - CRITICAL: >10% people missing canonical_id
 - CRITICAL: >100 pending dead letters
 - WARNING: >50 failed_again dead letters
 
-**Health reports logged to console** (email/SMS alerts can be added)
+**Notification Behavior:**
+- 📧 **Email**: Sent for all warnings and critical issues (detailed HTML report)
+- 📱 **SMS**: Sent for critical issues only (brief alert)
+- Test endpoint: `POST /api/admin/test-notifications`
+
+See `NOTIFICATION_SETUP.md` for configuration guide.
 
 ## Database Schema Changes
 
@@ -176,13 +181,32 @@ HEALTH_CHECK_INTERVAL=360             # Minutes
 EXPORT_TEMP_DIR=/tmp/duxsoup-exports
 EXPORT_MAX_ROWS=100000                # Max rows per export
 EXPORT_TTL_HOURS=24                   # Download link expiration
+
+# Email Alerts (Gmail example)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+ALERT_EMAIL_FROM=your-email@gmail.com
+ALERT_EMAIL_TO=alerts@yourcompany.com
+
+# SMS Alerts (Twilio)
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_FROM_NUMBER=+12345678900
+TWILIO_TO_NUMBER=+19876543210
 ```
+
+**Note:** Email/SMS configuration is optional. If not configured, health checks still run but alerts only go to logs.
 
 ## Dependencies
 
 - `node-cron` - Background job scheduling
 - `csv-writer` - CSV export generation
 - `uuid` - Export job IDs
+- `nodemailer` - Email notifications
+- `twilio` - SMS notifications
 
 ## Testing
 
@@ -209,6 +233,7 @@ npm test -- __tests__/integration/salesIntelligence.test.js
 | `/api/export/download/:jobId` | GET | Download export |
 | `/api/changes` | GET | Get recent changes |
 | `/api/changes/person/:id` | GET | Get person changes |
+| `/api/admin/test-notifications` | POST | Test email/SMS configuration |
 
 ## Not Implemented
 
@@ -217,7 +242,6 @@ The following features were **NOT** implemented:
 - ❌ Lead Scoring (removed per user request)
 - ❌ Segments API (removed per user request)
 - ❌ Slack Alerts (removed per user request - user doesn't use Slack)
-- ❌ Email/SMS health alerts (to be discussed)
 
 ## Future Enhancements
 

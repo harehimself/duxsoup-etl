@@ -1,6 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
+const {
+  testNotificationsHandler,
+} = require('../controllers/notificationController');
 
 const router = express.Router();
 
@@ -746,8 +749,12 @@ router.get('/health', (req, res) => {
       'POST /api/admin/run-linking - Run linking job via API (limit: 1000)',
       'POST /api/admin/rebuild-people - Rebuild people collection (limit: 5000)',
       'POST /api/admin/rebuild-people-full - FULL rebuild all observations (no limit)',
+      'POST /api/admin/test-notifications - Test email/SMS notification configuration',
     ],
   });
 });
+
+// Test notification configuration
+router.post('/test-notifications', testNotificationsHandler);
 
 module.exports = router;

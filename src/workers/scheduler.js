@@ -55,7 +55,23 @@ function startScheduler() {
         warnings: report.warnings?.length || 0,
       });
 
-      // TODO: Add email/SMS notification for critical issues
+      // Send email/SMS alerts for warnings and critical issues
+      if (report.status === 'warning' || report.status === 'critical') {
+        const { sendHealthAlerts } = require('../services/notificationService');
+        const results = await sendHealthAlerts(report).catch((err) => {
+          logger.error('Failed to send health alerts', {
+            error: err.message,
+          });
+          return { emailSent: false, smsSent: false };
+        });
+
+        if (results.emailSent || results.smsSent) {
+          logger.info('Health alerts sent', {
+            email: results.emailSent,
+            sms: results.smsSent,
+          });
+        }
+      }
     } catch (err) {
       logger.error('Scheduled health check failed', {
         error: err.message,
