@@ -29,7 +29,6 @@ const queryRoutes = require('./queryRoutes');
 const searchRoutes = require('./searchRoutes');
 const exportRoutes = require('./exportRoutes');
 const changeRoutes = require('./changeRoutes');
-const segmentRoutes = require('./segmentRoutes');
 
 const router = express.Router();
 
@@ -125,8 +124,5 @@ router.use('/export', exportRoutes);
 
 // Change endpoints (job changes, promotions, title changes)
 router.use('/changes', changeRoutes);
-
-// Segment endpoints (high-value, decision-makers, warm-leads, etc.)
-router.use('/segments', segmentRoutes);
 
 module.exports = router;

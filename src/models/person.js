@@ -239,23 +239,6 @@ const personSchema = new mongoose.Schema(
     derived: {
       avgTenureMonths: Number,
       yearsAtCurrentCompany: Number,
-      // Lead scoring fields
-      leadScore: {
-        type: Number,
-        min: 0,
-        max: 100,
-      },
-      segment: {
-        type: String,
-        enum: [
-          'high_value',
-          'decision_maker',
-          'warm_lead',
-          'needs_enrichment',
-          'standard',
-        ],
-      },
-      scoreUpdatedAt: Date,
     },
   },
   {

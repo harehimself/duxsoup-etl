@@ -19,11 +19,13 @@ echo "2. Search for 'engineer':"
 curl -s "$BASE_URL/api/search?q=engineer&limit=3" \
   | jq -r '.data.results[] | "  - \(.snapshot.fullName) - \(.snapshot.currentTitle)"'
 
-# 3. High-value prospects
+# 3. Companies
 echo ""
-echo "3. High-value prospects:"
-curl -s "$BASE_URL/api/segments/high-value?limit=3" \
-  | jq -r '.data.people[] | "  - \(.snapshot.fullName) (Score: \(.derived.leadScore))"'
+echo "3. Top companies:"
+curl -s -X POST $BASE_URL/api/query/companies \
+  -H "Content-Type: application/json" \
+  -d '{"limit":3}' \
+  | jq -r '.data.results[] | "  - \(.companyName): \(.employeeCount) employees"'
 
 # 4. Recent changes
 echo ""

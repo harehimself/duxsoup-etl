@@ -1,6 +1,5 @@
 const Change = require('../models/change');
 const logger = require('../utils/logger');
-const { sendAlertIfNeeded } = require('./alertService');
 
 /**
  * Change Detection Service
@@ -298,14 +297,6 @@ async function recordChange(changeData) {
     company: changeData.company,
     timestamp: new Date(),
     notified: false,
-  });
-
-  // Send Slack alert if needed (async, don't wait)
-  sendAlertIfNeeded(change).catch((err) => {
-    logger.error('Failed to send alert for change', {
-      change_id: change._id,
-      error: err.message,
-    });
   });
 
   return change;

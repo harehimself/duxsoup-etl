@@ -8,7 +8,6 @@ const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
-const { updatePersonScore } = require("../services/scoringService");
 
 /**
  * Person Controller
@@ -671,23 +670,6 @@ async function upsertFromObservation(observationDoc, sourceType) {
     } catch (error) {
       // Log error but don't fail the entire upsert
       logger.error("Failed to detect changes", {
-        person_id: person._id,
-        error: error.message,
-        stack: error.stack,
-      });
-    }
-
-    // Step 10.6: Update lead score and segment
-    try {
-      await updatePersonScore(person, detectedChanges);
-      logger.debug("Lead score updated", {
-        person_id: person._id,
-        leadScore: person.derived?.leadScore,
-        segment: person.derived?.segment,
-      });
-    } catch (error) {
-      // Log error but don't fail the entire upsert
-      logger.error("Failed to update lead score", {
         person_id: person._id,
         error: error.message,
         stack: error.stack,

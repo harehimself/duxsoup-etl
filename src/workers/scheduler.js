@@ -7,8 +7,6 @@ const logger = require('../utils/logger');
  * Automates recurring tasks:
  * - Dead letter replay: Every 1 hour
  * - Health check: Every 6 hours
- * - Lead scoring update: Daily at 2am
- * - Pending alerts: Every 15 minutes
  */
 
 let schedulerStarted = false;
@@ -57,53 +55,9 @@ function startScheduler() {
         warnings: report.warnings?.length || 0,
       });
 
-      // Send Slack alert if critical issues found
-      if (report.status === 'critical' && process.env.SLACK_WEBHOOK_URL) {
-        const { sendHealthAlert } = require('../services/alertService');
-        await sendHealthAlert(report).catch((err) => {
-          logger.error('Failed to send health alert', {
-            error: err.message,
-          });
-        });
-      }
+      // TODO: Add email/SMS notification for critical issues
     } catch (err) {
       logger.error('Scheduled health check failed', {
-        error: err.message,
-        stack: err.stack,
-      });
-    }
-  });
-
-  // Job 3: Lead scoring update (daily at 2am)
-  cron.schedule('0 2 * * *', async () => {
-    try {
-      logger.info('Running scheduled lead score recalculation');
-
-      const { recalculateAllScores } = require('../services/scoringService');
-      const stats = await recalculateAllScores({ batchSize: 100 });
-
-      logger.info('Scheduled lead score recalculation complete', stats);
-    } catch (err) {
-      logger.error('Scheduled lead score recalculation failed', {
-        error: err.message,
-        stack: err.stack,
-      });
-    }
-  });
-
-  // Job 4: Process pending alerts (every 15 minutes)
-  cron.schedule('*/15 * * * *', async () => {
-    try {
-      logger.debug('Running scheduled alert processing');
-
-      const { processPendingAlerts } = require('../services/alertService');
-      const stats = await processPendingAlerts({ limit: 100 });
-
-      if (stats.sent > 0 || stats.errors > 0) {
-        logger.info('Scheduled alert processing complete', stats);
-      }
-    } catch (err) {
-      logger.error('Scheduled alert processing failed', {
         error: err.message,
         stack: err.stack,
       });
