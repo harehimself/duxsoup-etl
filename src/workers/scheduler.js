@@ -29,8 +29,8 @@ function startScheduler() {
     try {
       logger.info('Running scheduled dead letter replay');
 
-      const { replayDeadLetters } = require('../scripts/replay-dead-letters');
-      const stats = await replayDeadLetters({ limit: 100 });
+      const { replayDeadLetters } = require('../../scripts/replayDeadLetters');
+      const stats = await replayDeadLetters({ dryRun: false, limit: 100 });
 
       logger.info('Scheduled dead letter replay complete', stats);
     } catch (err) {

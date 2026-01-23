@@ -107,6 +107,118 @@ describe('PersonController', () => {
 
       expect(result).toBe(false);
     });
+
+    // Tests for non-string values (bug fix for .trim() error)
+    it('should accept incoming number value (connections, degree)', () => {
+      const existingMeta = null;
+      const incomingMeta = {
+        value: 500, // Number, not string
+        observedAt: new Date('2024-01-15'),
+        source: 'visit',
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(true);
+    });
+
+    it('should overwrite existing with number value when higher precedence', () => {
+      const existingMeta = {
+        value: 250,
+        observedAt: new Date('2024-01-01'),
+        source: 'scan',
+      };
+      const incomingMeta = {
+        value: 500, // Number
+        observedAt: new Date('2024-01-10'),
+        source: 'visit', // Higher precedence
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(true);
+    });
+
+    it('should reject null incoming value', () => {
+      const existingMeta = {
+        value: 500,
+        observedAt: new Date('2024-01-01'),
+        source: 'visit',
+      };
+      const incomingMeta = {
+        value: null, // Null value
+        observedAt: new Date('2024-01-15'),
+        source: 'visit',
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(false);
+    });
+
+    it('should reject undefined incoming value', () => {
+      const existingMeta = {
+        value: 'John Doe',
+        observedAt: new Date('2024-01-01'),
+        source: 'visit',
+      };
+      const incomingMeta = {
+        value: undefined, // Undefined value
+        observedAt: new Date('2024-01-15'),
+        source: 'visit',
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(false);
+    });
+
+    it('should reject NaN incoming value', () => {
+      const existingMeta = {
+        value: 500,
+        observedAt: new Date('2024-01-01'),
+        source: 'visit',
+      };
+      const incomingMeta = {
+        value: NaN, // NaN value
+        observedAt: new Date('2024-01-15'),
+        source: 'visit',
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(false);
+    });
+
+    it('should accept valid number 0 (zero connections is valid)', () => {
+      const existingMeta = null;
+      const incomingMeta = {
+        value: 0, // Zero is a valid number
+        observedAt: new Date('2024-01-15'),
+        source: 'visit',
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(true);
+    });
+
+    it('should handle whitespace-only string as empty', () => {
+      const existingMeta = {
+        value: 'John Doe',
+        observedAt: new Date('2024-01-01'),
+        source: 'visit',
+      };
+      const incomingMeta = {
+        value: '   ', // Whitespace only
+        observedAt: new Date('2024-01-15'),
+        source: 'visit',
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(false);
+    });
   });
 
   describe('normalizeField()', () => {

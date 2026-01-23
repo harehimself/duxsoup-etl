@@ -93,8 +93,16 @@ function shouldOverwrite(existingMeta, incomingMeta) {
     return true;
   }
 
+  // Check if incoming value is empty/blank
+  const isIncomingEmpty = (value) => {
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string' && value.trim() === '') return true;
+    if (typeof value === 'number' && isNaN(value)) return true;
+    return false;
+  };
+
   // Never overwrite with empty/blank incoming
-  if (!incomingMeta.value || incomingMeta.value.trim() === "") {
+  if (isIncomingEmpty(incomingMeta.value)) {
     return false;
   }
 
