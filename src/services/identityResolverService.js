@@ -163,6 +163,60 @@ class IdentityResolverService {
   }
 
   /**
+   * Determine if canonical_id should be updated to a new value
+   * Updates when the new ID is based on a higher-priority identifier
+   *
+   * Priority: salesNavId (5) > linkedInUsername (4) > profileUrl (3) > publicUrl (2) > duxsoupId (1)
+   *
+   * @param {Object} person - Person document
+   * @param {String} newCanonicalId - Proposed new canonical_id
+   * @param {String} newPrimaryIdType - Type of identifier for new canonical_id
+   * @returns {Boolean} True if canonical_id should be updated
+   */
+  shouldUpdateCanonicalId(person, newCanonicalId, newPrimaryIdType) {
+    // If person has no canonical_id, always set it
+    if (!person.canonical_id) {
+      return true;
+    }
+
+    // If canonical IDs match, no update needed
+    if (person.canonical_id === newCanonicalId) {
+      return false;
+    }
+
+    // Priority mapping (higher = more stable)
+    const priorities = {
+      salesNavId: 5,
+      linkedInUsername: 4,
+      profileUrl: 3,
+      publicUrl: 2,
+      recruiterUrl: 2,
+      duxsoupId: 1,
+    };
+
+    const newPriority = priorities[newPrimaryIdType] || 0;
+
+    // Try to determine what type the existing canonical_id is based on
+    // by checking each alias to see if it would produce the existing canonical_id
+    for (const alias of person.aliases) {
+      const testCanonicalKey = buildCanonicalKey(alias.type, alias.value);
+      const testCanonicalId = computeCanonicalId(testCanonicalKey);
+
+      if (testCanonicalId === person.canonical_id) {
+        // Found the alias that created the existing canonical_id
+        const existingPriority = priorities[alias.type] || 0;
+
+        // Update if new priority is higher
+        return newPriority > existingPriority;
+      }
+    }
+
+    // If we can't determine the existing source, be conservative
+    // Only update if the new ID is salesNavId (highest priority)
+    return newPrimaryIdType === 'salesNavId';
+  }
+
+  /**
    * Merge multiple people into a single canonical person
    * Combines aliases, observations, roles, education, skills
    * Deletes loser documents
@@ -352,11 +406,31 @@ class IdentityResolverService {
           person.canonical_id = canonicalId;
           await person.save();
         } else if (person.canonical_id !== canonicalId) {
-          logger.warn('Canonical ID mismatch on alias match', {
-            person_id: person._id,
-            existing_canonical_id: person.canonical_id,
-            incoming_canonical_id: canonicalId,
-          });
+          // Check if we should update the canonical_id to a higher-priority one
+          const shouldUpdate = this.shouldUpdateCanonicalId(
+            person,
+            canonicalId,
+            identity.primary_id_type
+          );
+
+          if (shouldUpdate) {
+            logger.info('Updating canonical_id to higher-priority identifier', {
+              person_id: person._id,
+              old_canonical_id: person.canonical_id,
+              new_canonical_id: canonicalId,
+              new_primary_id_type: identity.primary_id_type,
+            });
+
+            person.canonical_id = canonicalId;
+            await person.save();
+          } else {
+            logger.warn('Canonical ID mismatch on alias match (keeping existing)', {
+              person_id: person._id,
+              existing_canonical_id: person.canonical_id,
+              incoming_canonical_id: canonicalId,
+              incoming_primary_id_type: identity.primary_id_type,
+            });
+          }
         }
 
         person = await this.mergeAliases(person, identity.aliases || []);
@@ -380,11 +454,31 @@ class IdentityResolverService {
         winner.canonical_id = canonicalId;
         await winner.save();
       } else if (winner.canonical_id !== canonicalId) {
-        logger.warn('Canonical ID mismatch on merge winner', {
-          winner_id: winner._id,
-          existing_canonical_id: winner.canonical_id,
-          incoming_canonical_id: canonicalId,
-        });
+        // Check if we should update the canonical_id to a higher-priority one
+        const shouldUpdate = this.shouldUpdateCanonicalId(
+          winner,
+          canonicalId,
+          identity.primary_id_type
+        );
+
+        if (shouldUpdate) {
+          logger.info('Updating canonical_id to higher-priority identifier on merge', {
+            winner_id: winner._id,
+            old_canonical_id: winner.canonical_id,
+            new_canonical_id: canonicalId,
+            new_primary_id_type: identity.primary_id_type,
+          });
+
+          winner.canonical_id = canonicalId;
+          await winner.save();
+        } else {
+          logger.warn('Canonical ID mismatch on merge winner (keeping existing)', {
+            winner_id: winner._id,
+            existing_canonical_id: winner.canonical_id,
+            incoming_canonical_id: canonicalId,
+            incoming_primary_id_type: identity.primary_id_type,
+          });
+        }
       }
 
       person = await this.mergePeople(winner, losers, {
