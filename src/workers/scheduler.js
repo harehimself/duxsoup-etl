@@ -30,7 +30,12 @@ function startScheduler() {
       logger.info('Running scheduled dead letter replay');
 
       const { replayDeadLetters } = require('../../scripts/replayDeadLetters');
-      const stats = await replayDeadLetters({ dryRun: false, limit: 100 });
+      // Use managedConnection: true to prevent disconnecting the shared database connection
+      const stats = await replayDeadLetters({
+        dryRun: false,
+        limit: 100,
+        managedConnection: true  // Don't disconnect - we're sharing the connection with the main app
+      });
 
       logger.info('Scheduled dead letter replay complete', stats);
     } catch (err) {

@@ -148,7 +148,7 @@ function generateReport() {
  * Main replay function
  */
 async function replayDeadLetters(options = {}) {
-  const { dryRun = true, limit = null, status = 'pending' } = options;
+  const { dryRun = true, limit = null, status = 'pending', managedConnection = false } = options;
 
   stats.startTime = new Date();
 
@@ -159,8 +159,10 @@ async function replayDeadLetters(options = {}) {
   console.log(`Status filter: ${status}`);
   console.log(`Limit: ${limit || 'none'}\n`);
 
-  // Connect to database
-  await database.connect();
+  // Connect to database only if not using managed connection (i.e., CLI mode)
+  if (!managedConnection) {
+    await database.connect();
+  }
 
   // Get dead letters
   const query = { status };
@@ -174,7 +176,10 @@ async function replayDeadLetters(options = {}) {
 
   if (stats.total === 0) {
     console.log('No dead letters to replay. Exiting.\n');
-    await database.disconnect();
+    // Only disconnect if we connected (CLI mode)
+    if (!managedConnection) {
+      await database.disconnect();
+    }
     return stats;
   }
 
@@ -197,7 +202,11 @@ async function replayDeadLetters(options = {}) {
   stats.endTime = new Date();
   generateReport();
 
-  await database.disconnect();
+  // Only disconnect if we connected (CLI mode)
+  if (!managedConnection) {
+    await database.disconnect();
+  }
+
   return stats;
 }
 
