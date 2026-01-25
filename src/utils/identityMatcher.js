@@ -5,8 +5,8 @@
  * (Scans, Visits, People, etc.)
  *
  * Priority Order:
- * 1. LinkedIn Username (stable across Sales Nav + Regular LinkedIn)
- * 2. Sales Navigator ID (ACwAAA/ACoAAA)
+ * 1. Sales Navigator ID (ACwAAA/ACoAAA) - MOST STABLE, never changes
+ * 2. LinkedIn Username - stable across Sales Nav + Regular LinkedIn
  * 3. Normalized Profile URL
  * 4. Public Profile / Recruiter Profile
  * 5. DuxSoup ID (changes between scan sources - least stable)
@@ -16,7 +16,7 @@
  *
  *   const identifiers = extractIdentifiers(webhookData);
  *   const primary = getPrimaryIdentifier(identifiers);
- *   // primary = { type: 'linkedInUsername', value: 'bret-lamb-1424546' }
+ *   // primary = { type: 'salesNavId', value: 'ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ' }
  */
 
 const crypto = require("crypto");
@@ -191,11 +191,14 @@ function extractIdentifiers(data) {
  * Get the primary identifier using waterfall approach
  *
  * Priority Order:
- * 1. Sales Navigator ID (most stable, never changes)
- * 2. LinkedIn Username (works across Sales Nav + Regular LinkedIn)
+ * 1. Sales Navigator ID (MOST STABLE - never changes, LinkedIn's canonical ID)
+ * 2. LinkedIn Username (stable across Sales Nav + Regular LinkedIn)
  * 3. Normalized Profile URL (fallback for profiles without custom username)
  * 4. Public Profile / Recruiter Profile (rare)
  * 5. DuxSoup ID (last resort - changes between scan sources)
+ *
+ * Note: All identifiers are collected as aliases for cross-platform matching.
+ * findByAnyAlias() can locate a person using any identifier type.
  *
  * @param {Object} identifiers - Object from extractIdentifiers()
  * @returns {Object|null} - { type: string, value: string } or null

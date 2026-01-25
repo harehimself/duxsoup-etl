@@ -117,9 +117,9 @@ describe("Identity Resolution Utility", () => {
   });
 
   describe("resolvePersonIdentity()", () => {
-    it("should use LinkedIn username as primary identity (NEW WATERFALL)", () => {
-      // NEW BEHAVIOR: LinkedIn username takes priority over Sales Nav ID
-      // This enables cross-platform matching (Sales Nav + Regular LinkedIn)
+    it("should use Sales Nav ID as primary identity (most stable)", () => {
+      // Sales Nav ID is most stable - never changes even if profile is updated
+      // LinkedIn username is collected as alias for cross-platform matching
       const webhookData = {
         SalesProfile:
           "https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7",
@@ -129,8 +129,8 @@ describe("Identity Resolution Utility", () => {
 
       const result = resolvePersonIdentity(webhookData);
 
-      expect(result.person_id).toBe("johndoe"); // Username, not Sales Nav ID
-      expect(result.source).toBe("linkedInUsername");
+      expect(result.person_id).toBe("ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ"); // Sales Nav ID
+      expect(result.source).toBe("salesNavId");
       expect(result.aliases).toContainEqual({
         type: "linkedInUsername",
         value: "johndoe",
@@ -154,8 +154,9 @@ describe("Identity Resolution Utility", () => {
       expect(result.source).toBe("salesNavId");
     });
 
-    it("should extract username from RecruiterProfile when available", () => {
-      // NEW BEHAVIOR: Extracts username from RecruiterProfile if present
+    it("should extract Sales Nav ID from RecruiterProfile when available", () => {
+      // RecruiterProfile contains Sales Nav ID - used as primary identity
+      // LinkedIn username from Profile is collected as alias
       const webhookData = {
         RecruiterProfile:
           "https://www.linkedin.com/talent/profile/ACwAAABCDEFGHIJ",
@@ -164,8 +165,12 @@ describe("Identity Resolution Utility", () => {
 
       const result = resolvePersonIdentity(webhookData);
 
-      expect(result.person_id).toBe("janedoe"); // Username from Profile
-      expect(result.source).toBe("linkedInUsername");
+      expect(result.person_id).toBe("ACwAAABCDEFGHIJ"); // Sales Nav ID from RecruiterProfile
+      expect(result.source).toBe("salesNavId");
+      expect(result.aliases).toContainEqual({
+        type: "linkedInUsername",
+        value: "janedoe",
+      });
     });
 
     it("should fallback to normalized profile URL when no username/Sales Nav ID", () => {

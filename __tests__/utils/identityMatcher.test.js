@@ -122,7 +122,7 @@ describe("Identity Matcher Utility", () => {
   });
 
   describe("getPrimaryIdentifier", () => {
-    it("should prioritize LinkedIn username over Sales Nav ID", () => {
+    it("should prioritize Sales Nav ID over LinkedIn username", () => {
       const identifiers = {
         linkedInUsername: "john-doe",
         salesNavId: "ACwAAA123",
@@ -131,8 +131,8 @@ describe("Identity Matcher Utility", () => {
 
       const primary = getPrimaryIdentifier(identifiers);
 
-      expect(primary.type).toBe("linkedInUsername");
-      expect(primary.value).toBe("john-doe");
+      expect(primary.type).toBe("salesNavId");
+      expect(primary.value).toBe("ACwAAA123");
     });
 
     it("should use Sales Nav ID if username not available", () => {

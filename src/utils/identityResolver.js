@@ -9,11 +9,11 @@ const { parseLocation } = require("./location-parser");
  * NOW USES CENTRALIZED IDENTITY MATCHER (src/utils/identityMatcher.js)
  *
  * This file maintains backward compatibility with existing code
- * while using the new waterfall identity matching logic internally.
+ * while using the waterfall identity matching logic internally.
  *
  * Waterfall Priority (from identityMatcher.js):
- * 1. LinkedIn Username (stable across Sales Nav + Regular LinkedIn)
- * 2. Sales Navigator ID (ACwAAA/ACoAAA)
+ * 1. Sales Navigator ID (ACwAAA/ACoAAA) - MOST STABLE, never changes
+ * 2. LinkedIn Username - stable across Sales Nav + Regular LinkedIn
  * 3. Normalized Profile URL
  * 4. Public Profile / Recruiter Profile
  * 5. DuxSoup ID (last resort)
