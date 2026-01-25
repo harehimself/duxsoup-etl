@@ -12,7 +12,9 @@ function applySnapshotValue(snapshot, field, value) {
 }
 
 async function upsertCompanyFromObservation(observationDoc, sourceType) {
-  const webhookData = observationDoc.rawData || observationDoc;
+  // Extract data from nested rawData.data structure if present, otherwise use top-level fields
+  const webhookData =
+    observationDoc.rawData?.data || observationDoc.rawData || observationDoc;
   const identity = resolveCompanyIdentity(webhookData);
 
   if (!identity.company_id || !identity.canonical_id) {

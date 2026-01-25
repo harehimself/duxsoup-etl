@@ -4,7 +4,9 @@ const { resolveLocationIdentity } = require("../utils/identityResolver");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 
 async function upsertLocationFromObservation(observationDoc, sourceType) {
-  const webhookData = observationDoc.rawData || observationDoc;
+  // Extract data from nested rawData.data structure if present, otherwise use top-level fields
+  const webhookData =
+    observationDoc.rawData?.data || observationDoc.rawData || observationDoc;
   const locationValue = webhookData.Location;
   const identity = resolveLocationIdentity(locationValue);
 

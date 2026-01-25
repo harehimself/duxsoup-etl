@@ -391,16 +391,13 @@ function resolveCompanyIdentity(webhookData) {
     }
   }
 
-  // Priority 3: Company name as last resort (if no numeric ID found)
-  if (!company_id && webhookData.Company) {
-    const name = webhookData.Company.trim();
-    if (name) {
-      company_id = name;
-      source = "name";
-      primaryIdType = "name";
-      aliases.push({ type: "name", value: name });
-    }
-  } else if (webhookData.Company) {
+  // Always add company name as alias (if available)
+  // NOTE: Company name alone is NOT used as _id because:
+  // 1. Company model requires numeric IDs only
+  // 2. Names are unstable (companies rebrand)
+  // 3. Names can duplicate across different companies
+  // Better to skip company creation than use unstable identifier
+  if (webhookData.Company) {
     const name = webhookData.Company.trim();
     if (name && !aliases.find((a) => a.value === name)) {
       aliases.push({ type: "name", value: name });

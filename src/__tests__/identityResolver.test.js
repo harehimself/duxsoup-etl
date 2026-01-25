@@ -276,16 +276,23 @@ describe("Identity Resolution Utility", () => {
       });
     });
 
-    it("should fallback to company name when CompanyID missing", () => {
+    it("should NOT create company with only name (requires numeric ID)", () => {
       const webhookData = {
         Company: "TechCorp",
       };
 
       const result = resolveCompanyIdentity(webhookData);
 
-      expect(result.company_id).toBe("TechCorp");
-      expect(result.source).toBe("name");
-      expect(result.canonical_key).toBe("name:TechCorp");
+      // Company name alone is insufficient - numeric ID required
+      expect(result.company_id).toBeNull();
+      expect(result.source).toBeNull();
+      expect(result.canonical_id).toBeNull();
+
+      // But name is still captured as alias for when numeric ID is found later
+      expect(result.aliases).toContainEqual({
+        type: "name",
+        value: "TechCorp",
+      });
     });
 
     it("should include company profile URL as alias", () => {
