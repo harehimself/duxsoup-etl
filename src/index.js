@@ -39,17 +39,52 @@ app.use((req, res, next) => {
   next();
 });
 
+// Database readiness check - reject requests if DB is not ready
+app.use((req, res, next) => {
+  // Skip DB check for health endpoint
+  if (req.path === '/health' || req.path === '/') {
+    return next();
+  }
+
+  if (!database.isReady()) {
+    const status = database.getConnectionStatus();
+    logger.warn('Request rejected - database not ready', {
+      path: req.path,
+      method: req.method,
+      dbState: status.readyStateText
+    });
+
+    return res.status(503).json({
+      success: false,
+      error: 'SERVICE_UNAVAILABLE',
+      message: 'Database connection not ready. Please retry in a few seconds.',
+      details: {
+        dbState: status.readyStateText,
+        readyState: status.readyState
+      }
+    });
+  }
+
+  next();
+});
+
 // Add API routes
 app.use("/api", apiRoutes);
 
 // Health check endpoint with database status
 app.get("/health", async (req, res) => {
   const dbStatus = database.getConnectionStatus();
-  res.json({
-    status: "ok",
+  const isHealthy = database.isReady();
+
+  const response = {
+    status: isHealthy ? "ok" : "degraded",
     database: dbStatus,
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  // Return 503 if database is not ready (helps load balancers detect unhealthy instances)
+  const statusCode = isHealthy ? 200 : 503;
+  res.status(statusCode).json(response);
 });
 
 app.get("/", (req, res) => {
