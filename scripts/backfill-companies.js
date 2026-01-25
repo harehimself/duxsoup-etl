@@ -37,31 +37,77 @@ async function backfillObservations(dryRun, limit) {
 
   console.log(`Fetching observations since ${cutoffDate.toISOString()}...`);
 
-  // Fetch visits and scans since cutoff date
+  // Count total observations
   const query = { createdAt: { $gte: cutoffDate } };
-  const visitQuery = limit
-    ? Visit.find(query).sort({ createdAt: 1 }).limit(limit)
-    : Visit.find(query).sort({ createdAt: 1 });
-  const scanQuery = limit
-    ? Scan.find(query).sort({ createdAt: 1 }).limit(limit)
-    : Scan.find(query).sort({ createdAt: 1 });
+  const visitCount = await Visit.countDocuments(query);
+  const scanCount = await Scan.countDocuments(query);
 
-  const visits = await visitQuery;
-  const scans = await scanQuery;
+  console.log(`Found ${visitCount} visits and ${scanCount} scans\n`);
 
-  console.log(`Found ${visits.length} visits and ${scans.length} scans\n`);
-
-  stats.total = visits.length + scans.length;
-
-  // Process visits
-  for (const visit of visits) {
-    await processObservation(visit, 'visit', dryRun);
+  if (limit) {
+    console.log(`Processing first ${limit} observations only (--limit=${limit})\n`);
   }
 
-  // Process scans
-  for (const scan of scans) {
-    await processObservation(scan, 'scan', dryRun);
+  stats.total = limit ? Math.min(limit, visitCount + scanCount) : (visitCount + scanCount);
+
+  // Process in batches to avoid memory issues
+  const batchSize = 1000;
+  let processedVisits = 0;
+  let processedScans = 0;
+
+  // Process visits in batches
+  console.log('Processing visits...');
+  while (processedVisits < (limit || visitCount)) {
+    const remaining = limit ? Math.min(batchSize, limit - processedVisits) : batchSize;
+    const visits = await Visit.find(query)
+      .sort({ _id: 1 })  // Sort by _id instead of createdAt (indexed)
+      .skip(processedVisits)
+      .limit(remaining);
+
+    if (visits.length === 0) break;
+
+    for (const visit of visits) {
+      await processObservation(visit, 'visit', dryRun);
+    }
+
+    processedVisits += visits.length;
+    if (processedVisits % 100 === 0) {
+      console.log(`  Processed ${processedVisits}/${limit || visitCount} visits...`);
+    }
+
+    if (limit && processedVisits >= limit) break;
+    if (visits.length < batchSize) break;
   }
+
+  // Process scans in batches
+  if (!limit || processedVisits < limit) {
+    console.log('Processing scans...');
+    const scanLimit = limit ? (limit - processedVisits) : null;
+
+    while (processedScans < (scanLimit || scanCount)) {
+      const remaining = scanLimit ? Math.min(batchSize, scanLimit - processedScans) : batchSize;
+      const scans = await Scan.find(query)
+        .sort({ _id: 1 })  // Sort by _id instead of createdAt (indexed)
+        .skip(processedScans)
+        .limit(remaining);
+
+      if (scans.length === 0) break;
+
+      for (const scan of scans) {
+        await processObservation(scan, 'scan', dryRun);
+      }
+
+      processedScans += scans.length;
+      if (processedScans % 100 === 0) {
+        console.log(`  Processed ${processedScans}/${scanLimit || scanCount} scans...`);
+      }
+
+      if (scanLimit && processedScans >= scanLimit) break;
+      if (scans.length < batchSize) break;
+    }
+  }
+
+  console.log(`\nTotal processed: ${processedVisits} visits + ${processedScans} scans\n`);
 }
 
 async function processObservation(observation, sourceType, dryRun) {
