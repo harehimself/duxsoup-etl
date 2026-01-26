@@ -51,7 +51,11 @@ async function main() {
   console.log('');
 
   // Connect to database
-  await mongoose.connect(process.env.MONGO_URI);
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI environment variable is required');
+  }
+  await mongoose.connect(mongoUri);
   console.log('✓ Connected to MongoDB\n');
 
   // Find people without salesNavId alias but with URL aliases
