@@ -106,42 +106,18 @@ function extractLinkedInUsername(data) {
 /**
  * Extract Sales Navigator ID from various fields
  *
+ * UPDATED: Now uses the robust extractor from salesNavIdExtractor.js
+ * - Case-insensitive extraction
+ * - Parameter stripping (,name,o7fk)
+ * - Canonical case normalization
+ *
  * @param {Object} data - Webhook or observation data
  * @returns {string|null} - Sales Navigator ID or null
  */
 function extractSalesNavId(data) {
-  // Sales Nav IDs start with ACwAAA or ACoAAA
-  const salesNavPattern = /A(Cw|Co)AAA[A-Za-z0-9_-]+/;
-
-  // Check SalesProfile URL
-  const salesProfile = data.SalesProfile || data.data?.SalesProfile;
-  if (salesProfile) {
-    const match = salesProfile.match(salesNavPattern);
-    if (match) return match[0];
-  }
-
-  // Check Profile URL (sometimes contains Sales Nav ID)
-  const profile = data.Profile || data.data?.Profile;
-  if (profile) {
-    const match = profile.match(salesNavPattern);
-    if (match) return match[0];
-  }
-
-  // Check PublicProfile
-  const publicProfile = data.PublicProfile || data.data?.PublicProfile;
-  if (publicProfile) {
-    const match = publicProfile.match(salesNavPattern);
-    if (match) return match[0];
-  }
-
-  // Check RecruiterProfile
-  const recruiterProfile = data.RecruiterProfile || data.data?.RecruiterProfile;
-  if (recruiterProfile) {
-    const match = recruiterProfile.match(salesNavPattern);
-    if (match) return match[0];
-  }
-
-  return null;
+  // Delegate to the robust extractor
+  const { extractSalesNavId: robustExtractor } = require('./salesNavIdExtractor');
+  return robustExtractor(data);
 }
 
 /**
@@ -169,14 +145,22 @@ function normalizeUrl(url) {
 /**
  * Extract all identifiers from webhook/observation data using waterfall priority
  *
+ * UPDATED: Now includes numericId extraction
+ *
  * @param {Object} data - Webhook or observation data
  * @returns {Object} - Object containing all extracted identifiers
  */
 function extractIdentifiers(data) {
+  const { extractNumericId } = require('./salesNavIdExtractor');
+
+  const duxsoupId = data.id || data.data?.id || null;
+  const numericId = duxsoupId ? extractNumericId(duxsoupId) : null;
+
   const identifiers = {
-    linkedInUsername: extractLinkedInUsername(data),
     salesNavId: extractSalesNavId(data),
-    duxsoupId: data.id || data.data?.id || null,
+    numericId: numericId,
+    linkedInUsername: extractLinkedInUsername(data),
+    duxsoupId: duxsoupId,
     profileUrl: normalizeUrl(data.Profile || data.data?.Profile),
     publicProfile: normalizeUrl(data.PublicProfile || data.data?.PublicProfile),
     recruiterProfile: normalizeUrl(
@@ -192,10 +176,11 @@ function extractIdentifiers(data) {
  *
  * Priority Order:
  * 1. Sales Navigator ID (MOST STABLE - never changes, LinkedIn's canonical ID)
- * 2. LinkedIn Username (stable across Sales Nav + Regular LinkedIn)
- * 3. Normalized Profile URL (fallback for profiles without custom username)
- * 4. Public Profile / Recruiter Profile (rare)
- * 5. DuxSoup ID (last resort - changes between scan sources)
+ * 2. Numeric ID (LinkedIn member ID - stable and immutable)
+ * 3. LinkedIn Username (stable across Sales Nav + Regular LinkedIn)
+ * 4. Normalized Profile URL (fallback for profiles without custom username)
+ * 5. Public Profile / Recruiter Profile (rare)
+ * 6. DuxSoup ID (last resort - changes between scan sources)
  *
  * Note: All identifiers are collected as aliases for cross-platform matching.
  * findByAnyAlias() can locate a person using any identifier type.
@@ -206,6 +191,9 @@ function extractIdentifiers(data) {
 function getPrimaryIdentifier(identifiers) {
   if (identifiers.salesNavId) {
     return { type: "salesNavId", value: identifiers.salesNavId };
+  }
+  if (identifiers.numericId) {
+    return { type: "numericId", value: identifiers.numericId };
   }
   if (identifiers.linkedInUsername) {
     return { type: "linkedInUsername", value: identifiers.linkedInUsername };

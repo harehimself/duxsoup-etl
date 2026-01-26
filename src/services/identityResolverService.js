@@ -19,6 +19,8 @@ class IdentityResolverService {
   /**
    * Find people matching any of the provided aliases
    *
+   * UPDATED: Now uses case-insensitive matching for salesNavId
+   *
    * @param {Array} aliases - Array of { type, value } alias objects
    * @returns {Promise<Array>} Array of matching Person documents
    */
@@ -27,24 +29,54 @@ class IdentityResolverService {
       return [];
     }
 
-    // Extract alias values for query
-    const aliasValues = aliases.map(a => a.value).filter(Boolean);
-
-    if (aliasValues.length === 0) {
-      return [];
-    }
-
     try {
-      // Find people where any alias matches
+      // Build query conditions
+      const conditions = [];
+
+      // Group aliases by type
+      const salesNavIdAliases = [];
+      const otherAliases = [];
+
+      aliases.forEach(alias => {
+        if (alias.type === 'salesNavId' && alias.value) {
+          salesNavIdAliases.push(alias.value);
+        } else if (alias.value) {
+          otherAliases.push(alias.value);
+        }
+      });
+
+      // Add case-insensitive query for salesNavId
+      if (salesNavIdAliases.length > 0) {
+        salesNavIdAliases.forEach(value => {
+          const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          conditions.push({
+            'aliases.type': 'salesNavId',
+            'aliases.value': { $regex: new RegExp(`^${escapedValue}$`, 'i') }
+          });
+        });
+      }
+
+      // Add exact match query for other aliases
+      if (otherAliases.length > 0) {
+        conditions.push({
+          'aliases.value': { $in: otherAliases }
+        });
+      }
+
+      if (conditions.length === 0) {
+        return [];
+      }
+
+      // Find people matching any condition
       const people = await Person.find({
-        'aliases.value': { $in: aliasValues },
+        $or: conditions
       });
 
       return people;
     } catch (error) {
       logger.error('Failed to find people by aliases', {
         error: error.message,
-        aliasValues,
+        aliasCount: aliases.length,
       });
       throw error;
     }
@@ -166,7 +198,7 @@ class IdentityResolverService {
    * Determine if canonical_id should be updated to a new value
    * Updates when the new ID is based on a higher-priority identifier
    *
-   * Priority: salesNavId (5) > linkedInUsername (4) > profileUrl (3) > publicUrl (2) > duxsoupId (1)
+   * Priority: salesNavId (10) > numericId (9) > linkedInUsername (8) > profileUrl (5) > publicUrl (4) > duxsoupId (1)
    *
    * @param {Object} person - Person document
    * @param {String} newCanonicalId - Proposed new canonical_id
@@ -186,11 +218,13 @@ class IdentityResolverService {
 
     // Priority mapping (higher = more stable)
     const priorities = {
-      salesNavId: 5,
-      linkedInUsername: 4,
-      profileUrl: 3,
-      publicUrl: 2,
-      recruiterUrl: 2,
+      salesNavId: 10,
+      numericId: 9,
+      linkedInUsername: 8,
+      profileUrl: 5,
+      publicUrl: 4,
+      salesUrl: 4,
+      recruiterUrl: 4,
       duxsoupId: 1,
     };
 
