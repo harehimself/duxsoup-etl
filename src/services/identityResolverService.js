@@ -152,7 +152,7 @@ class IdentityResolverService {
 
     return people.reduce((winner, candidate) => {
       // Rule 1: Prefer Sales Nav ID format
-      const salesNavPattern = /^(ACwAAA|ACoAAA)/;
+      const salesNavPattern = /^(ACwAA|ACoAA)/;
       const winnerHasSalesNav = salesNavPattern.test(winner._id);
       const candidateHasSalesNav = salesNavPattern.test(candidate._id);
 
