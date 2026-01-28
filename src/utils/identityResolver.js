@@ -12,7 +12,7 @@ const { parseLocation } = require("./location-parser");
  * while using the waterfall identity matching logic internally.
  *
  * Waterfall Priority (from identityMatcher.js):
- * 1. Sales Navigator ID (ACwAAA/ACoAAA) - MOST STABLE, never changes
+ * 1. Sales Navigator ID (ACwAA*/ACoAA*) - MOST STABLE, never changes
  * 2. LinkedIn Username - stable across Sales Nav + Regular LinkedIn
  * 3. Normalized Profile URL
  * 4. Public Profile / Recruiter Profile
@@ -24,11 +24,11 @@ const { parseLocation } = require("./location-parser");
 
 /**
  * Extract Sales Navigator person ID from URL or field
- * Format: ACwAAAxxxxxxx or ACoAAAxxxxxxx (base64-like ID)
+ * Format: ACwAAxxxxxxx or ACoAAxxxxxxx (base64-like ID)
  *
  * LinkedIn uses two formats:
  * - ACwAAA (common in scans): https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ
- * - ACoAAA (common in visits): https://www.linkedin.com/sales/people/ACoAABJdcQ8BIhAujd1YYtK2saU-EJcfP4SRYuQ
+ * - ACoAAB (common in visits): https://www.linkedin.com/sales/people/ACoAABJdcQ8BIhAujd1YYtK2saU-EJcfP4SRYuQ
  *
  * @param {string} url - URL or field value
  * @returns {string|null} Sales Navigator person ID or null
@@ -36,9 +36,9 @@ const { parseLocation } = require("./location-parser");
 function extractSalesNavId(url) {
   if (!url || typeof url !== "string") return null;
 
-  // Pattern: Match BOTH ACwAAA and ACoAAA followed by base64-like characters
+  // Pattern: Match BOTH ACwAA and ACoAA prefixes followed by base64-like characters
   // Use explicit alternation to avoid character class ambiguity
-  const salesNavPattern = /((?:ACwAAA|ACoAAA)[A-Za-z0-9_-]+)/;
+  const salesNavPattern = /((?:ACwAA|ACoAA)[A-Za-z0-9_-]+)/;
   const match = url.match(salesNavPattern);
 
   return match ? match[1] : null;

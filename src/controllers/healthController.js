@@ -183,7 +183,7 @@ async function getCoverageBreakdown(req, res) {
 
     // Count by primary identity source (what _id format they use)
     const salesNavPeople = await Person.countDocuments({
-      _id: { $regex: /^ACwAAA/ }
+      _id: { $regex: /^AC[ow]AA/ }
     });
 
     const numericPeople = await Person.countDocuments({

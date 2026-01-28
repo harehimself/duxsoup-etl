@@ -54,6 +54,14 @@ describe('extractSalesNavIdFromUrl', () => {
       expect(result).toBe('acwaaa0cm4mba9l9zimkopy1otohmypitrlogya');
     });
 
+    test('recruiterUrl format with ACoAAB prefix', () => {
+      const url =
+        'www.linkedin.com/talent/profile/acoaabhsj7ybkdwjpapp3d5higdd5blxqaal78a';
+      const result = extractSalesNavIdFromUrl(url);
+
+      expect(result).toBe('acoaabhsj7ybkdwjpapp3d5higdd5blxqaal78a');
+    });
+
     test('recruiterUrl format with https', () => {
       const url =
         'https://www.linkedin.com/talent/profile/ACwAAA0CM4MBa9l9ZiMKoPY1oTohmYpITrloGYA';
@@ -150,6 +158,14 @@ describe('extractSalesNavIdFromUrl', () => {
       const result = extractSalesNavIdFromUrl(url);
 
       expect(result).toBe('ACoAAA0CM4MBva7a2Z-_uLwWoO2swdf5ye_nV2E');
+    });
+
+    test('ACoAAB variant (mixed case)', () => {
+      const url =
+        'www.linkedin.com/sales/people/ACoAABhsj7yBKDWJpapp3d5higdd5blxqaal78a';
+      const result = extractSalesNavIdFromUrl(url);
+
+      expect(result).toBe('ACoAABhsj7yBKDWJpapp3d5higdd5blxqaal78a');
     });
   });
 
@@ -337,6 +353,11 @@ describe('normalizeToCanonicalCase', () => {
   test('Normalizes lowercase ACoAAA to canonical', () => {
     const result = normalizeToCanonicalCase('acoaaa0cm4mbva7a2z-_ulwwoo2swdf5ye_nv2e');
     expect(result).toBe('ACoAAA0cm4mbva7a2z-_ulwwoo2swdf5ye_nv2e');
+  });
+
+  test('Normalizes lowercase ACoAAB to canonical', () => {
+    const result = normalizeToCanonicalCase('acoaabhsj7ybkdwjpapp3d5higdd5blxqaal78a');
+    expect(result).toBe('ACoAABhsj7ybkdwjpapp3d5higdd5blxqaal78a');
   });
 
   test('Preserves already-canonical ACwAAA', () => {

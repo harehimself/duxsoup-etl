@@ -35,7 +35,7 @@ function extractLinkedInUsername(data) {
   const usernamePattern = /\/in\/([a-zA-Z0-9_-]+)\/?/;
   const pidPattern = /^pid\.([a-zA-Z0-9_-]+)$/;
   // Pattern to detect Sales Nav IDs (should NOT be treated as usernames)
-  const salesNavIdPattern = /^A(Cw|Co)AAA/;
+  const salesNavIdPattern = /^A(Cw|Co)AA/;
 
   /**
    * Helper to validate extracted username

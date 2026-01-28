@@ -16,7 +16,7 @@
 /**
  * Extract Sales Navigator ID from any LinkedIn URL
  *
- * Pattern: ACwAAA or ACoAAA followed by alphanumeric chars, hyphens, underscores
+ * Pattern: ACwAA/ACoAA followed by alphanumeric chars, hyphens, underscores
  * Case-insensitive to handle lowercase IDs in URLs
  * Strips trailing parameters (,name,o7fk or ,NAME_SEARCH,Z1JY)
  *
@@ -38,9 +38,9 @@ function extractSalesNavIdFromUrl(url) {
     return null;
   }
 
-  // Pattern: A(Cw|Co)AAA followed by base64-like characters
-  // /i flag makes it case-insensitive (matches ACwAAA, acwaaa, AcWaAa, etc.)
-  const salesNavPattern = /A(Cw|Co)AAA[A-Za-z0-9_-]+/i;
+  // Pattern: A(Cw|Co)AA followed by base64-like characters
+  // /i flag makes it case-insensitive (matches ACwAAA, ACoAAB, acwaaa, etc.)
+  const salesNavPattern = /A(Cw|Co)AA[A-Za-z0-9_-]+/i;
 
   // Extract the ID using regex
   const match = url.match(salesNavPattern);
@@ -133,36 +133,38 @@ function extractSalesNavId(data) {
 /**
  * Normalize Sales Navigator ID to canonical case format
  *
- * LinkedIn's canonical format uses mixed case: ACwAAA or ACoAAA
- * URLs may contain lowercase versions: acwaaa or acoaaa
+ * LinkedIn's canonical format uses mixed case: ACwAAA/ACoAAA (and variants like ACwAAB)
+ * URLs may contain lowercase versions: acwaaa, acoaab, etc.
  *
  * This function normalizes to the canonical format for consistency.
  *
  * @param {string} salesNavId - Sales Navigator ID (any case)
- * @returns {string} - Normalized to canonical case (ACwAAA/ACoAAA prefix)
+ * @returns {string} - Normalized to canonical case (ACwAA/ACoAA prefix)
  *
  * @example
  * normalizeToCanonicalCase('acwaaa0cm4mb123')
  * // Returns: 'ACwAAA0cm4mb123'
  *
- * normalizeToCanonicalCase('ACoAAA123xyz')
- * // Returns: 'ACoAAA123xyz'
+ * normalizeToCanonicalCase('ACoAAB123xyz')
+ * // Returns: 'ACoAAB123xyz'
  */
 function normalizeToCanonicalCase(salesNavId) {
   if (!salesNavId || typeof salesNavId !== 'string') {
     return salesNavId;
   }
 
-  // Check if it starts with ACwAAA (case-insensitive)
-  if (salesNavId.toLowerCase().startsWith('acwaaa')) {
-    // Normalize to ACwAAA + rest of ID
-    return 'ACwAAA' + salesNavId.substring(6);
+  const lower = salesNavId.toLowerCase();
+
+  // Check if it starts with ACwAA (case-insensitive)
+  if (lower.startsWith('acwaa')) {
+    const sixthChar = salesNavId[5] ? salesNavId[5].toUpperCase() : '';
+    return `ACwAA${sixthChar}${salesNavId.substring(6)}`;
   }
 
-  // Check if it starts with ACoAAA (case-insensitive)
-  if (salesNavId.toLowerCase().startsWith('acoaaa')) {
-    // Normalize to ACoAAA + rest of ID
-    return 'ACoAAA' + salesNavId.substring(6);
+  // Check if it starts with ACoAA (case-insensitive)
+  if (lower.startsWith('acoaa')) {
+    const sixthChar = salesNavId[5] ? salesNavId[5].toUpperCase() : '';
+    return `ACoAA${sixthChar}${salesNavId.substring(6)}`;
   }
 
   // Already in canonical format or unknown format
