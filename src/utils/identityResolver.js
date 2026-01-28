@@ -12,7 +12,7 @@ const { parseLocation } = require("./location-parser");
  * while using the waterfall identity matching logic internally.
  *
  * Waterfall Priority (from identityMatcher.js):
- * 1. Sales Navigator ID (ACwAA*/ACoAA*) - MOST STABLE, never changes
+ * 1. Sales Navigator ID (ACwAAA... or ACoAAA...) - MOST STABLE, never changes
  * 2. LinkedIn Username - stable across Sales Nav + Regular LinkedIn
  * 3. Normalized Profile URL
  * 4. Public Profile / Recruiter Profile
