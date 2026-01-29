@@ -1,0 +1,85 @@
+{
+  "$comment": "Atlas Search Index Definitions for duxsoup database. Apply via Atlas UI or mongocli.",
+  "indexes": [
+    {
+      "name": "default",
+      "collectionName": "people",
+      "database": "duxsoup",
+      "type": "search",
+      "definition": {
+        "mappings": {
+          "dynamic": false,
+          "fields": {
+            "snapshot": {
+              "type": "document",
+              "fields": {
+                "fullName": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "firstName": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "lastName": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "currentTitle": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "currentCompany": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "industry": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "location": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "city": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "state": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "country": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "summary": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "skills": {
+                  "type": "string",
+                  "analyzer": "lucene.standard"
+                },
+                "email": {
+                  "type": "string",
+                  "analyzer": "lucene.keyword"
+                }
+              }
+            },
+            "aliases": {
+              "type": "document",
+              "fields": {
+                "value": {
+                  "type": "string",
+                  "analyzer": "lucene.keyword"
+                }
+              }
+            }
+          }
+        },
+        "analyzer": "lucene.standard"
+      }
+    }
+  ]
+}
