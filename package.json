@@ -37,7 +37,7 @@
     "csv-writer": "^1.6.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "mongoose": "^8.15.1",
+    "mongoose": "^9.1.5",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.13",
     "twilio": "^5.12.0",
