@@ -18,9 +18,17 @@ try {
 const config = getConfig();
 const app = express();
 
-// Security and middleware configuration
+// CORS configuration - restrictive by default
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : false; // Reject all cross-origin requests when not configured
+
+if (!process.env.ALLOWED_ORIGINS) {
+  logger.warn('ALLOWED_ORIGINS not set - CORS will reject all cross-origin browser requests. Server-to-server webhooks are unaffected.');
+}
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+  origin: allowedOrigins,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
