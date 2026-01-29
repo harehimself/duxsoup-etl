@@ -3,7 +3,8 @@ name: Deploy to Render
 on:
   push:
     branches:
-      - main # Or whichever branch you use for production deployments
+      - master
+      - main
 
 jobs:
   deploy:
