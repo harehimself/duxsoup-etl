@@ -136,6 +136,46 @@ The system looks for the MongoDB URI in this order:
 | `PORT`        | `3000`        | `3000`             | API server port     |
 | `LOG_LEVEL`   | `debug`       | `info`             | Logging verbosity   |
 
+## Atlas Search Index Configuration
+
+The `people` collection supports MongoDB Atlas Search for advanced full-text search capabilities.
+
+### Field Limit Issue
+
+Atlas Search indexes have a **300 field limit**. The default dynamic mapping will fail because:
+- The `snapshot._meta` field (Mixed type) stores provenance metadata for every field
+- Array fields like `roles[]` and `education[]` multiply field counts
+- Total fields with dynamic mapping: **309+** (exceeds limit)
+
+### Fix: Use Static Field Mapping
+
+Run the helper script to get the correct index definition:
+
+```bash
+node scripts/createAtlasSearchIndex.js --output
+```
+
+Then apply via Atlas UI:
+
+1. Go to **Atlas UI > Database > Browse Collections > Search**
+2. Delete the failing "default" index on "people" collection
+3. Click **Create Search Index**
+4. Select **JSON Editor**
+5. Paste the definition from the script output
+6. Index Name: `default`, Collection: `people`
+7. Click **Create Search Index**
+
+The static mapping indexes only **13 searchable fields** instead of 309+:
+- `snapshot.fullName`, `firstName`, `lastName`
+- `snapshot.currentTitle`, `currentCompany`
+- `snapshot.industry`, `location`, `city`, `state`, `country`
+- `snapshot.summary`, `skills`, `email`
+- `aliases.value` (for ID lookups)
+
+### Note on Search Implementation
+
+The application currently uses MongoDB's native `$text` search (defined in `src/models/person.js`), which works independently of Atlas Search. The Atlas Search index is optional and provides additional features like fuzzy matching and autocomplete if needed in the future.
+
 ## Troubleshooting
 
 ### Wrong Database Connected
