@@ -11,7 +11,7 @@ jobs:
     environment: production # Or a similar environment defined in GitHub
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Deploy to Render
         # Render has native integration with GitHub, typically you don't need a custom action for this.
