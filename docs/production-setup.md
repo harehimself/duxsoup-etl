@@ -36,9 +36,51 @@ LOG_LEVEL=info
 
 - [ ] Update `MONGODB_URI` with production database credentials
 - [ ] Ensure MongoDB has proper authentication enabled
-- [ ] Configure `CORS_ORIGIN` if needed for API access
+- [ ] **Restrict MongoDB Atlas IP Access List** (see below)
+- [ ] Configure `ALLOWED_ORIGINS` for CORS restrictions
 - [ ] Review and set appropriate `LOG_LEVEL` (info, warn, error)
 - [ ] Backup your database before running migrations
+
+### 3. MongoDB Atlas Network Access (Critical)
+
+**Never use `0.0.0.0/0` in production.** This allows connections from any IP worldwide.
+
+#### For Render Deployments
+
+Render uses dynamic outbound IPs on the free plan. Options:
+
+**Option A: Upgrade to Render Paid Plan (Recommended)**
+1. Upgrade to a paid Render plan to get static outbound IPs
+2. Go to Render Dashboard → Service → "Outbound IPs"
+3. In MongoDB Atlas: Security → Network Access → Add IP Address
+4. Add only the Render outbound IPs
+
+**Option B: Use MongoDB Atlas Private Endpoints**
+For M10+ clusters, configure AWS/GCP PrivateLink for zero-exposure networking.
+
+**Option C: Temporary Development Access**
+If you must allow broad access temporarily:
+1. Use the narrowest CIDR range possible
+2. Set an expiration date in Atlas (e.g., 24 hours)
+3. Remove immediately after development session
+
+#### To Restrict Access in Atlas
+
+1. Log into [MongoDB Atlas](https://cloud.mongodb.com/)
+2. Go to **Security → Network Access**
+3. **Delete** the `0.0.0.0/0` entry
+4. **Delete** any overly broad CIDR ranges (e.g., `/16` blocks)
+5. **Add** only specific IPs:
+   - Your Render service outbound IPs
+   - Your development machine IP (with expiration)
+   - CI/CD runner IPs if needed
+
+#### Verifying Current Access
+
+Check your Atlas IP Access List for these red flags:
+- `0.0.0.0/0` - Allows entire internet
+- `/8`, `/16` CIDR ranges - Millions of IPs
+- No expiration dates on temporary entries
 
 ## Running Migrations in Production
 
