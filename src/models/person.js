@@ -140,6 +140,7 @@ const personSchema = new mongoose.Schema(
       middleName: { type: String, maxlength: 100 },
       lastName: { type: String, maxlength: 100 },
       fullName: { type: String, maxlength: 300 },
+      birthday: { type: Date },
 
       // Current position
       currentTitle: { type: String, maxlength: 1000 }, // Increased for keyword-rich titles

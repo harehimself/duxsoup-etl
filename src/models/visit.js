@@ -61,6 +61,7 @@ const visitSchema = new mongoose.Schema(
     IM: String,
     Twitter: String,
     Location: String,
+    Birthday: String,
 
     // Structured location fields (parsed from Location string)
     city: { type: String, maxlength: 100 },

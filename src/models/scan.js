@@ -45,6 +45,7 @@ const scanSchema = new mongoose.Schema({
   CompanyProfile: String,
   Title: String,
   Location: String,
+  Birthday: String,
 
   // Structured location fields (parsed from Location string)
   city: { type: String, maxlength: 100 },

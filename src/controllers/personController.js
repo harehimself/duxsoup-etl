@@ -407,6 +407,13 @@ async function upsertFromObservation(observationDoc, sourceType) {
       observationMeta,
     );
 
+    normalizeField(
+      person.snapshot,
+      "birthday",
+      parseSafeDate(webhookData.Birthday),
+      observationMeta,
+    );
+
     // Compute full name if we have components
     if (person.snapshot.firstName || person.snapshot.lastName) {
       const fullName = [
