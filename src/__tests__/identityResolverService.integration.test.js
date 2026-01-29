@@ -453,4 +453,64 @@ describe('IdentityResolverService', () => {
       expect(mergeRecord.loser_ids).toContain('12345678');
     });
   });
+
+  describe('findSalesNavIdDuplicates()', () => {
+    it('finds duplicates using extracted salesNavId and ignores unique records', async () => {
+      await Person.create({
+        _id: 'ACwAAA111',
+        canonical_id: canonicalIdFor('salesNavId', 'ACwAAA111'),
+        aliases: [{ type: 'salesNavId', value: 'ACwAAA111' }],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      await Person.create({
+        _id: 'linkedin.com/in/jane-doe',
+        canonical_id: canonicalIdFor('publicUrl', 'linkedin.com/in/jane-doe'),
+        aliases: [
+          {
+            type: 'salesUrl',
+            value: 'www.linkedin.com/sales/lead/acwaaa111,NAME_SEARCH,Z1JY',
+          },
+        ],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      await Person.create({
+        _id: 'linkedin.com/in/john-doe',
+        canonical_id: canonicalIdFor('publicUrl', 'linkedin.com/in/john-doe'),
+        aliases: [
+          { type: 'publicUrl', value: 'www.linkedin.com/in/ACwAAA111' },
+        ],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      await Person.create({
+        _id: '12345678',
+        canonical_id: canonicalIdFor('numericId', '12345678'),
+        aliases: [{ type: 'numericId', value: '12345678' }],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      const duplicates = await identityResolverService.findSalesNavIdDuplicates();
+      const groupsById = Object.fromEntries(
+        duplicates.map(group => [group.salesNavId, group.people])
+      );
+
+      expect(Object.keys(groupsById)).toEqual(['ACwAAA111']);
+      expect(groupsById.ACwAAA111).toHaveLength(3);
+
+      const duplicateIds = groupsById.ACwAAA111.map(person => person._id);
+      expect(duplicateIds).toEqual(
+        expect.arrayContaining([
+          'ACwAAA111',
+          'linkedin.com/in/jane-doe',
+          'linkedin.com/in/john-doe',
+        ])
+      );
+    });
+  });
 });

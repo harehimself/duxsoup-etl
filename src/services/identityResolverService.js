@@ -1,5 +1,6 @@
 const Person = require('../models/person');
 const { computeCanonicalId, buildCanonicalKey } = require('../utils/identityResolver');
+const { extractSalesNavId, normalizeToCanonicalCase } = require('../utils/salesNavIdExtractor');
 const logger = require('../utils/logger');
 
 /**
@@ -534,6 +535,96 @@ class IdentityResolverService {
       throw error;
     }
   }
+
+  /**
+   * Find duplicate people grouped by salesNavId across the collection.
+   * Uses the same Sales Navigator extraction logic as identityMatcher/salesNavIdExtractor.
+   *
+   * @returns {Promise<Array<{salesNavId: string, people: Array<Object>}>>}
+   */
+  async findSalesNavIdDuplicates() {
+    const people = await Person.find({}, { _id: 1, aliases: 1 }).lean();
+    const grouped = new Map();
+
+    for (const person of people) {
+      const salesNavId = extractSalesNavIdFromPersonRecord(person);
+      if (!salesNavId) {
+        continue;
+      }
+
+      const existing = grouped.get(salesNavId) || [];
+      existing.push(person);
+      grouped.set(salesNavId, existing);
+    }
+
+    const duplicates = [];
+    for (const [salesNavId, matches] of grouped.entries()) {
+      if (matches.length > 1) {
+        duplicates.push({ salesNavId, people: matches });
+      }
+    }
+
+    return duplicates;
+  }
+}
+
+const SALES_NAV_ID_PATTERN = /^AC[wo]AA[A-Za-z0-9_-]+$/i;
+
+function extractSalesNavIdFromPersonRecord(person) {
+  if (!person) {
+    return null;
+  }
+
+  if (person._id && SALES_NAV_ID_PATTERN.test(person._id)) {
+    return normalizeToCanonicalCase(person._id);
+  }
+
+  const aliases = person.aliases || [];
+  const explicitAlias = aliases.find(
+    (alias) => alias?.type === 'salesNavId' && alias?.value,
+  );
+
+  if (explicitAlias) {
+    return normalizeToCanonicalCase(explicitAlias.value);
+  }
+
+  const data = buildSalesNavExtractionData(aliases);
+  const extracted = extractSalesNavId(data);
+
+  if (!extracted) {
+    return null;
+  }
+
+  return normalizeToCanonicalCase(extracted);
+}
+
+function buildSalesNavExtractionData(aliases = []) {
+  const data = {};
+
+  aliases.forEach((alias) => {
+    if (!alias?.value) {
+      return;
+    }
+
+    switch (alias.type) {
+      case 'salesUrl':
+        data.salesUrl = alias.value;
+        break;
+      case 'recruiterUrl':
+        data.recruiterUrl = alias.value;
+        break;
+      case 'profileUrl':
+        data.profileUrl = alias.value;
+        break;
+      case 'publicUrl':
+        data.PublicProfile = alias.value;
+        break;
+      default:
+        break;
+    }
+  });
+
+  return data;
 }
 
 module.exports = new IdentityResolverService();
