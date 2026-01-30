@@ -24,34 +24,49 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
   const observationId = observationDoc._id;
 
   let location = await Location.findOne({
-    canonical_id: identity.canonical_id,
+    $or: [{ _id: identity.location_id }, { canonical_id: identity.canonical_id }],
   });
 
   if (!location) {
     // Parse structured location fields from identity.parsed
     const parsed = identity.parsed || {};
 
-    location = await Location.create({
-      _id: identity.location_id,
-      canonical_id: identity.canonical_id,
-      aliases: dedupeAliases(identity.aliases),
-      snapshot: {
-        name: identity.normalized,
-        normalized: identity.normalized,
-        // Structured location fields from parser
-        city: parsed.city || null,
-        state: parsed.state || null,
-        stateCode: parsed.stateCode || null,
-        country: parsed.country || null,
-        countryCode: parsed.countryCode || null,
-        province: parsed.province || null,
-        region: parsed.region || null,
-        locationType: parsed.locationType || "unknown",
-      },
-      observations: { visits: [], scans: [] },
-      meta: {},
-    });
-  } else {
+    try {
+      location = await Location.create({
+        _id: identity.location_id,
+        canonical_id: identity.canonical_id,
+        aliases: dedupeAliases(identity.aliases),
+        snapshot: {
+          name: identity.normalized,
+          normalized: identity.normalized,
+          // Structured location fields from parser
+          city: parsed.city || null,
+          state: parsed.state || null,
+          stateCode: parsed.stateCode || null,
+          country: parsed.country || null,
+          countryCode: parsed.countryCode || null,
+          province: parsed.province || null,
+          region: parsed.region || null,
+          locationType: parsed.locationType || "unknown",
+        },
+        observations: { visits: [], scans: [] },
+        meta: {},
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        // Race condition: another request inserted this location between our find and create
+        location = await Location.findById(identity.location_id);
+        if (!location) {
+          throw err; // Unexpected: duplicate key but document not found
+        }
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // Always update aliases and snapshot fields for existing locations
+  {
     const mergedAliases = dedupeAliases([
       ...(location.aliases || []),
       ...(identity.aliases || []),

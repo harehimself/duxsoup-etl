@@ -29,18 +29,35 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   const observedAt = webhookData.VisitTime || webhookData.ScanTime || new Date();
   const observationId = observationDoc._id;
 
-  let company = await Company.findOne({ canonical_id: identity.canonical_id });
+  let company = await Company.findOne({
+    $or: [{ _id: identity.company_id }, { canonical_id: identity.canonical_id }],
+  });
 
   if (!company) {
-    company = await Company.create({
-      _id: identity.company_id,
-      canonical_id: identity.canonical_id,
-      aliases: dedupeAliases(identity.aliases),
-      snapshot: {},
-      observations: { visits: [], scans: [] },
-      meta: {},
-    });
-  } else {
+    try {
+      company = await Company.create({
+        _id: identity.company_id,
+        canonical_id: identity.canonical_id,
+        aliases: dedupeAliases(identity.aliases),
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+        meta: {},
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        // Race condition: another request inserted this company between our find and create
+        company = await Company.findById(identity.company_id);
+        if (!company) {
+          throw err; // Unexpected: duplicate key but document not found
+        }
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // Always merge aliases
+  {
     const mergedAliases = dedupeAliases([...(company.aliases || []), ...(identity.aliases || [])]);
     company.aliases = mergedAliases;
   }
