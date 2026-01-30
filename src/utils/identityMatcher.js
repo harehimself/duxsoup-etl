@@ -188,9 +188,48 @@ function normalizeDuxsoupId(duxsoupId) {
 }
 
 /**
+ * Extract LinkedIn vanity name from profile URLs
+ *
+ * The vanity name is the custom slug in linkedin.com/in/{vanityName}
+ * Example: "www.linkedin.com/in/mike-hare" → "mike-hare"
+ *
+ * IMPORTANT: Excludes Sales Navigator IDs (ACwAAA/ACoAAA patterns)
+ * Those are NOT vanity names even though they can appear in /in/ URLs.
+ *
+ * @param {Object} data - Webhook or observation data
+ * @returns {string|null} - Vanity name or null
+ */
+function extractVanityName(data) {
+  const vanityPattern = /\/in\/([a-zA-Z0-9_-]+)\/?/;
+  const salesNavIdPattern = /^A(Cw|Co)AA/;
+
+  function extractFromUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+    const match = url.match(vanityPattern);
+    if (!match) return null;
+    const slug = match[1];
+    // Reject Sales Navigator IDs masquerading in /in/ URLs
+    if (salesNavIdPattern.test(slug)) return null;
+    return slug.toLowerCase();
+  }
+
+  // Check Profile URL first (most common source)
+  const profile = data.Profile || data.data?.Profile;
+  const fromProfile = extractFromUrl(profile);
+  if (fromProfile) return fromProfile;
+
+  // Check PublicProfile
+  const publicProfile = data.PublicProfile || data.data?.PublicProfile;
+  const fromPublic = extractFromUrl(publicProfile);
+  if (fromPublic) return fromPublic;
+
+  return null;
+}
+
+/**
  * Extract all identifiers from webhook/observation data using waterfall priority
  *
- * UPDATED: Now includes numericId extraction
+ * UPDATED: Now includes numericId extraction and vanityName
  *
  * @param {Object} data - Webhook or observation data
  * @returns {Object} - Object containing all extracted identifiers
@@ -206,6 +245,7 @@ function extractIdentifiers(data) {
     salesNavId: extractSalesNavId(data),
     numericId: numericId,
     linkedInUsername: extractLinkedInUsername(data),
+    vanityName: extractVanityName(data),
     duxsoupId: normalizedDuxsoupId || duxsoupId,
     profileUrl: normalizeUrl(data.Profile || data.data?.Profile),
     publicProfile:
@@ -319,6 +359,7 @@ function isSamePerson(data1, data2) {
 
 module.exports = {
   extractLinkedInUsername,
+  extractVanityName,
   extractSalesNavId,
   normalizeUrl,
   normalizePublicProfileUrl,

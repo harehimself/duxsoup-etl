@@ -279,6 +279,10 @@ function resolvePersonIdentity(webhookData) {
     addAlias("linkedInUsername", identifiers.linkedInUsername);
   }
 
+  if (identifiers.vanityName) {
+    addAlias("vanityName", identifiers.vanityName);
+  }
+
   if (identifiers.salesNavId) {
     addAlias("salesNavId", identifiers.salesNavId);
   }
