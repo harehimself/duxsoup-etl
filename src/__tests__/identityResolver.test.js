@@ -181,7 +181,7 @@ describe("Identity Resolution Utility", () => {
 
       const result = resolvePersonIdentity(webhookData);
 
-      expect(result.person_id).toBe("www.linkedin.com/profile/87654321");
+      expect(result.person_id).toBe("linkedin.com/profile/87654321");
       expect(result.source).toBe("profileUrl");
     });
 
@@ -214,6 +214,20 @@ describe("Identity Resolution Utility", () => {
       expect(result.aliases).toContainEqual(
         expect.objectContaining({ type: "linkedInUsername", value: "johndoe" }),
       );
+    });
+
+    it("should add numericId alias when duxsoup ID is numeric", () => {
+      const webhookData = {
+        id: "id.218248067",
+        Profile: "https://www.linkedin.com/profile/218248067",
+      };
+
+      const result = resolvePersonIdentity(webhookData);
+
+      expect(result.aliases).toContainEqual({
+        type: "numericId",
+        value: "218248067",
+      });
     });
 
     it("should compute canonical_id for sales nav identity", () => {
