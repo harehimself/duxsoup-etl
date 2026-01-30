@@ -241,6 +241,16 @@ const personSchema = new mongoose.Schema(
       avgTenureMonths: Number,
       yearsAtCurrentCompany: Number,
     },
+
+    // Merge tracking (optional audit metadata)
+    mergedInto: {
+      type: String,
+      default: null,
+    },
+    mergedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
