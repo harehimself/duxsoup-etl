@@ -51,6 +51,32 @@ const webhookRateLimiter = rateLimit({
   },
 });
 
+// Rate limiter for read/query endpoints
+const readRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'RATE_LIMITED',
+    message: 'Too many requests, please slow down',
+  },
+});
+
+// Rate limiter for admin endpoints (more restrictive)
+const adminRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'RATE_LIMITED',
+    message: 'Too many admin requests, please slow down',
+  },
+});
+
 // Simple test route
 router.get('/test', (req, res) => {
   res.json({ message: 'API routes working' });
@@ -81,16 +107,16 @@ router.get('/version', (req, res) => {
 });
 
 // Health endpoints for ops monitoring
-router.get('/health/ingestion', getIngestionHealth);
-router.get('/health/parity', getParityHealth);
-router.get('/health/metrics', getMetrics);
-router.get('/health/coverage-breakdown', getCoverageBreakdown);
-router.get('/health/canonical-coverage', getCanonicalCoverage);
-router.get('/health/company-coverage', getCompanyCoverage);
-router.get('/health/location-coverage', getLocationCoverage);
-router.get('/health/data-quality', getDataQuality);
-router.get('/health/dashboard', getDashboard);
-router.get('/health/test-notifications', webhookAuth, testNotifications);
+router.get('/health/ingestion', readRateLimiter, getIngestionHealth);
+router.get('/health/parity', readRateLimiter, getParityHealth);
+router.get('/health/metrics', readRateLimiter, getMetrics);
+router.get('/health/coverage-breakdown', readRateLimiter, getCoverageBreakdown);
+router.get('/health/canonical-coverage', readRateLimiter, getCanonicalCoverage);
+router.get('/health/company-coverage', readRateLimiter, getCompanyCoverage);
+router.get('/health/location-coverage', readRateLimiter, getLocationCoverage);
+router.get('/health/data-quality', readRateLimiter, getDataQuality);
+router.get('/health/dashboard', readRateLimiter, getDashboard);
+router.get('/health/test-notifications', readRateLimiter, webhookAuth, testNotifications);
 
 // Person read endpoints (hybrid cutover)
 router.get('/people/metrics', getReadMetrics);
@@ -133,21 +159,21 @@ router.post('/webhook', webhookRateLimiter, webhookAuth, (req, res) => {
 });
 
 // Admin endpoints (one-time migrations, etc.)
-router.use('/admin', adminRoutes);
+router.use('/admin', adminRateLimiter, adminRoutes);
 
 // Observation replay endpoint (admin, protected)
 router.post('/admin/replay/:observationId', webhookAuth, replayObservation);
 
 // Query endpoints (search and filter people/companies)
-router.use('/query', queryRoutes);
+router.use('/query', readRateLimiter, queryRoutes);
 
 // Search endpoints (full-text search)
-router.use('/search', searchRoutes);
+router.use('/search', readRateLimiter, searchRoutes);
 
 // Export endpoints (CSV/JSON export)
-router.use('/export', exportRoutes);
+router.use('/export', readRateLimiter, exportRoutes);
 
 // Change endpoints (job changes, promotions, title changes)
-router.use('/changes', changeRoutes);
+router.use('/changes', readRateLimiter, changeRoutes);
 
 module.exports = router;

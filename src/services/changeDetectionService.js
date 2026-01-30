@@ -346,8 +346,8 @@ async function getRecentChanges(options = {}) {
 
   const query = {};
 
-  // Filter by type
-  if (type) {
+  // Filter by type (sanitize to prevent NoSQL injection)
+  if (type && typeof type === 'string') {
     query.type = type;
   }
 
