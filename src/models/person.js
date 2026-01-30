@@ -68,6 +68,27 @@ const roleSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Parsed seniority tier from title
+    seniority: {
+      type: String,
+      maxlength: 50,
+      enum: [
+        'Owner',
+        'CXO',
+        'SVP',
+        'VP',
+        'Managing Director',
+        'Manager',
+        'In Training',
+        'Individual Contributor',
+      ],
+    },
+    // Seniority rank (1-8, higher = more senior)
+    seniorityRank: {
+      type: Number,
+      min: 1,
+      max: 8,
+    },
   },
   { _id: false, toJSON: { virtuals: true }, toObject: { virtuals: true } },
 );
@@ -244,6 +265,19 @@ const personSchema = new mongoose.Schema(
     derived: {
       avgTenureMonths: Number,
       yearsAtCurrentCompany: Number,
+      // Highest seniority across all roles
+      highestSeniority: {
+        type: String,
+        maxlength: 50,
+      },
+      highestSeniorityRank: {
+        type: Number,
+        min: 1,
+        max: 8,
+      },
+      // Reference to the role with highest seniority
+      highestSeniorityRoleTitle: String,
+      highestSeniorityRoleCompany: String,
     },
 
     // Merge tracking (optional audit metadata)

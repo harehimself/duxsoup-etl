@@ -8,7 +8,10 @@ const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
-const { parseTitle } = require("../utils/titleParser");
+const {
+  parseTitle,
+  getHighestSeniorityRole,
+} = require("../utils/titleParser");
 
 /**
  * Person Controller
@@ -168,13 +171,17 @@ function normalizeField(snapshot, fieldPath, incomingValue, observationMeta) {
  * Compute derived metrics from roles timeline
  *
  * @param {Array} roles - Array of role objects
- * @returns {Object} { avg_tenure_months, years_at_current_company }
+ * @returns {Object} Derived metrics including tenure and highest seniority
  */
 function computeDerivedMetrics(roles) {
   if (!roles || roles.length === 0) {
     return {
-      avg_tenure_months: null,
-      years_at_current_company: null,
+      avgTenureMonths: null,
+      yearsAtCurrentCompany: null,
+      highestSeniority: null,
+      highestSeniorityRank: null,
+      highestSeniorityRoleTitle: null,
+      highestSeniorityRoleCompany: null,
     };
   }
 
@@ -207,14 +214,35 @@ function computeDerivedMetrics(roles) {
     }
   });
 
+  // Get the role with highest seniority tier
+  const highestRole = getHighestSeniorityRole(roles);
+
   return {
-    avg_tenure_months:
+    avgTenureMonths:
       roleCount > 0 ? Math.round(totalTenureMonths / roleCount) : null,
-    years_at_current_company:
+    yearsAtCurrentCompany:
       currentCompanyYears !== null
         ? Math.round(currentCompanyYears * 10) / 10
         : null,
+    highestSeniority: highestRole?.seniority || null,
+    highestSeniorityRank: highestRole?.seniorityRank || null,
+    highestSeniorityRoleTitle: highestRole?.title || null,
+    highestSeniorityRoleCompany: highestRole?.companyName || null,
   };
+}
+
+/**
+ * Parse and add seniority classification to a role
+ * @param {Object} role - Role object with title
+ * @returns {Object} Role with seniority and seniorityRank added
+ */
+function enrichRoleWithSeniority(role) {
+  if (role.title) {
+    const parsed = parseTitle(role.title);
+    role.seniority = parsed.seniority;
+    role.seniorityRank = parsed.seniorityRank;
+  }
+  return role;
 }
 
 /**
@@ -250,8 +278,8 @@ function updateRolesTimeline(person, observationData, observationMeta) {
       );
 
       if (!existingRole) {
-        // Add new role
-        person.snapshot.roles.push({
+        // Add new role with seniority classification
+        const newRole = enrichRoleWithSeniority({
           title: pos.Title,
           companyId: null, // Will be resolved separately
           companyName: pos.Company,
@@ -262,6 +290,7 @@ function updateRolesTimeline(person, observationData, observationMeta) {
             pos.To && pos.To !== "Present" ? parseSafeDate(pos.To) : null,
           isCurrent: pos.To === "Present" || !pos.To,
         });
+        person.snapshot.roles.push(newRole);
         updated = true;
       }
     });
@@ -275,8 +304,8 @@ function updateRolesTimeline(person, observationData, observationMeta) {
     );
 
     if (!existingCurrentRole) {
-      // Add current role
-      person.snapshot.roles.push({
+      // Add current role with seniority classification
+      const newRole = enrichRoleWithSeniority({
         title: currentRole,
         companyId: currentCompanyId || null,
         companyName: currentCompany,
@@ -286,6 +315,7 @@ function updateRolesTimeline(person, observationData, observationMeta) {
         endDate: null,
         isCurrent: true,
       });
+      person.snapshot.roles.push(newRole);
       updated = true;
     } else if (currentCompanyId && !existingCurrentRole.companyId) {
       // Update company ID if we now have it

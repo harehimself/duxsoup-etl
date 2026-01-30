@@ -315,7 +315,7 @@ describe('PersonController', () => {
 
       const metrics = computeDerivedMetrics(roles);
 
-      expect(metrics.avg_tenure_months).toBe(24);
+      expect(metrics.avgTenureMonths).toBe(24);
     });
 
     it('should compute years_at_current_company for current role', () => {
@@ -330,8 +330,8 @@ describe('PersonController', () => {
 
       const metrics = computeDerivedMetrics(roles);
 
-      expect(metrics.years_at_current_company).toBeGreaterThan(2);
-      expect(metrics.years_at_current_company).toBeLessThan(5);
+      expect(metrics.yearsAtCurrentCompany).toBeGreaterThan(2);
+      expect(metrics.yearsAtCurrentCompany).toBeLessThan(5);
     });
 
     it('should return null metrics when no roles exist', () => {
@@ -339,8 +339,8 @@ describe('PersonController', () => {
 
       const metrics = computeDerivedMetrics(roles);
 
-      expect(metrics.avg_tenure_months).toBeNull();
-      expect(metrics.years_at_current_company).toBeNull();
+      expect(metrics.avgTenureMonths).toBeNull();
+      expect(metrics.yearsAtCurrentCompany).toBeNull();
     });
 
     it('should handle multiple current roles (multi-current support)', () => {
@@ -360,7 +360,7 @@ describe('PersonController', () => {
       const metrics = computeDerivedMetrics(roles);
 
       // Should use the longest current tenure
-      expect(metrics.years_at_current_company).toBeGreaterThan(2);
+      expect(metrics.yearsAtCurrentCompany).toBeGreaterThan(2);
     });
   });
 
