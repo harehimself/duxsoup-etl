@@ -103,7 +103,7 @@ describe("Identity Matcher Utility", () => {
       expect(identifiers.linkedInUsername).toBe("john-doe");
       expect(identifiers.salesNavId).toBe("ACwAAA123");
       expect(identifiers.duxsoupId).toBe("pid.john-doe");
-      expect(identifiers.profileUrl).toBe("www.linkedin.com/in/john-doe");
+      expect(identifiers.profileUrl).toBe("linkedin.com/in/john-doe");
     });
 
     it("should handle webhook data structure (nested data field)", () => {
