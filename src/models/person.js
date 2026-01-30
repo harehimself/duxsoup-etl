@@ -22,6 +22,7 @@ const aliasSchema = new mongoose.Schema(
       required: true,
       enum: [
         "linkedInUsername",
+        "vanityName",
         "salesNavId",
         "numericId",
         "duxsoupId",
