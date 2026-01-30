@@ -60,7 +60,14 @@ function extractLinkedInUsername(data) {
     }
   }
 
-  // 2. Check Profile URL
+  // 2. Check explicit LinkedIn username field
+  const explicitUsername = data.LinkedInUsername || data.data?.LinkedInUsername;
+  if (explicitUsername) {
+    const username = validateUsername(explicitUsername);
+    if (username) return username;
+  }
+
+  // 3. Check Profile URL
   const profile = data.Profile || data.data?.Profile;
   if (profile) {
     const match = profile.match(usernamePattern);
@@ -70,7 +77,7 @@ function extractLinkedInUsername(data) {
     }
   }
 
-  // 3. Check PublicProfile
+  // 4. Check PublicProfile
   const publicProfile = data.PublicProfile || data.data?.PublicProfile;
   if (publicProfile) {
     const match = publicProfile.match(usernamePattern);
@@ -80,7 +87,7 @@ function extractLinkedInUsername(data) {
     }
   }
 
-  // 4. Check SalesProfile (rare, but possible)
+  // 5. Check SalesProfile (rare, but possible)
   const salesProfile = data.SalesProfile || data.data?.SalesProfile;
   if (salesProfile) {
     const match = salesProfile.match(usernamePattern);
@@ -90,7 +97,7 @@ function extractLinkedInUsername(data) {
     }
   }
 
-  // 5. Check RecruiterProfile
+  // 6. Check RecruiterProfile
   const recruiterProfile = data.RecruiterProfile || data.data?.RecruiterProfile;
   if (recruiterProfile) {
     const match = recruiterProfile.match(usernamePattern);
@@ -136,10 +143,48 @@ function normalizeUrl(url) {
     normalized = normalized.split("?")[0];
     // Remove http/https differences
     normalized = normalized.replace(/^https?:\/\//, "");
+    // Normalize www subdomain
+    normalized = normalized.replace(/^www\./, "");
     return normalized;
   } catch (e) {
     return url;
   }
+}
+
+/**
+ * Normalize public LinkedIn profile URLs to linkedin.com/in/<username> or linkedin.com/pub/<slug>
+ *
+ * @param {string} url - LinkedIn URL
+ * @returns {string|null} - Normalized public profile URL or null
+ */
+function normalizePublicProfileUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+
+  const normalized = normalizeUrl(url);
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(/linkedin\.com\/(in|pub)\/([^\/\?]+)/);
+  if (!match) {
+    return null;
+  }
+
+  return `linkedin.com/${match[1]}/${match[2]}`;
+}
+
+/**
+ * Normalize DuxSoup IDs to a canonical lowercase format.
+ *
+ * @param {string} duxsoupId - DuxSoup ID
+ * @returns {string|null} - Normalized DuxSoup ID or null
+ */
+function normalizeDuxsoupId(duxsoupId) {
+  if (!duxsoupId || typeof duxsoupId !== 'string') {
+    return null;
+  }
+
+  return duxsoupId.trim().toLowerCase();
 }
 
 /**
@@ -154,15 +199,19 @@ function extractIdentifiers(data) {
   const { extractNumericId } = require('./salesNavIdExtractor');
 
   const duxsoupId = data.id || data.data?.id || null;
+  const normalizedDuxsoupId = normalizeDuxsoupId(duxsoupId);
   const numericId = duxsoupId ? extractNumericId(duxsoupId) : null;
 
   const identifiers = {
     salesNavId: extractSalesNavId(data),
     numericId: numericId,
     linkedInUsername: extractLinkedInUsername(data),
-    duxsoupId: duxsoupId,
+    duxsoupId: normalizedDuxsoupId || duxsoupId,
     profileUrl: normalizeUrl(data.Profile || data.data?.Profile),
-    publicProfile: normalizeUrl(data.PublicProfile || data.data?.PublicProfile),
+    publicProfile:
+      normalizePublicProfileUrl(data.PublicProfile || data.data?.PublicProfile) ||
+      normalizePublicProfileUrl(data.Profile || data.data?.Profile) ||
+      normalizeUrl(data.PublicProfile || data.data?.PublicProfile),
     recruiterProfile: normalizeUrl(
       data.RecruiterProfile || data.data?.RecruiterProfile,
     ),
@@ -272,6 +321,8 @@ module.exports = {
   extractLinkedInUsername,
   extractSalesNavId,
   normalizeUrl,
+  normalizePublicProfileUrl,
+  normalizeDuxsoupId,
   extractIdentifiers,
   getPrimaryIdentifier,
   generateIdentityKey,
