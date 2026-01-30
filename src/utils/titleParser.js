@@ -1,81 +1,122 @@
 /**
  * Title Parser Utility
  *
- * Parses LinkedIn titles into structured seniority and department classifications.
+ * Parses LinkedIn titles into structured seniority tiers and department classifications.
  * Used for enrichment during person snapshot upserts and for query filtering.
+ *
+ * Seniority Tier System:
+ * - Higher tier_rank = more senior position
+ * - Matching order is critical: check higher tiers first
+ * - For multiple roles, highest tier_rank wins
  */
 
 /**
- * Seniority level definitions with pattern matching
- * Order matters: higher seniority levels are checked first
+ * Seniority tier definitions with pattern matching
+ * CRITICAL: Order matters - higher tiers must be checked first to avoid false matches
+ * tier_rank: 1 (lowest) to 8 (highest)
  */
-const SENIORITY_LEVELS = [
+const SENIORITY_TIERS = [
   {
-    level: 'c-suite',
+    tier: 'Owner',
+    tier_rank: 8,
     patterns: [
-      /\b(C[A-Z]O|Chief\s+\w+\s+Officer|CEO|CFO|CTO|COO|CMO|CIO|CISO|CRO|CPO|CDO)\b/i,
+      /\b(Founder|Co-?Founder|Owner|Co-?Owner|Sole\s+Proprietor|Partner(?!\s+Manager))\b/i,
+    ],
+    description: 'Business owners, founders, and partners',
+  },
+  {
+    tier: 'CXO',
+    tier_rank: 7,
+    patterns: [
+      // Match "Chief" followed by any officer title
+      /\bChief\s+\w+\s+Officer\b/i,
       /\bChief\b/i,
+      // Match C-level abbreviations (CEO, CFO, CTO, etc.)
+      /\bC[A-Z]O\b/,
+      // Specific C-suite titles
+      /\b(CEO|CFO|CTO|COO|CMO|CIO|CISO|CRO|CPO|CDO|CCO|CLO|CHRO|CSO)\b/,
     ],
+    description: 'C-suite executives and chiefs',
   },
   {
-    level: 'founder',
+    tier: 'SVP',
+    tier_rank: 6,
     patterns: [
-      /\b(Founder|Co-?Founder|Co-?Owner|Owner|Partner|Managing\s+Partner)\b/i,
+      // Senior VP variations (must come before general VP)
+      /\b(SVP|S\.V\.P\.)\b/i,
+      /\bSenior\s+Vice\s+President\b/i,
+      /\bSenior\s+VP\b/i,
+      // Executive VP variations
+      /\b(EVP|E\.V\.P\.)\b/i,
+      /\bExecutive\s+Vice\s+President\b/i,
+      /\bExecutive\s+VP\b/i,
+      // General Manager (often at SVP level)
+      /\bGeneral\s+Manager\b/i,
+      /\bGM\b/,
     ],
+    description: 'Senior and Executive Vice Presidents, General Managers',
   },
   {
-    level: 'vp',
+    tier: 'VP',
+    tier_rank: 5,
     patterns: [
-      /\b(VP|Vice\s+President|SVP|EVP|AVP|Senior\s+Vice\s+President|Executive\s+Vice\s+President)\b/i,
+      // Vice President (excluding SVP/EVP which are caught above)
+      /\bVice\s+President\b/i,
+      /\b(VP|V\.P\.)\b/i,
+      // Assistant VP
+      /\b(AVP|A\.V\.P\.)\b/i,
+      /\bAssistant\s+Vice\s+President\b/i,
+      // Head of titles (typically VP-level)
+      /\bHead\s+of\b/i,
     ],
+    description: 'Vice Presidents and Head of titles',
   },
   {
-    level: 'director',
+    tier: 'Managing Director',
+    tier_rank: 4,
     patterns: [
-      /\b(Director|Sr\.?\s+Director|Senior\s+Director|Managing\s+Director|Executive\s+Director)\b/i,
+      // Managing Director (must be specific - not just "Director")
+      /\bManaging\s+Director\b/i,
+      /\bManaging\s+Dir\.?\b/i,
+      /\b(MD)\b/,
     ],
+    description: 'Managing Directors',
   },
   {
-    level: 'head',
+    tier: 'Manager',
+    tier_rank: 3,
     patterns: [
-      /\b(Head\s+of)\b/i,
+      /\b(Manager|Mgr\.?)\b/i,
+      /\bSenior\s+Manager\b/i,
+      /\bSr\.?\s+Manager\b/i,
+      /\bTeam\s+Lead\b/i,
+      /\bSupervisor\b/i,
+      /\bLead\b/i,
+      // Specific manager types
+      /\b(Program\s+Manager|Project\s+Manager|Product\s+Manager|Engineering\s+Manager)\b/i,
     ],
+    description: 'Managers, team leads, and supervisors',
   },
   {
-    level: 'manager',
+    tier: 'In Training',
+    tier_rank: 2,
     patterns: [
-      /\b(Manager|Sr\.?\s+Manager|Senior\s+Manager|General\s+Manager|Program\s+Manager|Product\s+Manager|Project\s+Manager)\b/i,
+      /\b(Student|Intern|Internship|Apprentice|Trainee|Co-?op|Candidate)\b/i,
+      /\bEntry[\s-]?Level\b/i,
     ],
+    description: 'Students, interns, and trainees',
   },
   {
-    level: 'lead',
+    tier: 'Individual Contributor',
+    tier_rank: 1,
     patterns: [
-      /\b(Lead|Team\s+Lead|Tech\s+Lead|Principal)\b/i,
+      // This is the default/fallback tier
+      // Explicitly match IC-related terms
+      /\b(Analyst|Specialist|Coordinator|Associate|Consultant|Engineer|Developer|Designer|Architect)\b/i,
+      /\b(Senior|Sr\.?|Staff|Principal)\b/i,
+      /\b(Junior|Jr\.?)\b/i,
     ],
-  },
-  {
-    level: 'senior',
-    patterns: [
-      /\b(Senior|Sr\.?)\b/i,
-    ],
-  },
-  {
-    level: 'mid',
-    patterns: [
-      /\b(Mid-?level|Staff)\b/i,
-    ],
-  },
-  {
-    level: 'junior',
-    patterns: [
-      /\b(Junior|Jr\.?|Associate|Entry[\s-]?Level)\b/i,
-    ],
-  },
-  {
-    level: 'intern',
-    patterns: [
-      /\b(Intern|Internship|Trainee|Apprentice|Co-?op)\b/i,
-    ],
+    description: 'Individual contributors without management responsibilities',
   },
 ];
 
@@ -86,7 +127,7 @@ const DEPARTMENTS = [
   {
     department: 'engineering',
     patterns: [
-      /\b(Engineer|Engineering|Software|Developer|Development|SWE|SDE|DevOps|Backend|Frontend|Full[\s-]?Stack|Platform|Infrastructure|Architect|Technical)\b/i,
+      /\b(Engineer|Engineering|Software|Developer|Development|SWE|SDE|DevOps|Backend|Frontend|Full[\s-]?Stack|Platform|Infrastructure|Architect|Technical|Technology)\b/i,
     ],
   },
   {
@@ -158,40 +199,49 @@ const DEPARTMENTS = [
 ];
 
 /**
- * Parse a title string into structured seniority and department
+ * Parse a title string into structured seniority tier and department
  *
  * @param {string} title - The LinkedIn title to parse
- * @returns {Object} { seniority, department, normalized }
- *   - seniority: string|null - One of the SENIORITY_LEVELS levels
- *   - department: string|null - One of the DEPARTMENTS departments
+ * @returns {Object} { seniority, seniorityRank, department, normalized }
+ *   - seniority: string - Tier name (defaults to "Individual Contributor")
+ *   - seniorityRank: number - Tier rank (1-8, higher = more senior)
+ *   - department: string|null - Department classification
  *   - normalized: string - Cleaned/trimmed title
  */
 function parseTitle(title) {
   const result = {
     seniority: null,
+    seniorityRank: null,
     department: null,
     normalized: '',
   };
 
-  if (!title || typeof title !== 'string') {
+  // Handle invalid input - return defaults
+  if (!title || typeof title !== 'string' || title.trim() === '') {
+    result.seniority = 'Individual Contributor';
+    result.seniorityRank = 1;
     return result;
   }
 
   result.normalized = title.trim();
 
-  if (result.normalized === '') {
-    return result;
-  }
-
-  // Match seniority (first match wins — higher levels checked first)
-  for (const { level, patterns } of SENIORITY_LEVELS) {
+  // Match seniority tier (first match wins — higher tiers checked first)
+  // CRITICAL: Order matters to avoid false matches (e.g., "SVP" must match before "VP")
+  for (const { tier, tier_rank, patterns } of SENIORITY_TIERS) {
     for (const pattern of patterns) {
       if (pattern.test(result.normalized)) {
-        result.seniority = level;
+        result.seniority = tier;
+        result.seniorityRank = tier_rank;
         break;
       }
     }
     if (result.seniority) break;
+  }
+
+  // Default to Individual Contributor if no match found
+  if (!result.seniority) {
+    result.seniority = 'Individual Contributor';
+    result.seniorityRank = 1;
   }
 
   // Match department (first match wins)
@@ -209,11 +259,23 @@ function parseTitle(title) {
 }
 
 /**
- * Get all valid seniority levels
+ * Get all valid seniority tiers (ordered by rank, highest first)
+ * @returns {Array<{tier: string, rank: number}>}
+ */
+function getSeniorityTiers() {
+  return SENIORITY_TIERS.map((s) => ({
+    tier: s.tier,
+    rank: s.tier_rank,
+    description: s.description,
+  })).sort((a, b) => b.rank - a.rank);
+}
+
+/**
+ * Get seniority tier names only
  * @returns {string[]}
  */
-function getSeniorityLevels() {
-  return SENIORITY_LEVELS.map((s) => s.level);
+function getSeniorityTierNames() {
+  return SENIORITY_TIERS.map((s) => s.tier);
 }
 
 /**
@@ -224,8 +286,54 @@ function getDepartments() {
   return DEPARTMENTS.map((d) => d.department);
 }
 
+/**
+ * Compare two seniority tiers and return the higher one
+ * @param {string} tier1 - First tier name
+ * @param {string} tier2 - Second tier name
+ * @returns {string} The tier with higher rank
+ */
+function getHigherSeniorityTier(tier1, tier2) {
+  if (!tier1) return tier2;
+  if (!tier2) return tier1;
+
+  const rank1 = SENIORITY_TIERS.find((t) => t.tier === tier1)?.tier_rank || 0;
+  const rank2 = SENIORITY_TIERS.find((t) => t.tier === tier2)?.tier_rank || 0;
+
+  return rank1 >= rank2 ? tier1 : tier2;
+}
+
+/**
+ * Get the highest seniority tier from an array of roles
+ * @param {Array<Object>} roles - Array of role objects with seniority field
+ * @returns {Object|null} The role with the highest seniority tier, or null if no roles
+ */
+function getHighestSeniorityRole(roles) {
+  if (!roles || roles.length === 0) return null;
+
+  // Filter roles that have seniority parsed
+  const rolesWithSeniority = roles.filter((r) => r.seniority);
+
+  if (rolesWithSeniority.length === 0) return null;
+
+  // Find role with highest tier_rank
+  return rolesWithSeniority.reduce((highest, current) => {
+    const currentTier = SENIORITY_TIERS.find((t) => t.tier === current.seniority);
+    const highestTier = SENIORITY_TIERS.find((t) => t.tier === highest.seniority);
+
+    const currentRank = currentTier?.tier_rank || 0;
+    const highestRank = highestTier?.tier_rank || 0;
+
+    return currentRank > highestRank ? current : highest;
+  });
+}
+
 module.exports = {
   parseTitle,
-  getSeniorityLevels,
+  getSeniorityTiers,
+  getSeniorityTierNames,
   getDepartments,
+  getHigherSeniorityTier,
+  getHighestSeniorityRole,
+  // Legacy exports for backward compatibility
+  getSeniorityLevels: getSeniorityTierNames,
 };
