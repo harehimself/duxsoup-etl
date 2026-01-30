@@ -42,8 +42,12 @@ function isLikelyLinkedInUrl(value) {
     return false;
   }
 
-  const normalized = value.trim().toLowerCase();
-  return normalized.includes('linkedin.com/');
+  const normalized = identityMatcher.normalizeUrl(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.startsWith('linkedin.com/');
 }
 
 function extractUsernameFromUrl(url) {
