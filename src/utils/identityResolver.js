@@ -199,11 +199,11 @@ function computeCanonicalId(canonicalKey, namespace = CANONICAL_ID_NAMESPACE) {
   const namespaceBytes = uuidToBytes(namespace);
   const nameBytes = Buffer.from(canonicalKey, "utf8");
   const hash = crypto
-    .createHash("sha1")
+    .createHash("sha256")
     .update(Buffer.concat([namespaceBytes, nameBytes]))
     .digest();
 
-  hash[6] = (hash[6] & 0x0f) | 0x50;
+  hash[6] = (hash[6] & 0x0f) | 0x80;
   hash[8] = (hash[8] & 0x3f) | 0x80;
 
   return bytesToUuid(hash.slice(0, 16));
