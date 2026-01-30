@@ -72,14 +72,17 @@ function normalizeSalesNavAliases(aliases = []) {
     }
 
     const canonical = normalizeToCanonicalCase(alias.value) || alias.value;
-    const key = `${alias.type}:${canonical}`;
+    // Use lowercase for deduplication to catch case variants in suffix
+    const key = `${alias.type}:${canonical.toLowerCase()}`;
 
     if (seenSalesNav.has(key)) {
+      // Duplicate detected (case-insensitive)
       changed = true;
       return;
     }
 
     if (canonical !== alias.value) {
+      // Prefix normalization changed the value
       changed = true;
     }
 
@@ -93,6 +96,31 @@ function normalizeSalesNavAliases(aliases = []) {
   return { updated, changed };
 }
 
+async function connectWithRetry(mongoUri, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 30000,
+      });
+      logger.info('Connected to MongoDB');
+      return;
+    } catch (error) {
+      logger.warn(`Connection attempt ${attempt}/${maxRetries} failed`, {
+        error: error.message,
+      });
+
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // Exponential backoff: 2s, 4s, 8s
+      const delayMs = Math.pow(2, attempt) * 1000;
+      logger.info(`Retrying in ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 async function run() {
   // Prefer shorthand, then standard.
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
@@ -100,11 +128,7 @@ async function run() {
     throw new Error('Database connection string (MONGO_URI or MONGODB_URI) is missing.');
   }
 
-  await mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 30000,
-  });
-
-  logger.info('Connected to MongoDB');
+  await connectWithRetry(mongoUri);
 
   if (limit) {
     logger.info(`Limiting to ${limit} records`);
@@ -123,6 +147,7 @@ async function run() {
     lowercase: 0,
     mixed: 0,
     nonstandard: 0,
+    missing: 0,
   };
 
   const caseVariantKeys = new Map();
@@ -135,6 +160,16 @@ async function run() {
     }
 
     processed += 1;
+
+    // Log progress every 1000 records
+    if (processed % 1000 === 0) {
+      logger.info(`Progress: processed ${processed} people`, {
+        peopleWithSalesNav,
+        peopleMissingSalesNav,
+        peopleWithCaseVariants,
+        updatedPeople: isDryRun ? 0 : updatedPeople,
+      });
+    }
     const aliases = person.aliases || [];
     const salesNavAliases = aliases.filter(
       (alias) => alias?.type === 'salesNavId' && alias?.value,
@@ -184,12 +219,20 @@ async function run() {
     }
 
     if (!isDryRun && pendingUpdates.length >= batchSize) {
+      logger.info(`Flushing batch of ${pendingUpdates.length} updates...`, {
+        updatedPeople,
+        processed,
+      });
       await Person.bulkWrite(pendingUpdates);
       pendingUpdates.length = 0;
     }
   }
 
   if (!isDryRun && pendingUpdates.length > 0) {
+    logger.info(`Flushing final batch of ${pendingUpdates.length} updates...`, {
+      updatedPeople,
+      processed,
+    });
     await Person.bulkWrite(pendingUpdates);
   }
 
