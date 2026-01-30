@@ -222,6 +222,7 @@ class IdentityResolverService {
       salesNavId: 10,
       numericId: 9,
       linkedInUsername: 8,
+      vanityName: 7,
       profileUrl: 5,
       publicUrl: 4,
       salesUrl: 4,

@@ -1,5 +1,6 @@
 const {
   extractLinkedInUsername,
+  extractVanityName,
   extractSalesNavId,
   extractIdentifiers,
   getPrimaryIdentifier,
@@ -53,6 +54,67 @@ describe("Identity Matcher Utility", () => {
     });
   });
 
+  describe("extractVanityName", () => {
+    it("should extract vanity name from Profile URL", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/mike-hare/",
+      };
+      expect(extractVanityName(data)).toBe("mike-hare");
+    });
+
+    it("should extract vanity name from PublicProfile URL", () => {
+      const data = {
+        PublicProfile: "https://www.linkedin.com/in/john-doe-12345/",
+      };
+      expect(extractVanityName(data)).toBe("john-doe-12345");
+    });
+
+    it("should NOT extract Sales Nav ID as vanity name", () => {
+      const data = {
+        Profile:
+          "https://www.linkedin.com/in/ACoAAABE0YMBV0hB3H25XkLdge6Z26NdlwNqCyQ",
+      };
+      expect(extractVanityName(data)).toBeNull();
+    });
+
+    it("should NOT extract from Sales Navigator URLs (no /in/ path)", () => {
+      const data = {
+        Profile:
+          "https://www.linkedin.com/sales/lead/ACwAAAEiQMIBVrfkvaejRy13OSJVdwNFNpiVw5o",
+      };
+      expect(extractVanityName(data)).toBeNull();
+    });
+
+    it("should NOT extract from pid DuxSoup IDs (URL-only source)", () => {
+      const data = {
+        id: "pid.mike-hare",
+      };
+      expect(extractVanityName(data)).toBeNull();
+    });
+
+    it("should be case-insensitive and lowercase the result", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/Mike-Hare/",
+      };
+      expect(extractVanityName(data)).toBe("mike-hare");
+    });
+
+    it("should prefer Profile over PublicProfile", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/profile-name/",
+        PublicProfile: "https://www.linkedin.com/in/public-name/",
+      };
+      expect(extractVanityName(data)).toBe("profile-name");
+    });
+
+    it("should return null if no /in/ URL is present", () => {
+      const data = {
+        id: "id.12345",
+      };
+      expect(extractVanityName(data)).toBeNull();
+    });
+  });
+
   describe("extractSalesNavId", () => {
     it("should extract Sales Nav ID from SalesProfile", () => {
       const data = {
@@ -101,6 +163,7 @@ describe("Identity Matcher Utility", () => {
       const identifiers = extractIdentifiers(data);
 
       expect(identifiers.linkedInUsername).toBe("john-doe");
+      expect(identifiers.vanityName).toBe("john-doe");
       expect(identifiers.salesNavId).toBe("ACwAAA123");
       expect(identifiers.duxsoupId).toBe("pid.john-doe");
       expect(identifiers.profileUrl).toBe("linkedin.com/in/john-doe");
