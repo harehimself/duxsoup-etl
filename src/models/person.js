@@ -221,8 +221,8 @@ const personSchema = new mongoose.Schema(
       personalWebsite: { type: String, maxlength: 2000 },
       companyWebsite: { type: String, maxlength: 2000 },
 
-      // Connection degree (1 = 1st, 2 = 2nd, 3 = 3rd)
-      degree: { type: Number, min: 1, max: 3 },
+      // Connection degree (1 = 1st, 2 = 2nd, 3 = 3rd, 4+ = out of network)
+      degree: { type: Number, min: 1, max: 10 },
 
       // Provenance metadata - tracks source of each field value
       // Structure: { fieldName: { value, observedAt, source, observationId } }

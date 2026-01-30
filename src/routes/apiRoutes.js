@@ -35,6 +35,7 @@ const queryRoutes = require('./queryRoutes');
 const searchRoutes = require('./searchRoutes');
 const exportRoutes = require('./exportRoutes');
 const changeRoutes = require('./changeRoutes');
+const seniorityRoutes = require('./seniorityRoutes');
 
 const router = express.Router();
 
@@ -175,5 +176,8 @@ router.use('/export', readRateLimiter, exportRoutes);
 
 // Change endpoints (job changes, promotions, title changes)
 router.use('/changes', readRateLimiter, changeRoutes);
+
+// Seniority endpoints (filter and analyze by seniority tier)
+router.use('/seniority', readRateLimiter, seniorityRoutes);
 
 module.exports = router;

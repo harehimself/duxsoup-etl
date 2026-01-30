@@ -20,7 +20,12 @@ const SENIORITY_TIERS = [
     tier: 'Owner',
     tier_rank: 8,
     patterns: [
-      /\b(Founder|Co-?Founder|Owner|Co-?Owner|Sole\s+Proprietor|Partner(?!\s+Manager))\b/i,
+      /\b(Founder|Co-?Founder|Owner|Co-?Owner|Sole\s+Proprietor)\b/i,
+      // Partner - business ownership only
+      // Negative lookbehind to exclude client-facing "Partner" roles
+      /\b(?<!Senior\s)(?<!Client\s)(?<!Talent\s)(?<!Success\s)(?<!Account\s)(?<!Sales\s)(?<!Acquisition\s)(Managing\s+)?Partner(?!\s+(Manager|Marketing|Development))\b/i,
+      // "Senior Partner" only when standalone (not part of job function)
+      /\bSenior\s+Partner(?!\s+(Manager|Marketing|Client|Talent|Account|Acquisition))\b/i,
     ],
     description: 'Business owners, founders, and partners',
   },
@@ -92,10 +97,16 @@ const SENIORITY_TIERS = [
       /\bTeam\s+Lead\b/i,
       /\bSupervisor\b/i,
       /\bLead\b/i,
+      // Director titles (avoiding Managing Director which is rank 4)
+      /\bDirector(?!\s+of\s+the\s+Board)\b/i,
+      /\bSenior\s+Director\b/i,
+      /\bSr\.?\s+Director\b/i,
+      /\bExecutive\s+Director\b/i,
+      /\bRegional\s+Director\b/i,
       // Specific manager types
       /\b(Program\s+Manager|Project\s+Manager|Product\s+Manager|Engineering\s+Manager)\b/i,
     ],
-    description: 'Managers, team leads, and supervisors',
+    description: 'Managers, directors, team leads, and supervisors',
   },
   {
     tier: 'In Training',

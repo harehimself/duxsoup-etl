@@ -158,7 +158,29 @@ Group 1/5:
 
 ---
 
-### Step 6: Merge Duplicates (Optional)
+### Step 6: Audit salesNavId capitalization
+
+Review capitalization patterns and optionally standardize aliases to the canonical
+Sales Navigator format (ACwAA/ACoAA). This does **not** change `canonical_id` values
+and preserves case-insensitive identity resolution.
+
+```bash
+# Audit only (no changes)
+node scripts/audit-salesnavid-case.js --dry-run
+
+# Standardize aliases to canonical case (in-place)
+node scripts/audit-salesnavid-case.js --execute
+```
+
+**Expected output includes:**
+- Total counts by capitalization category (canonical/lowercase/mixed/nonstandard)
+- Number of people with multiple case variants for the same salesNavId
+- Number of people with multiple distinct salesNavIds
+- Records updated when `--execute` is used
+
+---
+
+### Step 7: Merge Duplicates (Optional)
 
 If you're confident, auto-merge duplicates:
 
@@ -178,7 +200,7 @@ node scripts/identify-salesnavid-duplicates.js --auto-merge
 
 ---
 
-### Step 7: Verify Results
+### Step 8: Verify Results
 
 ```bash
 # Check salesNavId coverage
@@ -203,7 +225,7 @@ mongoose.connect(process.env.MONGO_URI).then(async () => {
 
 ---
 
-### Step 8: Deploy Code Changes
+### Step 9: Deploy Code Changes
 
 Once backfill is complete, deploy the updated code to production.
 
