@@ -224,9 +224,18 @@ function resolvePersonIdentity(webhookData) {
   const primary = identityMatcher.getPrimaryIdentifier(identifiers);
 
   const aliases = [];
+  const aliasKeys = new Set();
   let person_id = null;
   let source = null;
   let primaryIdType = null;
+
+  const addAlias = (type, value) => {
+    if (!value) return;
+    const key = `${type}:${value}`;
+    if (aliasKeys.has(key)) return;
+    aliasKeys.add(key);
+    aliases.push({ type, value });
+  };
 
   if (!primary) {
     logger.warn("No identifier found in webhook data", {
@@ -256,6 +265,7 @@ function resolvePersonIdentity(webhookData) {
   const sourceMapping = {
     linkedInUsername: "linkedInUsername",
     salesNavId: "salesNavId",
+    numericId: "numericId",
     profileUrl: "profileUrl",
     publicProfile: "publicUrl",
     recruiterProfile: "recruiterUrl",
@@ -266,30 +276,31 @@ function resolvePersonIdentity(webhookData) {
 
   // Build aliases from all extracted identifiers
   if (identifiers.linkedInUsername) {
-    aliases.push({
-      type: "linkedInUsername",
-      value: identifiers.linkedInUsername,
-    });
+    addAlias("linkedInUsername", identifiers.linkedInUsername);
   }
 
   if (identifiers.salesNavId) {
-    aliases.push({ type: "salesNavId", value: identifiers.salesNavId });
+    addAlias("salesNavId", identifiers.salesNavId);
+  }
+
+  if (identifiers.numericId) {
+    addAlias("numericId", identifiers.numericId);
   }
 
   if (identifiers.duxsoupId) {
-    aliases.push({ type: "duxsoupId", value: identifiers.duxsoupId });
+    addAlias("duxsoupId", identifiers.duxsoupId);
   }
 
   if (identifiers.profileUrl) {
-    aliases.push({ type: "profileUrl", value: identifiers.profileUrl });
+    addAlias("profileUrl", identifiers.profileUrl);
   }
 
   if (identifiers.publicProfile) {
-    aliases.push({ type: "publicUrl", value: identifiers.publicProfile });
+    addAlias("publicUrl", identifiers.publicProfile);
   }
 
   if (identifiers.recruiterProfile) {
-    aliases.push({ type: "recruiterUrl", value: identifiers.recruiterProfile });
+    addAlias("recruiterUrl", identifiers.recruiterProfile);
   }
 
   // Add original URL fields as aliases (normalized)
@@ -298,7 +309,7 @@ function resolvePersonIdentity(webhookData) {
       webhookData.SalesProfile,
     );
     if (normalizedSalesUrl) {
-      aliases.push({ type: "salesUrl", value: normalizedSalesUrl });
+      addAlias("salesUrl", normalizedSalesUrl);
     }
   }
 
@@ -307,8 +318,22 @@ function resolvePersonIdentity(webhookData) {
       webhookData.RecruiterProfile,
     );
     if (normalizedRecruiterUrl) {
-      aliases.push({ type: "recruiterUrl", value: normalizedRecruiterUrl });
+      addAlias("recruiterUrl", normalizedRecruiterUrl);
     }
+  }
+
+  const publicProfileFromUrl = identityMatcher.normalizePublicProfileUrl(
+    webhookData.Profile || webhookData.PublicProfile,
+  );
+  if (publicProfileFromUrl) {
+    addAlias("publicUrl", publicProfileFromUrl);
+  }
+
+  const normalizedDuxsoupId = identityMatcher.normalizeDuxsoupId(
+    webhookData.id || webhookData.data?.id,
+  );
+  if (normalizedDuxsoupId && normalizedDuxsoupId !== identifiers.duxsoupId) {
+    addAlias("duxsoupId", normalizedDuxsoupId);
   }
 
   // Log warning if using unstable identifier
