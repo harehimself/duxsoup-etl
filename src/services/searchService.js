@@ -114,8 +114,9 @@ async function fuzzySearchPeople(params) {
 
   logger.info('Executing fuzzy search (text search returned no results)', { query });
 
-  // Build regex pattern (case-insensitive, word boundary)
-  const pattern = query.trim().replace(/\s+/g, '|');
+  // Escape special regex characters to prevent regex injection, then split on whitespace for OR matching
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = escaped.replace(/\s+/g, '|');
   const regex = new RegExp(pattern, 'i');
 
   // Search across multiple fields
