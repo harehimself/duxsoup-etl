@@ -37,7 +37,11 @@ function classifySalesNavId(value) {
   }
 
   const hasCanonicalPrefix = /^(ACw|ACo)AA/.test(canonical);
-  if (value === canonical && hasCanonicalPrefix) {
+  if (!hasCanonicalPrefix) {
+    return 'nonstandard';
+  }
+
+  if (value === canonical) {
     return 'canonical';
   }
 
