@@ -94,9 +94,10 @@ function normalizeSalesNavAliases(aliases = []) {
 }
 
 async function run() {
-  const mongoUri = process.env.MONGO_URI;
+  // Prefer shorthand, then standard.
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
   if (!mongoUri) {
-    throw new Error('MONGO_URI is not set');
+    throw new Error('Database connection string (MONGO_URI or MONGODB_URI) is missing.');
   }
 
   await mongoose.connect(mongoUri, {
@@ -113,6 +114,7 @@ async function run() {
 
   let processed = 0;
   let peopleWithSalesNav = 0;
+  let peopleMissingSalesNav = 0;
   let peopleWithCaseVariants = 0;
   let peopleWithMultipleIds = 0;
 
@@ -121,7 +123,6 @@ async function run() {
     lowercase: 0,
     mixed: 0,
     nonstandard: 0,
-    missing: 0,
   };
 
   const caseVariantKeys = new Map();
@@ -140,7 +141,7 @@ async function run() {
     );
 
     if (salesNavAliases.length === 0) {
-      counts.missing += 1;
+      peopleMissingSalesNav += 1;
     } else {
       peopleWithSalesNav += 1;
     }
@@ -195,6 +196,7 @@ async function run() {
   logger.info('salesNavId capitalization audit complete', {
     processed,
     peopleWithSalesNav,
+    peopleMissingSalesNav,
     peopleWithCaseVariants,
     peopleWithMultipleIds,
     caseVariantKeys: caseVariantKeys.size,
