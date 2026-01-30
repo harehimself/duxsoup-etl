@@ -43,7 +43,15 @@ async function searchPeopleHandler(req, res, next) {
 
     res.json({
       success: true,
-      data: result,
+      data: result.results,
+      pagination: {
+        offset: Number(skip) || 0,
+        limit: result.metadata.limit,
+        count: result.metadata.count,
+        totalCount: result.metadata.totalCount,
+        hasMore: result.metadata.hasMore,
+        nextSkip: result.metadata.nextSkip,
+      },
     });
   } catch (err) {
     logger.error('Error executing search', {

@@ -85,6 +85,74 @@ function startScheduler() {
     }
   });
 
+  // Job 3: Change notification digest (daily at 8 AM)
+  cron.schedule('0 8 * * *', async () => {
+    try {
+      logger.info('Running scheduled change notification digest');
+
+      const Change = require('../models/change');
+      const { sendHealthAlerts } = require('../services/notificationService');
+
+      // Find un-notified changes
+      const pendingChanges = await Change.find({ notified: false })
+        .sort({ timestamp: -1 })
+        .limit(100)
+        .lean();
+
+      if (pendingChanges.length === 0) {
+        logger.info('No pending change notifications');
+        return;
+      }
+
+      // Group by type
+      const grouped = {};
+      pendingChanges.forEach((c) => {
+        if (!grouped[c.type]) grouped[c.type] = [];
+        grouped[c.type].push(c);
+      });
+
+      // Build alert report
+      const report = {
+        status: 'warning',
+        timestamp: new Date(),
+        warnings: Object.entries(grouped).map(([type, changes]) => ({
+          message: `${changes.length} ${type.replace(/_/g, ' ')} event(s) detected`,
+          recommendation: `Review recent ${type} changes in the changes API`,
+        })),
+        metrics: {
+          totalChanges: pendingChanges.length,
+          companyChanges: grouped.company_change?.length || 0,
+          promotions: grouped.promotion?.length || 0,
+          titleChanges: grouped.title_change?.length || 0,
+        },
+      };
+
+      const results = await sendHealthAlerts(report).catch((err) => {
+        logger.error('Failed to send change digest', { error: err.message });
+        return { emailSent: false, smsSent: false };
+      });
+
+      // Mark changes as notified
+      if (results.emailSent || results.smsSent) {
+        const changeIds = pendingChanges.map((c) => c._id);
+        await Change.updateMany(
+          { _id: { $in: changeIds } },
+          { $set: { notified: true, notifiedAt: new Date() } },
+        );
+        logger.info('Change digest sent and changes marked as notified', {
+          email: results.emailSent,
+          sms: results.smsSent,
+          count: changeIds.length,
+        });
+      }
+    } catch (err) {
+      logger.error('Scheduled change notification digest failed', {
+        error: err.message,
+        stack: err.stack,
+      });
+    }
+  });
+
   schedulerStarted = true;
   logger.info('Background job scheduler started successfully');
 }
