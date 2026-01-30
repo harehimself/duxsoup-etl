@@ -450,6 +450,173 @@ async function getMetrics(req, res) {
   }
 }
 
+/**
+ * GET /health/data-quality
+ * Data completeness and quality metrics
+ */
+async function getDataQuality(req, res) {
+  try {
+    const totalPeople = await Person.countDocuments();
+
+    // Count people missing key fields
+    const [missingTitle, missingCompany, missingLocation, missingEmail, missingConnections] =
+      await Promise.all([
+        Person.countDocuments({
+          $or: [
+            { 'snapshot.currentTitle': { $exists: false } },
+            { 'snapshot.currentTitle': null },
+            { 'snapshot.currentTitle': '' },
+          ],
+        }),
+        Person.countDocuments({
+          $or: [
+            { 'snapshot.currentCompany': { $exists: false } },
+            { 'snapshot.currentCompany': null },
+            { 'snapshot.currentCompany': '' },
+          ],
+        }),
+        Person.countDocuments({
+          $or: [
+            { 'snapshot.location': { $exists: false } },
+            { 'snapshot.location': null },
+            { 'snapshot.location': '' },
+          ],
+        }),
+        Person.countDocuments({
+          $or: [
+            { 'snapshot.email': { $exists: false } },
+            { 'snapshot.email': null },
+            { 'snapshot.email': '' },
+          ],
+        }),
+        Person.countDocuments({
+          $or: [
+            { 'snapshot.connections': { $exists: false } },
+            { 'snapshot.connections': null },
+          ],
+        }),
+      ]);
+
+    const pct = (missing) =>
+      totalPeople > 0 ? Math.round(((totalPeople - missing) / totalPeople) * 100 * 100) / 100 : 0;
+
+    const quality = {
+      totalPeople,
+      fields: {
+        currentTitle: { present: totalPeople - missingTitle, missing: missingTitle, coverage: pct(missingTitle) },
+        currentCompany: { present: totalPeople - missingCompany, missing: missingCompany, coverage: pct(missingCompany) },
+        location: { present: totalPeople - missingLocation, missing: missingLocation, coverage: pct(missingLocation) },
+        email: { present: totalPeople - missingEmail, missing: missingEmail, coverage: pct(missingEmail) },
+        connections: { present: totalPeople - missingConnections, missing: missingConnections, coverage: pct(missingConnections) },
+      },
+      overallCompleteness:
+        totalPeople > 0
+          ? Math.round(
+              ((5 * totalPeople - missingTitle - missingCompany - missingLocation - missingEmail - missingConnections) /
+                (5 * totalPeople)) *
+                100 *
+                100,
+            ) / 100
+          : 0,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.json({ success: true, data: quality });
+  } catch (error) {
+    logger.error('Failed to get data quality', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: 'Failed to compute data quality', message: error.message });
+  }
+}
+
+/**
+ * GET /health/dashboard
+ * Consolidated dashboard with key metrics from all health endpoints
+ */
+async function getDashboard(req, res) {
+  try {
+    const now = new Date();
+    const last24h = new Date(now - 24 * 60 * 60 * 1000);
+    const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    const Change = require('../models/change');
+    const Company = require('../models/company');
+
+    const [
+      totalPeople,
+      totalCompanies,
+      totalVisits,
+      totalScans,
+      visits24h,
+      scans24h,
+      deadLettersPending,
+      deadLettersFailed,
+      changesLast7d,
+      recentChanges,
+    ] = await Promise.all([
+      Person.countDocuments(),
+      Company.countDocuments(),
+      Visit.countDocuments(),
+      Scan.countDocuments(),
+      Visit.countDocuments({ createdAt: { $gte: last24h } }),
+      Scan.countDocuments({ createdAt: { $gte: last24h } }),
+      DeadLetter.countDocuments({ status: 'pending' }),
+      DeadLetter.countDocuments({ status: 'failed_again' }),
+      Change.countDocuments({ timestamp: { $gte: last7d } }),
+      Change.find().sort({ timestamp: -1 }).limit(5).lean(),
+    ]);
+
+    const deadLettersCreated24h = await DeadLetter.countDocuments({ createdAt: { $gte: last24h } });
+    const totalObs24h = visits24h + scans24h;
+    const successRate = totalObs24h > 0 ? ((totalObs24h - deadLettersCreated24h) / totalObs24h) * 100 : 100;
+
+    const dashboard = {
+      summary: {
+        totalPeople,
+        totalCompanies,
+        totalObservations: totalVisits + totalScans,
+        observations24h: totalObs24h,
+      },
+      ingestion: {
+        successRate24h: Math.round(successRate * 100) / 100,
+        visits24h,
+        scans24h,
+        deadLettersPending,
+        deadLettersFailed,
+        status: successRate >= 95 ? 'healthy' : successRate >= 90 ? 'degraded' : 'unhealthy',
+      },
+      changes: {
+        last7Days: changesLast7d,
+        recent: recentChanges,
+      },
+      timestamp: now.toISOString(),
+    };
+
+    res.json({ success: true, data: dashboard });
+  } catch (error) {
+    logger.error('Failed to get dashboard', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: 'Failed to compute dashboard', message: error.message });
+  }
+}
+
+/**
+ * GET /health/test-notifications
+ * Test notification configuration (email + SMS)
+ */
+async function testNotifications(req, res) {
+  try {
+    const notificationService = require('../services/notificationService');
+    const results = await notificationService.testNotifications();
+
+    res.json({
+      success: true,
+      data: results,
+    });
+  } catch (error) {
+    logger.error('Failed to test notifications', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: 'Failed to test notifications', message: error.message });
+  }
+}
+
 module.exports = {
   getIngestionHealth,
   getParityHealth,
@@ -458,4 +625,7 @@ module.exports = {
   getCanonicalCoverage,
   getCompanyCoverage,
   getLocationCoverage,
+  getDataQuality,
+  getDashboard,
+  testNotifications,
 };

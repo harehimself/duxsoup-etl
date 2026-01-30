@@ -146,6 +146,10 @@ const personSchema = new mongoose.Schema(
       currentTitle: { type: String, maxlength: 1000 }, // Increased for keyword-rich titles
       currentCompany: { type: String, maxlength: 200 },
       currentCompanyId: String,
+      // Parsed title enrichment (auto-derived from currentTitle)
+      parsedSeniority: { type: String, maxlength: 50 },
+      parsedDepartment: { type: String, maxlength: 50 },
+
       currentCompanyUrl: String, // Computed from currentCompanyId
       currentCompanyProfile: String, // LinkedIn company profile URL from observation
 

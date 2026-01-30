@@ -52,7 +52,15 @@ async function queryPeopleHandler(req, res, next) {
 
     res.json({
       success: true,
-      data: result,
+      data: result.results,
+      pagination: {
+        offset: skip || 0,
+        limit: result.metadata.limit,
+        count: result.metadata.count,
+        totalCount: result.metadata.totalCount,
+        hasMore: result.metadata.hasMore,
+        nextSkip: result.metadata.nextSkip,
+      },
     });
   } catch (err) {
     logger.error('Error executing people query', {
@@ -94,7 +102,10 @@ async function queryCompaniesHandler(req, res, next) {
 
     res.json({
       success: true,
-      data: result,
+      data: result.results,
+      pagination: {
+        count: result.metadata.count,
+      },
     });
   } catch (err) {
     logger.error('Error executing companies query', {

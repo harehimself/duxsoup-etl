@@ -8,6 +8,7 @@ const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
+const { parseTitle } = require("../utils/titleParser");
 
 /**
  * Person Controller
@@ -432,6 +433,18 @@ async function upsertFromObservation(observationDoc, sourceType) {
       webhookData.Title,
       observationMeta,
     );
+
+    // Enrich with parsed title (seniority + department)
+    if (person.snapshot.currentTitle) {
+      const parsed = parseTitle(person.snapshot.currentTitle);
+      if (parsed.seniority) {
+        normalizeField(person.snapshot, "parsedSeniority", parsed.seniority, observationMeta);
+      }
+      if (parsed.department) {
+        normalizeField(person.snapshot, "parsedDepartment", parsed.department, observationMeta);
+      }
+    }
+
     normalizeField(
       person.snapshot,
       "currentCompany",

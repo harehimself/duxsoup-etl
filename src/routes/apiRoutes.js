@@ -1,7 +1,9 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const logger = require('../utils/logger');
 const { handleVisit } = require('../controllers/visitController');
 const { handleScan } = require('../controllers/scanController');
+const webhookAuth = require('../middleware/webhookAuth');
 const {
   getIngestionHealth,
   getParityHealth,
@@ -10,6 +12,9 @@ const {
   getCanonicalCoverage,
   getCompanyCoverage,
   getLocationCoverage,
+  getDataQuality,
+  getDashboard,
+  testNotifications,
 } = require('../controllers/healthController');
 const {
   getPersonById,
@@ -24,6 +29,7 @@ const {
   getLocationById,
   getLocationByAlias,
 } = require('../controllers/locationReadController');
+const { replayObservation } = require('../controllers/replayController');
 const adminRoutes = require('./adminRoutes');
 const queryRoutes = require('./queryRoutes');
 const searchRoutes = require('./searchRoutes');
@@ -31,6 +37,19 @@ const exportRoutes = require('./exportRoutes');
 const changeRoutes = require('./changeRoutes');
 
 const router = express.Router();
+
+// Rate limiter for webhook endpoint
+const webhookRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: parseInt(process.env.WEBHOOK_RATE_LIMIT || '100', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'RATE_LIMITED',
+    message: 'Too many requests, please slow down',
+  },
+});
 
 // Simple test route
 router.get('/test', (req, res) => {
@@ -69,6 +88,9 @@ router.get('/health/coverage-breakdown', getCoverageBreakdown);
 router.get('/health/canonical-coverage', getCanonicalCoverage);
 router.get('/health/company-coverage', getCompanyCoverage);
 router.get('/health/location-coverage', getLocationCoverage);
+router.get('/health/data-quality', getDataQuality);
+router.get('/health/dashboard', getDashboard);
+router.get('/health/test-notifications', webhookAuth, testNotifications);
 
 // Person read endpoints (hybrid cutover)
 router.get('/people/metrics', getReadMetrics);
@@ -83,21 +105,21 @@ router.get('/companies/by-alias/:value', getCompanyByAlias);
 router.get('/locations/:id', getLocationById);
 router.get('/locations/by-alias/:value', getLocationByAlias);
 
-// Main webhook endpoint
-router.post('/webhook', (req, res) => {
+// Main webhook endpoint (with auth + rate limiting)
+router.post('/webhook', webhookRateLimiter, webhookAuth, (req, res) => {
   const payload = req.body;
-  
-  logger.info('Webhook received', { 
+
+  logger.info('Webhook received', {
     type: payload.type,
     id: payload.id
   });
-  
+
   if (!payload.type) {
     return res.status(400).json({
       error: 'Missing type field'
     });
   }
-  
+
   if (payload.type === 'visit') {
     return handleVisit(req, res);
   } else if (payload.type === 'scan') {
@@ -112,6 +134,9 @@ router.post('/webhook', (req, res) => {
 
 // Admin endpoints (one-time migrations, etc.)
 router.use('/admin', adminRoutes);
+
+// Observation replay endpoint (admin, protected)
+router.post('/admin/replay/:observationId', webhookAuth, replayObservation);
 
 // Query endpoints (search and filter people/companies)
 router.use('/query', queryRoutes);
