@@ -37,6 +37,19 @@ function normalizeValue(value) {
   return value ? value.toString().trim().toLowerCase() : null;
 }
 
+function isLikelyLinkedInUrl(value) {
+  if (!value || typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = identityMatcher.normalizeUrl(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.startsWith('linkedin.com/');
+}
+
 function extractUsernameFromUrl(url) {
   if (!url) return null;
   const normalized = identityMatcher.normalizeUrl(url);
@@ -98,7 +111,8 @@ async function run() {
     const aliasesToAdd = [];
 
     const allAliasValues = (person.aliases || [])
-      .map(alias => alias?.value)
+      .filter(alias => alias?.value && isLikelyLinkedInUrl(alias.value))
+      .map(alias => alias.value)
       .filter(Boolean);
 
     allAliasValues.forEach(value => {
