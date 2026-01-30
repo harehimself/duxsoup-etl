@@ -21,7 +21,8 @@
     "migrate:locations:run": "node scripts/migrateLocationStructure.js",
     "migrate:locations:prod": "NODE_ENV=production node scripts/migrateLocationStructure.js",
     "audit:canonical-id": "node -e \"const mongoose=require('mongoose');const Person=require('./src/models/person');(async()=>{const uri=process.env.MONGODB_URI||'mongodb://localhost:27017/duxsoup-etl';await mongoose.connect(uri);const missing=await Person.countDocuments({\\$or:[{canonical_id:{\\$exists:false}},{canonical_id:null},{canonical_id:''}]});const total=await Person.countDocuments({});const sample=await Person.find({canonical_id:{\\$exists:true}}).limit(3).select('_id canonical_id aliases').lean();console.log({total,missing,sample});await mongoose.disconnect();})();\"",
-    "dedupe:aliases": "node scripts/dedupeAliases.js --dry-run"
+    "dedupe:aliases": "node scripts/dedupeAliases.js --dry-run",
+    "import:csv": "node scripts/import-csv-visits.js"
   },
   "keywords": [
     "linkedin",
