@@ -25,7 +25,7 @@
     "backfill:seniority": "node scripts/backfillSeniority.js",
     "import:csv": "node scripts/import-csv-visits.js",
     "lint": "eslint src/ __tests__/",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "keywords": [
     "linkedin",
