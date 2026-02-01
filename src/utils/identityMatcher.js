@@ -143,10 +143,14 @@ function normalizeUrl(url) {
     normalized = normalized.replace(/\/$/, "");
     // Remove query parameters
     normalized = normalized.split("?")[0];
+    // Remove comma-separated tracking params (e.g. ,NAME,o7fk on Sales Nav URLs)
+    normalized = normalized.split(",")[0];
     // Remove http/https differences
     normalized = normalized.replace(/^https?:\/\//, "");
     // Normalize www subdomain
     normalized = normalized.replace(/^www\./, "");
+    // Normalize double slashes and trailing slash
+    normalized = normalized.replace(/\/\/+/g, '/').replace(/\/$/, '');
     return normalized;
   } catch (_e) {
     return url;

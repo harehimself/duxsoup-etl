@@ -1,190 +1,289 @@
 #!/usr/bin/env node
 
 /**
- * Comprehensive Orphaned Observations Analysis
+ * Orphaned Observations Analysis - Phase 3
  *
- * Analyzes the relationship between:
- * - Orphaned visits/scans (not linked to any person)
- * - Dead letter queue entries
- * - Missing person records
+ * Analyzes orphaned Visit and Scan documents (not referenced by any Person).
+ * Categorizes them as:
+ * - Linkable: Found exactly 1 matching Person
+ * - Ambiguous: Found 2+ matching People
+ * - Unresolvable: No matching Person or missing stable ID
  */
 
 const mongoose = require('mongoose');
+const fs = require('fs');
 const Person = require('../src/models/person');
 const Visit = require('../src/models/visit');
 const Scan = require('../src/models/scan');
-const DeadLetter = require('../src/models/deadLetter');
+const identityMatcher = require('../src/utils/identityMatcher');
+const logger = require('../src/utils/logger');
+
+async function categorizeOrphan(observation, type) {
+  // Extract identifiers using centralized identity matcher
+  const identifiers = identityMatcher.extractIdentifiers(observation);
+  const primary = identityMatcher.getPrimaryIdentifier(identifiers);
+
+  if (!primary) {
+    return {
+      category: 'unresolvable',
+      reason: 'no_stable_id',
+      identifiers: {},
+      observation_id: observation._id,
+      type
+    };
+  }
+
+  // Build query to find matching Person by aliases
+  const aliasQueries = [];
+
+  if (identifiers.salesNavId) {
+    aliasQueries.push({ 'aliases.type': 'salesNavId', 'aliases.value': identifiers.salesNavId });
+  }
+  if (identifiers.linkedInUsername) {
+    aliasQueries.push({ 'aliases.type': 'linkedInUsername', 'aliases.value': identifiers.linkedInUsername });
+  }
+  if (identifiers.numericId) {
+    aliasQueries.push({ 'aliases.type': 'numericId', 'aliases.value': identifiers.numericId });
+  }
+  if (identifiers.profileUrl) {
+    aliasQueries.push({ 'aliases.type': 'profileUrl', 'aliases.value': identifiers.profileUrl });
+  }
+
+  if (aliasQueries.length === 0) {
+    return {
+      category: 'unresolvable',
+      reason: 'no_queryable_identifiers',
+      identifiers,
+      observation_id: observation._id,
+      type
+    };
+  }
+
+  const matchingPeople = await Person.find({ $or: aliasQueries }, { _id: 1 }).lean();
+
+  if (matchingPeople.length === 0) {
+    return {
+      category: 'unresolvable',
+      reason: 'person_not_found',
+      identifiers,
+      observation_id: observation._id,
+      type
+    };
+  }
+
+  if (matchingPeople.length === 1) {
+    return {
+      category: 'linkable',
+      person_id: matchingPeople[0]._id,
+      match_type: primary.type,
+      identifiers,
+      observation_id: observation._id,
+      type
+    };
+  }
+
+  // Multiple matches
+  return {
+    category: 'ambiguous',
+    matching_person_ids: matchingPeople.map(p => p._id),
+    identifiers,
+    observation_id: observation._id,
+    type
+  };
+}
 
 async function analyzeOrphanedObservations() {
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/duxsoup-etl');
+  // Connect to the production database
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/duxsoup';
+  await mongoose.connect(mongoUri);
 
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('COMPREHENSIVE ORPHANED OBSERVATIONS ANALYSIS');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  logger.info('Starting orphaned observations analysis...');
+  logger.info(`Connected to: ${mongoUri}`);
 
-  // 1. Get total counts
-  console.log('1. TOTAL COUNTS');
-  console.log('─────────────────────────────────────────────────────────────────────────\n');
-
-  const totalPeople = await Person.countDocuments();
-  const totalVisits = await Visit.countDocuments();
-  const totalScans = await Scan.countDocuments();
-  const totalDeadLetters = await DeadLetter.countDocuments();
-
-  console.log(`People:       ${totalPeople.toLocaleString()}`);
-  console.log(`Visits:       ${totalVisits.toLocaleString()}`);
-  console.log(`Scans:        ${totalScans.toLocaleString()}`);
-  console.log(`Dead Letters: ${totalDeadLetters.toLocaleString()}`);
-  console.log('');
-
-  // 2. Find orphaned observations
-  console.log('2. ORPHANED OBSERVATIONS (not referenced by any person)');
-  console.log('─────────────────────────────────────────────────────────────────────────\n');
-
-  const referencedVisitIds = new Set();
-  const referencedScanIds = new Set();
+  // Step 1: Get all referenced observations
+  logger.info('Fetching all observation references from people...');
 
   const people = await Person.find({}, { 'observations.visits': 1, 'observations.scans': 1 }).lean();
 
+  const referencedVisits = new Set();
+  const referencedScans = new Set();
+
   people.forEach(person => {
-    person.observations?.visits?.filter(id => id).forEach(id => referencedVisitIds.add(id.toString()));
-    person.observations?.scans?.filter(id => id).forEach(id => referencedScanIds.add(id.toString()));
+    if (person.observations?.visits) {
+      person.observations.visits.forEach(id => referencedVisits.add(id.toString()));
+    }
+    if (person.observations?.scans) {
+      person.observations.scans.forEach(id => referencedScans.add(id.toString()));
+    }
   });
+
+  logger.info(`Found ${referencedVisits.size} referenced visits, ${referencedScans.size} referenced scans`);
+
+  // Step 2: Find orphaned observations
+  logger.info('Finding orphaned observations...');
+
+  const totalVisits = await Visit.countDocuments();
+  const totalScans = await Scan.countDocuments();
 
   const allVisitIds = await Visit.find({}, { _id: 1 }).lean();
   const allScanIds = await Scan.find({}, { _id: 1 }).lean();
 
   const orphanedVisitIds = allVisitIds
-    .filter(v => !referencedVisitIds.has(v._id.toString()))
+    .filter(v => !referencedVisits.has(v._id.toString()))
     .map(v => v._id);
 
   const orphanedScanIds = allScanIds
-    .filter(s => !referencedScanIds.has(s._id.toString()))
+    .filter(s => !referencedScans.has(s._id.toString()))
     .map(s => s._id);
 
-  console.log(`Referenced visits: ${referencedVisitIds.size.toLocaleString()}`);
-  console.log(`Orphaned visits:   ${orphanedVisitIds.length.toLocaleString()}`);
-  console.log(`Referenced scans:  ${referencedScanIds.size.toLocaleString()}`);
-  console.log(`Orphaned scans:    ${orphanedScanIds.length.toLocaleString()}`);
-  console.log('');
+  logger.info(`Total visits: ${totalVisits}, Orphaned: ${orphanedVisitIds.length}`);
+  logger.info(`Total scans: ${totalScans}, Orphaned: ${orphanedScanIds.length}`);
 
-  // 3. Check dead letter queue for orphaned observations
-  console.log('3. DEAD LETTER QUEUE ANALYSIS');
-  console.log('─────────────────────────────────────────────────────────────────────────\n');
+  // Step 3: Categorize orphans
+  logger.info('Categorizing orphaned observations...');
 
-  const orphanedInDeadLetters = {
-    visits: 0,
-    scans: 0
+  const categorized = {
+    visits: { linkable: [], ambiguous: [], unresolvable: [] },
+    scans: { linkable: [], ambiguous: [], unresolvable: [] }
   };
 
-  for (const visitId of orphanedVisitIds) {
-    const inDeadLetter = await DeadLetter.findOne({ observation_id: visitId });
-    if (inDeadLetter) orphanedInDeadLetters.visits++;
+  // Process visits in batches
+  const visitBatchSize = 100;
+  for (let i = 0; i < orphanedVisitIds.length; i += visitBatchSize) {
+    const batch = orphanedVisitIds.slice(i, i + visitBatchSize);
+    const visits = await Visit.find({ _id: { $in: batch } }).lean();
+
+    for (const visit of visits) {
+      const result = await categorizeOrphan(visit, 'visit');
+      categorized.visits[result.category].push(result);
+    }
+
+    logger.info(`Processed ${Math.min(i + visitBatchSize, orphanedVisitIds.length)}/${orphanedVisitIds.length} visits`);
   }
 
-  for (const scanId of orphanedScanIds) {
-    const inDeadLetter = await DeadLetter.findOne({ observation_id: scanId });
-    if (inDeadLetter) orphanedInDeadLetters.scans++;
+  // Process scans in batches
+  const scanBatchSize = 100;
+  for (let i = 0; i < orphanedScanIds.length; i += scanBatchSize) {
+    const batch = orphanedScanIds.slice(i, i + scanBatchSize);
+    const scans = await Scan.find({ _id: { $in: batch } }).lean();
+
+    for (const scan of scans) {
+      const result = await categorizeOrphan(scan, 'scan');
+      categorized.scans[result.category].push(result);
+    }
+
+    logger.info(`Processed ${Math.min(i + scanBatchSize, orphanedScanIds.length)}/${orphanedScanIds.length} scans`);
   }
 
-  console.log('Orphaned observations also in dead letter queue:');
-  console.log(`  Visits: ${orphanedInDeadLetters.visits}/${orphanedVisitIds.length}`);
-  console.log(`  Scans:  ${orphanedInDeadLetters.scans}/${orphanedScanIds.length}`);
+  // Step 4: Print report
+  console.log('\n');
+  console.log('ORPHANED OBSERVATIONS ANALYSIS');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+  console.log('Visits:');
+  console.log(`  Total: ${totalVisits}`);
+  console.log(`  Referenced: ${referencedVisits.size}`);
+  console.log(`  Orphaned: ${orphanedVisitIds.length}`);
+  console.log('  ');
+  console.log('  Breakdown:');
+  console.log(`    Linkable: ${categorized.visits.linkable.length} (can link to existing Person)`);
+  console.log(`    Ambiguous: ${categorized.visits.ambiguous.length} (matches 2+ People)`);
+  console.log(`    Unresolvable: ${categorized.visits.unresolvable.length} (no matching Person)`);
   console.log('');
 
-  // 4. Dead letter status breakdown
-  console.log('4. DEAD LETTER STATUS BREAKDOWN');
-  console.log('─────────────────────────────────────────────────────────────────────────\n');
+  console.log('Scans:');
+  console.log(`  Total: ${totalScans}`);
+  console.log(`  Referenced: ${referencedScans.size}`);
+  console.log(`  Orphaned: ${orphanedScanIds.length}`);
+  console.log('  ');
+  console.log('  Breakdown:');
+  console.log(`    Linkable: ${categorized.scans.linkable.length} (can link to existing Person)`);
+  console.log(`    Ambiguous: ${categorized.scans.ambiguous.length} (matches 2+ People)`);
+  console.log(`    Unresolvable: ${categorized.scans.unresolvable.length} (no matching Person)`);
+  console.log('');
 
-  const deadLettersByStatus = await DeadLetter.aggregate([
-    { $group: { _id: '$status', count: { $sum: 1 } } },
-    { $sort: { count: -1 } }
-  ]);
-
-  deadLettersByStatus.forEach(item => {
-    console.log(`  ${item._id || 'unknown'}: ${item.count.toLocaleString()}`);
+  // Sample linkable visits
+  console.log('Sample linkable visits (first 5):');
+  categorized.visits.linkable.slice(0, 5).forEach(item => {
+    console.log(`  - ${item.observation_id} | ${item.person_id} | ${item.match_type}`);
   });
   console.log('');
 
-  // 5. Sample orphaned observations not in dead letters
-  console.log('5. SAMPLE ORPHANED OBSERVATIONS (not in dead letter queue)');
-  console.log('─────────────────────────────────────────────────────────────────────────\n');
+  // Sample linkable scans
+  console.log('Sample linkable scans (first 5):');
+  categorized.scans.linkable.slice(0, 5).forEach(item => {
+    console.log(`  - ${item.observation_id} | ${item.person_id} | ${item.match_type}`);
+  });
+  console.log('');
 
-  const orphanedNotInDeadLetters = [];
+  // Sample unresolvable visits
+  console.log('Sample unresolvable visits (first 5):');
+  categorized.visits.unresolvable.slice(0, 5).forEach(item => {
+    const ids = Object.entries(item.identifiers)
+      .filter(([k, v]) => v)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ') || 'none';
+    console.log(`  - ${item.observation_id} | ${ids} | ${item.reason}`);
+  });
+  console.log('');
 
-  for (const visitId of orphanedVisitIds.slice(0, 10)) {
-    const inDeadLetter = await DeadLetter.findOne({ observation_id: visitId });
-    if (!inDeadLetter) {
-      const visit = await Visit.findById(visitId).lean();
-      if (visit) {
-        orphanedNotInDeadLetters.push({
-          type: 'visit',
-          id: visitId,
-          profile: visit.Profile,
-          salesNavId: visit.SalesNavId,
-          createdAt: visit.createdAt
-        });
-      }
-    }
-  }
+  // Sample unresolvable scans
+  console.log('Sample unresolvable scans (first 5):');
+  categorized.scans.unresolvable.slice(0, 5).forEach(item => {
+    const ids = Object.entries(item.identifiers)
+      .filter(([k, v]) => v)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ') || 'none';
+    console.log(`  - ${item.observation_id} | ${ids} | ${item.reason}`);
+  });
+  console.log('');
 
-  for (const scanId of orphanedScanIds.slice(0, 10)) {
-    const inDeadLetter = await DeadLetter.findOne({ observation_id: scanId });
-    if (!inDeadLetter) {
-      const scan = await Scan.findById(scanId).lean();
-      if (scan) {
-        orphanedNotInDeadLetters.push({
-          type: 'scan',
-          id: scanId,
-          profile: scan.Profile,
-          salesNavId: scan.SalesNavId,
-          createdAt: scan.createdAt
-        });
-      }
-    }
-  }
-
-  if (orphanedNotInDeadLetters.length > 0) {
-    console.log(`Found ${orphanedNotInDeadLetters.length} orphaned observations not in dead letters:\n`);
-    orphanedNotInDeadLetters.slice(0, 5).forEach((obs, i) => {
-      console.log(`${i + 1}. ${obs.type.toUpperCase()} ${obs.id}`);
-      console.log(`   Profile: ${obs.profile || 'N/A'}`);
-      console.log(`   Sales Nav ID: ${obs.salesNavId || 'N/A'}`);
-      console.log(`   Created: ${obs.createdAt || 'N/A'}`);
-      console.log('');
+  // Sample ambiguous
+  if (categorized.visits.ambiguous.length > 0) {
+    console.log('Sample ambiguous visits (first 3):');
+    categorized.visits.ambiguous.slice(0, 3).forEach(item => {
+      console.log(`  - ${item.observation_id} | matches: ${item.matching_person_ids.join(', ')}`);
     });
-  } else {
-    console.log('All orphaned observations are in the dead letter queue.\n');
-  }
-
-  // 6. Recommendations
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('RECOMMENDATIONS');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-  const orphanedNotInDL = orphanedVisitIds.length + orphanedScanIds.length -
-                          orphanedInDeadLetters.visits - orphanedInDeadLetters.scans;
-
-  if (orphanedNotInDL > 0) {
-    console.log(`⚠️  ${orphanedNotInDL} orphaned observations NOT in dead letter queue`);
-    console.log('   → These should be linked to person records or moved to dead letters\n');
-    console.log('   Run: node scripts/link-orphaned-observations.js');
     console.log('');
   }
 
-  if (totalDeadLetters > 0) {
-    console.log(`📋 ${totalDeadLetters.toLocaleString()} dead letters in queue`);
-    console.log('   → Review and replay failed observations\n');
-    console.log('   Run: node scripts/replay-dead-letters.js');
+  if (categorized.scans.ambiguous.length > 0) {
+    console.log('Sample ambiguous scans (first 3):');
+    categorized.scans.ambiguous.slice(0, 3).forEach(item => {
+      console.log(`  - ${item.observation_id} | matches: ${item.matching_person_ids.join(', ')}`);
+    });
     console.log('');
   }
 
-  if (orphanedNotInDL === 0 && totalDeadLetters === 0) {
-    console.log('✓ No action needed - all observations are properly linked or in dead letters\n');
-  }
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  // Save detailed results to file
+  const reportPath = '/home/harelabs/01-projects/duxsoup-etl/orphaned-observations-report.json';
+  fs.writeFileSync(reportPath, JSON.stringify({
+    summary: {
+      visits: {
+        total: totalVisits,
+        referenced: referencedVisits.size,
+        orphaned: orphanedVisitIds.length,
+        linkable: categorized.visits.linkable.length,
+        ambiguous: categorized.visits.ambiguous.length,
+        unresolvable: categorized.visits.unresolvable.length
+      },
+      scans: {
+        total: totalScans,
+        referenced: referencedScans.size,
+        orphaned: orphanedScanIds.length,
+        linkable: categorized.scans.linkable.length,
+        ambiguous: categorized.scans.ambiguous.length,
+        unresolvable: categorized.scans.unresolvable.length
+      }
+    },
+    details: categorized
+  }, null, 2));
 
+  console.log(`\nDetailed report saved to: ${reportPath}\n`);
+
+  logger.info('Analysis complete');
   await mongoose.disconnect();
 }
 
