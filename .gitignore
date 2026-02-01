@@ -115,3 +115,4 @@ backups/
 .claude/settings.local.json
 CLAUDE.local.md
 .claude/CLAUDE.local.md
+.mcp.json
