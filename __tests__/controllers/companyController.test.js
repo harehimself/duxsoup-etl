@@ -157,7 +157,7 @@ describe('CompanyController', () => {
       });
       Company.findById.mockResolvedValue(reloadedDoc);
 
-      const result = await upsertCompanyFromObservation(observationDoc, 'visit');
+      const _result = await upsertCompanyFromObservation(observationDoc, 'visit');
 
       // $addToSet used for atomic observation reference
       expect(Company.updateOne).toHaveBeenCalledWith(
