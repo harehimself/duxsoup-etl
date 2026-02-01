@@ -313,6 +313,7 @@ personSchema.index({ "snapshot.currentCompany": 1 });
 personSchema.index({ createdAt: -1 });
 personSchema.index({ "snapshot.currentCompany": 1, createdAt: -1 });
 personSchema.index({ "snapshot.country": 1 });
+personSchema.index({ "snapshot.city": 1, "snapshot.state": 1, "snapshot.country": 1 });
 personSchema.index({ "derived.highestSeniorityRank": -1 });
 
 // Full-text search index (weighted by relevance)

@@ -2,6 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
+const compression = require("compression");
+const mongoSanitize = require("express-mongo-sanitize");
+const crypto = require("crypto");
 
 const logger = require("./utils/logger");
 const database = require("./utils/database");
@@ -21,6 +24,19 @@ const app = express();
 
 // Security headers
 app.use(helmet());
+
+// Response compression
+app.use(compression());
+
+// Sanitize MongoDB operator injection from req.body, req.query, req.params
+app.use(mongoSanitize());
+
+// Request correlation IDs
+app.use((req, res, next) => {
+  req.id = req.headers["x-request-id"] || crypto.randomUUID();
+  res.setHeader("X-Request-Id", req.id);
+  next();
+});
 
 // CORS configuration - restrictive by default
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -51,6 +67,7 @@ app.use(
 // Request logging middleware
 app.use((req, res, next) => {
   logger.debug(`${req.method} ${req.path}`, {
+    requestId: req.id,
     ip: req.ip,
     userAgent: req.get("user-agent"),
   });
@@ -119,6 +136,7 @@ app.get("/", (req, res) => {
 // Global error handler - must be after all route definitions
 app.use((err, req, res, _next) => {
   logger.error("Unhandled error", {
+    requestId: req.id,
     error: err.message,
     stack: err.stack,
     path: req.path,

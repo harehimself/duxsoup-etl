@@ -46,6 +46,29 @@ const mergeSchema = new mongoose.Schema({
     index: true,
   },
 
+  // Snapshots of loser documents before deletion (for rollback)
+  loserSnapshots: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
+
+  // Snapshot of winner before merge (for rollback)
+  winnerSnapshotBefore: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+
+  // Whether this merge has been rolled back
+  rolledBack: {
+    type: Boolean,
+    default: false,
+  },
+
+  rolledBackAt: {
+    type: Date,
+    default: null,
+  },
+
   // Optional metadata
   metadata: {
     type: mongoose.Schema.Types.Mixed,

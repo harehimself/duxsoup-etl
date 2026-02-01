@@ -288,6 +288,9 @@ class IdentityResolverService {
         reason: mergeReason.reason || 'alias_conflict',
       });
 
+      // Capture winner state before merge for rollback
+      mergeReason._winnerSnapshot = winner.toObject();
+
       // Collect all unique aliases
       const allAliases = [...winner.aliases];
       const aliasValues = new Set(allAliases.map(a => a.value));
@@ -360,7 +363,7 @@ class IdentityResolverService {
 
       await winner.save();
 
-      // Create merge audit record
+      // Create merge audit record with rollback snapshots
       const Merge = require('../models/merge');
       await Merge.create({
         winner_id: winner._id,
@@ -368,6 +371,8 @@ class IdentityResolverService {
         reason: mergeReason.reason || 'alias_conflict',
         sourceObservationId: mergeReason.sourceObservationId,
         timestamp: new Date(),
+        winnerSnapshotBefore: mergeReason._winnerSnapshot || null,
+        loserSnapshots: losers.map(l => l.toObject()),
       });
 
       // Delete loser documents

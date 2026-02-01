@@ -24,6 +24,16 @@ module.exports = {
   resetMocks: true,
   restoreMocks: true,
 
+  // Coverage thresholds - fail CI if coverage drops below these values
+  coverageThreshold: {
+    global: {
+      branches: 50,
+      functions: 50,
+      lines: 60,
+      statements: 60,
+    },
+  },
+
   // Verbose output
   verbose: true,
 };
