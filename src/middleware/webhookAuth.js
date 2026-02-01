@@ -14,8 +14,16 @@ let warnedOnce = false;
 function webhookAuth(req, res, next) {
   const secret = process.env.WEBHOOK_SECRET;
 
-  // If no secret configured, pass through
+  // If no secret configured, fail closed in production
   if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('WEBHOOK_SECRET not set in production - rejecting request');
+      return res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Webhook authentication is not configured',
+      });
+    }
     if (!warnedOnce) {
       logger.warn('WEBHOOK_SECRET not set - webhook endpoint is unauthenticated');
       warnedOnce = true;

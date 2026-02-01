@@ -165,7 +165,7 @@ router.post("/webhook", webhookRateLimiter, webhookAuth, (req, res) => {
 });
 
 // Admin endpoints (one-time migrations, etc.)
-router.use("/admin", adminRateLimiter, adminRoutes);
+router.use("/admin", webhookAuth, adminRateLimiter, adminRoutes);
 
 // Observation replay endpoint (admin, protected)
 router.post("/admin/replay/:observationId", webhookAuth, replayObservation);
