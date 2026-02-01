@@ -181,7 +181,7 @@ describe('LocationController', () => {
       });
       Location.findById.mockResolvedValue(reloadedDoc);
 
-      const result = await upsertLocationFromObservation(observationDoc, 'scan');
+      await upsertLocationFromObservation(observationDoc, 'scan');
 
       // Observation linked via $addToSet
       expect(Location.updateOne).toHaveBeenCalledWith(
