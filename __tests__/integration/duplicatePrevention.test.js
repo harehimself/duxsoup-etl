@@ -170,8 +170,8 @@ describe('Duplicate Prevention — alias overlap across webhook types', () => {
 
   describe('Real-world duplicate scenario: Alton Harewood', () => {
     it('should produce overlapping aliases for the exact scenario from investigation', () => {
-      // Webhook Type A: Sales Nav scan
-      const webhookA = {
+      // Webhook Type A: Sales Nav scan (kept for documentation of the scenario)
+      const _webhookA = {
         id: 'id.1927818',
         SalesProfile:
           'https://www.linkedin.com/sales/lead/ACwAAAAdaooB-xOpw0VY7_AKzaZfnxxGrfTigvU,name_search,lx9l',
@@ -185,7 +185,6 @@ describe('Duplicate Prevention — alias overlap across webhook types', () => {
         Profile: 'https://www.linkedin.com/in/altonharewood',
       };
 
-      const identityA = resolvePersonIdentity(webhookA);
       const identityB = resolvePersonIdentity(webhookB);
 
       // webhookB should have linkedInUsername alias

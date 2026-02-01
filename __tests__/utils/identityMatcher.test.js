@@ -3,7 +3,6 @@ const {
   extractVanityName,
   extractSalesNavId,
   normalizeUrl,
-  normalizePublicProfileUrl,
   normalizeDuxsoupId,
   extractIdentifiers,
   getPrimaryIdentifier,
