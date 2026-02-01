@@ -118,5 +118,6 @@ companySchema.index({ "snapshot.name": 1 });
 companySchema.index({ createdAt: -1 });
 companySchema.index({ "meta.lastObservedAt": -1 });
 companySchema.index({ "meta.observationsCount": -1 });
+companySchema.index({ "snapshot.industry": 1 });
 
 module.exports = mongoose.model("Company", companySchema);
