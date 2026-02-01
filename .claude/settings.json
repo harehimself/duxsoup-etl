@@ -1,23 +1,30 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm test:*)",
+      "Bash(npm test *)",
+      "Bash(npm run test *)",
       "Bash(npm run test:*)",
       "Bash(npm run lint)",
       "Bash(npm run dev)",
-      "Bash(git:*)",
+      "Bash(git *)",
       "Read(src/**)",
       "Read(tests/**)",
+      "Read(__tests__/**)",
       "Read(docs/**)",
       "Read(**/*.md)",
       "Read(**/*.json)",
       "Read(**/*.js)"
     ],
     "deny": [
-      "Bash(curl:*)",
-      "Bash(wget:*)",
-      "Bash(rm -rf:*)",
-      "Bash(npm publish:*)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -r *)",
+      "Bash(npm publish *)",
+      "Bash(npx *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)",
       "Read(.env)",
       "Read(.env.*)",
       "Read(./logs/**)",
@@ -25,8 +32,8 @@
       "Edit(.env)"
     ],
     "ask": [
-      "Bash(npm install:*)",
-      "Bash(git push:*)",
+      "Bash(npm install *)",
+      "Bash(git push *)",
       "Edit(package.json)",
       "Write(src/models/**)"
     ],
@@ -46,12 +53,21 @@
             "description": "Block editing of .env and secrets files"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const data = JSON.parse(require('fs').readFileSync(0, 'utf-8')); const cmd = data?.tool_input?.command || ''; if (/\\.env|secrets/.test(cmd) && /echo|cat|>>|>/.test(cmd)) { console.error('❌ Blocked: Never write to secrets files via Bash'); process.exit(2); }\"",
+            "description": "Block Bash commands that write to .env or secrets files"
+          }
+        ]
       }
     ]
   },
-  "model": "claude-sonnet-4-5-20250929",
   "attribution": {
-    "commit": "🤖 Generated with Claude Code\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>",
+    "commit": "🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
     "pr": "🤖 Generated with Claude Code"
   }
 }

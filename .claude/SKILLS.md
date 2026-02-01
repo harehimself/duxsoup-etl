@@ -13,6 +13,8 @@ This document lists all custom slash commands available for this project. These 
 | `/replay-dead-letters` | Replay failed observations | Recovery after bug fixes |
 | `/quick-query` | Ad-hoc MongoDB queries | Quick data exploration |
 | `/scaffold-script` | Generate new scripts | Creating analysis scripts |
+| `/push` | Quality git push workflow | Solo-dev push with safety checks |
+| `/audit-security` | Security posture audit | Dependency vulns, secrets, CORS |
 
 ---
 
@@ -248,6 +250,65 @@ This document lists all custom slash commands available for this project. These 
 **Also creates:**
 - NPM script in package.json
 - Permission in .claude/settings.local.json
+
+---
+
+## 🛡️ /audit-security
+
+**Run a comprehensive security posture audit**
+
+```bash
+/audit-security              # Full audit
+/audit-security --quick      # Dependencies + secrets only
+```
+
+**Use when:**
+- Periodic security reviews
+- Before deploying to production
+- After adding new dependencies
+- Checking for accidentally committed secrets
+
+**Checks performed:**
+- Dependency vulnerabilities (`npm audit`)
+- Hardcoded secrets scan (API keys, tokens, passwords in source)
+- Environment file safety (.env in .gitignore, not tracked)
+- CORS configuration audit
+- Webhook endpoint security (auth, rate limiting, body size)
+- Admin route authorization review
+- MongoDB connection security
+
+**Output severity levels:**
+- 🔴 CRITICAL: Immediate action required
+- 🟡 WARNING: Should be addressed
+- 🟢 GOOD: No issues found
+
+---
+
+## 🚀 /push
+
+**Quality git push with safety checks**
+
+```bash
+/push
+```
+
+**Use when:**
+- Pushing changes to GitHub after development
+- Solo-dev workflow (direct pushes to main/master)
+- Need fetch → rebase → test → commit → push in one step
+
+**Workflow:**
+1. Fetch & sync with remote
+2. Review status and categorize changes
+3. Run tests
+4. Generate conventional commit message
+5. Push with verification
+
+**Safety features:**
+- Blocks force-push unless explicitly instructed
+- Detects diverged branches and asks before proceeding
+- Warns on large changesets (>300 LOC or >10 files)
+- Never stages .env or secrets
 
 ---
 

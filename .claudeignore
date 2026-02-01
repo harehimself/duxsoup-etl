@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build & coverage output
+coverage/
+dist/
+
+# Logs
+logs/
+*.log
+
+# Environment & secrets
+.env
+.env.*
+
+# Temp files
+tmp/
+temp/
+backup/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# MongoDB data
+data/
