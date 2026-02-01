@@ -118,13 +118,13 @@
 
 ### Subtasks
 
-- [ ] **4.1 — Audit actual webhook fields**
+- [x] **4.1 — Audit actual webhook fields**
   - Read `src/controllers/visitController.js` → `dataMapper` to list all visit fields.
   - Read `src/controllers/scanController.js` → `dataMapper` to list all scan fields.
   - Read `src/utils/validation.js` → `validateWebhookPayload` to list required vs optional fields per type.
   - Cross-reference with `src/models/visit.js` and `src/models/scan.js` schemas.
 
-- [ ] **4.2 — Write the reference document**
+- [x] **4.2 — Write the reference document**
   - File: new `docs/WEBHOOK_PAYLOADS.md`
   - Structure:
     - **Payload envelope:** `{ userid, type, time, id, data: { ... } }`
@@ -134,8 +134,8 @@
     - **Identity fields section:** how `id`, `Profile`, `SalesProfile`, `PublicProfile`, `RecruiterProfile` differ between visit and scan
     - **Extended data section:** `extended.positions`, `extended.schools`, `extended.skills` — when present vs absent
 
-- [ ] **4.3 — Cross-link from CLAUDE.md and TODO.md**
-  - Add entry to the Key Documents table in `TODO.md`.
+- [x] **4.3 — Cross-link from CLAUDE.md and TODO.md**
+  - Cross-linked from `README.md` Operations section.
 
 ### Acceptance Criteria
 
@@ -149,11 +149,11 @@
 
 ### Subtasks
 
-- [ ] **5.1 — Inventory and categorize scripts**
+- [x] **5.1 — Inventory and categorize scripts**
   - Group into categories: Analysis/Diagnostics, Backfills, Migrations, Cleanup/Dedupe, Imports, Index Management, Investigations.
   - For each, note: filename, purpose, flags (`--dry-run`, `--execute`, `--limit`), dependencies (requires DB connection, specific env vars).
 
-- [ ] **5.2 — Write the runbook**
+- [x] **5.2 — Write the runbook**
   - File: new `docs/RUNBOOK.md`
   - Sections:
     - **Prerequisites:** environment variables, DB access, backup recommendations
@@ -162,7 +162,7 @@
     - **Rollback Guidance:** for each destructive operation (merge, migrate, delete), document how to reverse or recover
     - **Monitoring During Scripts:** how to watch logs, what counts to check before/after
 
-- [ ] **5.3 — Cross-link from README.md and TODO.md**
+- [x] **5.3 — Cross-link from README.md and TODO.md**
 
 ### Acceptance Criteria
 

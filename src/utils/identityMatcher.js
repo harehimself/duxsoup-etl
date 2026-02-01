@@ -123,7 +123,9 @@ function extractLinkedInUsername(data) {
  */
 function extractSalesNavId(data) {
   // Delegate to the robust extractor
-  const { extractSalesNavId: robustExtractor } = require('./salesNavIdExtractor');
+  const {
+    extractSalesNavId: robustExtractor,
+  } = require("./salesNavIdExtractor");
   return robustExtractor(data);
 }
 
@@ -150,7 +152,7 @@ function normalizeUrl(url) {
     // Normalize double slashes and trailing slash
     normalized = normalized.replace(/\/\/+/g, '/').replace(/\/$/, '');
     return normalized;
-  } catch (e) {
+  } catch (_e) {
     return url;
   }
 }
@@ -162,14 +164,14 @@ function normalizeUrl(url) {
  * @returns {string|null} - Normalized public profile URL or null
  */
 function normalizePublicProfileUrl(url) {
-  if (!url || typeof url !== 'string') return null;
+  if (!url || typeof url !== "string") return null;
 
   const normalized = normalizeUrl(url);
   if (!normalized) {
     return null;
   }
 
-  const match = normalized.match(/linkedin\.com\/(in|pub)\/([^\/\?]+)/);
+  const match = normalized.match(/linkedin\.com\/(in|pub)\/([^/?]+)/);
   if (!match) {
     return null;
   }
@@ -184,7 +186,7 @@ function normalizePublicProfileUrl(url) {
  * @returns {string|null} - Normalized DuxSoup ID or null
  */
 function normalizeDuxsoupId(duxsoupId) {
-  if (!duxsoupId || typeof duxsoupId !== 'string') {
+  if (!duxsoupId || typeof duxsoupId !== "string") {
     return null;
   }
 
@@ -208,7 +210,7 @@ function extractVanityName(data) {
   const salesNavIdPattern = /^A(Cw|Co)AA/;
 
   function extractFromUrl(url) {
-    if (!url || typeof url !== 'string') return null;
+    if (!url || typeof url !== "string") return null;
     const match = url.match(vanityPattern);
     if (!match) return null;
     const slug = match[1];
@@ -239,7 +241,7 @@ function extractVanityName(data) {
  * @returns {Object} - Object containing all extracted identifiers
  */
 function extractIdentifiers(data) {
-  const { extractNumericId } = require('./salesNavIdExtractor');
+  const { extractNumericId } = require("./salesNavIdExtractor");
 
   const duxsoupId = data.id || data.data?.id || null;
   const normalizedDuxsoupId = normalizeDuxsoupId(duxsoupId);
@@ -253,7 +255,9 @@ function extractIdentifiers(data) {
     duxsoupId: normalizedDuxsoupId || duxsoupId,
     profileUrl: normalizeUrl(data.Profile || data.data?.Profile),
     publicProfile:
-      normalizePublicProfileUrl(data.PublicProfile || data.data?.PublicProfile) ||
+      normalizePublicProfileUrl(
+        data.PublicProfile || data.data?.PublicProfile,
+      ) ||
       normalizePublicProfileUrl(data.Profile || data.data?.Profile) ||
       normalizeUrl(data.PublicProfile || data.data?.PublicProfile),
     recruiterProfile: normalizeUrl(

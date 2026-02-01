@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const {
-  computeEventKey,
+  computeEventKey: _computeEventKey,
   analyzeCollection,
   backfillEventKeys,
   identifyDuplicates,
@@ -11,7 +11,7 @@ const Visit = require("../../src/models/visit");
 const Scan = require("../../src/models/scan");
 
 describe("Deduplication Script - Integration Tests", () => {
-  let connection;
+  let _connection;
 
   // Helper function to create minimal valid visit data
   const createVisitData = (overrides = {}) => ({
@@ -41,7 +41,7 @@ describe("Deduplication Script - Integration Tests", () => {
     // Connect to test database
     const uri =
       process.env.MONGODB_TEST_URI || "mongodb://localhost:27017/duxsoup-test";
-    connection = await mongoose.connect(uri);
+    _connection = await mongoose.connect(uri);
   });
 
   afterAll(async () => {
@@ -61,7 +61,7 @@ describe("Deduplication Script - Integration Tests", () => {
         await mongoose.connection.db
           .collection("visits")
           .dropIndex("event_key_1");
-      } catch (err) {
+      } catch (_err) {
         // Index might not exist, ignore error
       }
     });
@@ -72,7 +72,7 @@ describe("Deduplication Script - Integration Tests", () => {
         await mongoose.connection.db
           .collection("visits")
           .createIndex({ event_key: 1 }, { unique: true, sparse: true });
-      } catch (err) {
+      } catch (_err) {
         // Index might already exist, ignore error
       }
     });
@@ -276,39 +276,41 @@ describe("Deduplication Script - Integration Tests", () => {
 
       // Create duplicates with different createdAt timestamps
       // Use insertMany to bypass unique index constraint
-      const result = await mongoose.connection.db.collection("visits").insertMany([
-        {
-          ...createVisitData({
-            id: "dux1",
-            time: new Date("2024-01-15"),
-            VisitTime: new Date("2024-01-15"),
-          }),
-          event_key: eventKey,
-          createdAt: new Date("2024-01-10"), // OLDEST - should be kept
-        },
-        {
-          ...createVisitData({
-            id: "dux2",
-            time: new Date("2024-01-16"),
-            VisitTime: new Date("2024-01-16"),
-          }),
-          event_key: eventKey,
-          createdAt: new Date("2024-01-15"), // Should be removed
-        },
-        {
-          ...createVisitData({
-            id: "dux3",
-            time: new Date("2024-01-17"),
-            VisitTime: new Date("2024-01-17"),
-          }),
-          event_key: eventKey,
-          createdAt: new Date("2024-01-20"), // NEWEST - should be removed
-        },
-      ]);
+      const result = await mongoose.connection.db
+        .collection("visits")
+        .insertMany([
+          {
+            ...createVisitData({
+              id: "dux1",
+              time: new Date("2024-01-15"),
+              VisitTime: new Date("2024-01-15"),
+            }),
+            event_key: eventKey,
+            createdAt: new Date("2024-01-10"), // OLDEST - should be kept
+          },
+          {
+            ...createVisitData({
+              id: "dux2",
+              time: new Date("2024-01-16"),
+              VisitTime: new Date("2024-01-16"),
+            }),
+            event_key: eventKey,
+            createdAt: new Date("2024-01-15"), // Should be removed
+          },
+          {
+            ...createVisitData({
+              id: "dux3",
+              time: new Date("2024-01-17"),
+              VisitTime: new Date("2024-01-17"),
+            }),
+            event_key: eventKey,
+            createdAt: new Date("2024-01-20"), // NEWEST - should be removed
+          },
+        ]);
 
       const doc1 = { _id: result.insertedIds[0] };
-      const doc2 = { _id: result.insertedIds[1] };
-      const doc3 = { _id: result.insertedIds[2] };
+      const _doc2 = { _id: result.insertedIds[1] };
+      const _doc3 = { _id: result.insertedIds[2] };
 
       // Identify duplicates first
       const { groups } = await identifyDuplicates(Visit, "visits");
@@ -357,7 +359,7 @@ describe("Deduplication Script - Integration Tests", () => {
         });
       const doc1 = { _id: doc1Result.insertedId };
 
-      const doc2 = await Visit.create(
+      const _doc2 = await Visit.create(
         createVisitData({
           id: "dux2",
           time: new Date("2024-01-16"),
@@ -538,7 +540,7 @@ describe("Deduplication Script - Integration Tests", () => {
         await mongoose.connection.db
           .collection("visits")
           .dropIndex("event_key_1");
-      } catch (err) {
+      } catch (_err) {
         // Index might not exist, ignore error
       }
     });
@@ -549,7 +551,7 @@ describe("Deduplication Script - Integration Tests", () => {
         await mongoose.connection.db
           .collection("visits")
           .createIndex({ event_key: 1 }, { unique: true, sparse: true });
-      } catch (err) {
+      } catch (_err) {
         // Index might already exist, ignore error
       }
     });

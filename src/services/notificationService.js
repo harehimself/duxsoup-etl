@@ -1,6 +1,6 @@
-const nodemailer = require('nodemailer');
-const twilio = require('twilio');
-const logger = require('../utils/logger');
+const nodemailer = require("nodemailer");
+const twilio = require("twilio");
+const logger = require("../utils/logger");
 
 /**
  * Notification Service
@@ -14,8 +14,8 @@ const logger = require('../utils/logger');
 const EMAIL_ENABLED = !!process.env.SMTP_HOST && !!process.env.SMTP_USER;
 const SMTP_CONFIG = {
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+  port: parseInt(process.env.SMTP_PORT || "587", 10),
+  secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
   auth: EMAIL_ENABLED
     ? {
         user: process.env.SMTP_USER,
@@ -48,11 +48,17 @@ const SMS_TO = process.env.TWILIO_TO_NUMBER;
  */
 async function sendHealthEmail(report) {
   if (!EMAIL_ENABLED || !ALERT_EMAIL_TO) {
-    logger.debug('Email not configured, skipping email alert');
+    logger.debug("Email not configured, skipping email alert");
     return false;
   }
 
-  const { status, criticalIssues = [], warnings = [], metrics = {}, timestamp } = report;
+  const {
+    status,
+    criticalIssues: _criticalIssues = [],
+    warnings: _warnings = [],
+    metrics: _metrics = {},
+    timestamp: _timestamp,
+  } = report;
 
   try {
     // Create email transporter
@@ -73,7 +79,7 @@ async function sendHealthEmail(report) {
       html: htmlBody,
     });
 
-    logger.info('Health alert email sent', {
+    logger.info("Health alert email sent", {
       messageId: info.messageId,
       status,
       to: ALERT_EMAIL_TO,
@@ -81,7 +87,7 @@ async function sendHealthEmail(report) {
 
     return true;
   } catch (err) {
-    logger.error('Failed to send health alert email', {
+    logger.error("Failed to send health alert email", {
       error: err.message,
       stack: err.stack,
     });
@@ -97,12 +103,12 @@ async function sendHealthEmail(report) {
  */
 async function sendHealthSMS(report) {
   // Only send SMS for critical issues
-  if (report.status !== 'critical') {
+  if (report.status !== "critical") {
     return false;
   }
 
   if (!SMS_ENABLED || !SMS_TO) {
-    logger.debug('SMS not configured, skipping SMS alert');
+    logger.debug("SMS not configured, skipping SMS alert");
     return false;
   }
 
@@ -115,7 +121,7 @@ async function sendHealthSMS(report) {
       to: SMS_TO,
     });
 
-    logger.info('Health alert SMS sent', {
+    logger.info("Health alert SMS sent", {
       sid: result.sid,
       status: result.status,
       to: SMS_TO,
@@ -123,7 +129,7 @@ async function sendHealthSMS(report) {
 
     return true;
   } catch (err) {
-    logger.error('Failed to send health alert SMS', {
+    logger.error("Failed to send health alert SMS", {
       error: err.message,
       stack: err.stack,
     });
@@ -144,12 +150,12 @@ async function sendHealthAlerts(report) {
   };
 
   // Send email for warnings and critical
-  if (report.status === 'warning' || report.status === 'critical') {
+  if (report.status === "warning" || report.status === "critical") {
     results.emailSent = await sendHealthEmail(report);
   }
 
   // Send SMS for critical only
-  if (report.status === 'critical') {
+  if (report.status === "critical") {
     results.smsSent = await sendHealthSMS(report);
   }
 
@@ -163,10 +169,22 @@ async function sendHealthAlerts(report) {
  * @returns {String} HTML content
  */
 function buildEmailHtml(report) {
-  const { status, criticalIssues = [], warnings = [], metrics = {}, timestamp } = report;
+  const {
+    status,
+    criticalIssues = [],
+    warnings = [],
+    metrics = {},
+    timestamp,
+  } = report;
 
-  const emoji = status === 'critical' ? '🚨' : status === 'warning' ? '⚠️' : '✅';
-  const color = status === 'critical' ? '#dc3545' : status === 'warning' ? '#ffc107' : '#28a745';
+  const emoji =
+    status === "critical" ? "🚨" : status === "warning" ? "⚠️" : "✅";
+  const color =
+    status === "critical"
+      ? "#dc3545"
+      : status === "warning"
+        ? "#ffc107"
+        : "#28a745";
 
   let html = `
 <!DOCTYPE html>
@@ -261,7 +279,13 @@ function buildEmailHtml(report) {
  * @returns {String} Text content
  */
 function buildEmailText(report) {
-  const { status, criticalIssues = [], warnings = [], metrics = {}, timestamp } = report;
+  const {
+    status,
+    criticalIssues = [],
+    warnings = [],
+    metrics = {},
+    timestamp,
+  } = report;
 
   let text = `DuxSoup ETL Health Alert: ${status.toUpperCase()}\n`;
   text += `Checked at: ${new Date(timestamp).toLocaleString()}\n\n`;
@@ -354,12 +378,12 @@ async function testNotifications() {
   // Test email
   if (results.email.configured) {
     const testReport = {
-      status: 'warning',
+      status: "warning",
       timestamp: new Date(),
       warnings: [
         {
-          message: 'This is a test notification',
-          recommendation: 'No action needed - configuration test',
+          message: "This is a test notification",
+          recommendation: "No action needed - configuration test",
         },
       ],
       metrics: {
@@ -378,11 +402,11 @@ async function testNotifications() {
   if (results.sms.configured) {
     try {
       const result = await twilioClient.messages.create({
-        body: '🧪 DuxSoup ETL test SMS - configuration working!',
+        body: "🧪 DuxSoup ETL test SMS - configuration working!",
         from: SMS_FROM,
         to: SMS_TO,
       });
-      results.sms.sent = result.status === 'queued' || result.status === 'sent';
+      results.sms.sent = result.status === "queued" || result.status === "sent";
     } catch (err) {
       results.sms.error = err.message;
     }

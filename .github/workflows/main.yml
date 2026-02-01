@@ -33,11 +33,7 @@ jobs:
         run: npm test
 
       - name: Run linting
-        # Assuming you have an ESLint setup and a script like `npm run lint`
-        run: |
-          # npm install eslint # Uncomment if ESLint is not a dev dependency and needed here
-          # npm run lint
-          echo "Linting step - implement your lint command here (e.g., npm run lint)"
+        run: npm run lint
 
       - name: Dependency Vulnerability Scan
         # Example using a common action like `npm audit`

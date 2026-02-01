@@ -85,7 +85,7 @@ function extractPublicProfileUrl(url) {
       .trim();
 
     // Pattern: /in/username or /pub/username
-    const publicPattern = /^\/(in|pub)\/([^\/\?]+)/;
+    const publicPattern = /^\/(in|pub)\/([^/?]+)/;
     const match = normalized.match(publicPattern);
 
     return match ? `linkedin.com${match[0]}` : null;
@@ -149,7 +149,7 @@ function extractCompanyProfileUrl(url) {
       .replace(/\/$/, "")
       .trim();
 
-    const companyPattern = /^\/company\/([^\/\?]+)/;
+    const companyPattern = /^\/company\/([^/?]+)/;
     const match = normalized.match(companyPattern);
 
     return match ? `linkedin.com${match[0]}` : null;

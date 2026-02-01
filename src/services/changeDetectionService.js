@@ -37,6 +37,10 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
         personSnapshot: buildPersonSnapshot(person, newSnapshot),
         from: companyChange.from,
         to: companyChange.to,
+        fromCompanyId: companyChange.fromCompanyId,
+        toCompanyId: companyChange.toCompanyId,
+        roles: oldSnapshot.roles,
+        oldCompanyName: companyChange.from,
         observationId,
       });
 
@@ -155,6 +159,8 @@ function detectCompanyChange(oldSnapshot, newSnapshot) {
     return {
       from: oldCompany,
       to: newCompany,
+      fromCompanyId: oldSnapshot.currentCompanyId || null,
+      toCompanyId: newSnapshot.currentCompanyId || null,
     };
   }
 
@@ -288,7 +294,7 @@ function detectSeniorityUpgrade(oldTitle, newTitle) {
  * @returns {Promise<Object>} Created change record
  */
 async function recordChange(changeData) {
-  const change = await Change.create({
+  const doc = {
     type: changeData.type,
     person_id: changeData.person_id,
     personSnapshot: changeData.personSnapshot,
@@ -297,9 +303,63 @@ async function recordChange(changeData) {
     company: changeData.company,
     timestamp: new Date(),
     notified: false,
-  });
+  };
 
+  // Enrich company_change records with additional context
+  if (changeData.type === 'company_change') {
+    doc.fromCompanyId = changeData.fromCompanyId || null;
+    doc.toCompanyId = changeData.toCompanyId || null;
+    doc.recentJobChange = true;
+    doc.recentJobChangeExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+
+    // Compute tenure at previous role
+    doc.tenureDaysAtPreviousRole = computeTenureAtPreviousRole(
+      changeData.roles,
+      changeData.oldCompanyName,
+    );
+  }
+
+  const change = await Change.create(doc);
   return change;
+}
+
+/**
+ * Compute tenure in days at the previous company role
+ *
+ * @param {Array} roles - Person's roles array
+ * @param {String} oldCompanyName - Name of the old company
+ * @returns {Number|null} Tenure in days, or null if not computable
+ */
+function computeTenureAtPreviousRole(roles, oldCompanyName) {
+  if (!roles || !Array.isArray(roles) || !oldCompanyName) {
+    return null;
+  }
+
+  const normalizedOld = normalizeString(oldCompanyName);
+
+  // Find the most relevant role at the old company:
+  // prefer isCurrent, then most recent startDate
+  const matchingRoles = roles.filter(
+    (role) => normalizeString(role.companyName) === normalizedOld,
+  );
+
+  if (matchingRoles.length === 0) {
+    return null;
+  }
+
+  // Prefer current role, otherwise the one with most recent startDate
+  const bestRole =
+    matchingRoles.find((r) => r.isCurrent) ||
+    matchingRoles
+      .filter((r) => r.startDate)
+      .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))[0];
+
+  if (!bestRole || !bestRole.startDate) {
+    return null;
+  }
+
+  const startDate = new Date(bestRole.startDate);
+  return Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 /**
