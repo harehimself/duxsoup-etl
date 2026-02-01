@@ -153,6 +153,28 @@ function startScheduler() {
     }
   });
 
+  // Job 4: Expire recentJobChange flags (daily at 2 AM)
+  cron.schedule('0 2 * * *', async () => {
+    try {
+      logger.info('Running scheduled recentJobChange expiry');
+
+      const Change = require('../models/change');
+      const result = await Change.updateMany(
+        { recentJobChange: true, recentJobChangeExpiresAt: { $lte: new Date() } },
+        { $set: { recentJobChange: false } },
+      );
+
+      logger.info('Scheduled recentJobChange expiry complete', {
+        modifiedCount: result.modifiedCount || 0,
+      });
+    } catch (err) {
+      logger.error('Scheduled recentJobChange expiry failed', {
+        error: err.message,
+        stack: err.stack,
+      });
+    }
+  });
+
   schedulerStarted = true;
   logger.info('Background job scheduler started successfully');
 }

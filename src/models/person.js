@@ -311,6 +311,9 @@ personSchema.index({ "meta.observationsCount": -1 });
 personSchema.index({ "snapshot.fullName": 1 });
 personSchema.index({ "snapshot.currentCompany": 1 });
 personSchema.index({ createdAt: -1 });
+personSchema.index({ "snapshot.currentCompany": 1, createdAt: -1 });
+personSchema.index({ "snapshot.country": 1 });
+personSchema.index({ "derived.highestSeniorityRank": -1 });
 
 // Full-text search index (weighted by relevance)
 personSchema.index(
