@@ -25,52 +25,18 @@
 ## Project Structure
 
 ```
-duxsoup-etl/
-├── src/
-│   ├── index.js              # Entry point - Express server setup
-│   ├── controllers/          # Business logic handlers
-│   │   ├── observationHandler.js   # Generic webhook processor
-│   │   ├── visitController.js      # Visit webhook handler
-│   │   ├── scanController.js       # Scan webhook handler
-│   │   ├── personController.js     # Person snapshot logic (716 lines, core)
-│   │   ├── companyController.js    # Company snapshot logic
-│   │   ├── locationController.js   # Location snapshot logic
-│   │   ├── healthController.js     # Health/metrics endpoints
-│   │   └── *ReadController.js      # Read path controllers
-│   ├── models/               # Mongoose schemas
-│   │   ├── person.js         # Canonical person snapshots
-│   │   ├── visit.js          # Immutable visit observations
-│   │   ├── scan.js           # Immutable scan observations
-│   │   ├── company.js        # Canonical company snapshots
-│   │   ├── location.js       # Canonical location snapshots
-│   │   ├── deadLetter.js     # Failed upserts for replay
-│   │   └── change.js         # Job changes/promotions tracking
-│   ├── routes/               # API route definitions
-│   │   ├── apiRoutes.js      # Main routes (webhook, health, CRUD)
-│   │   ├── queryRoutes.js    # Search/filter endpoints
-│   │   ├── searchRoutes.js   # Full-text search
-│   │   ├── exportRoutes.js   # CSV/JSON export
-│   │   └── changeRoutes.js   # Job changes queries
-│   ├── services/             # Business logic services
-│   │   ├── identityResolverService.js  # Identity matching
-│   │   ├── changeDetectionService.js   # Detect job changes
-│   │   └── *Service.js       # Query, search, export, etc.
-│   ├── utils/                # Helpers
-│   │   ├── errors.js         # AppError classes
-│   │   ├── validation.js     # Webhook validation
-│   │   ├── identityResolver.js       # Extract stable IDs
-│   │   ├── salesNavIdExtractor.js    # Sales Nav ID regex
-│   │   ├── eventKey.js       # Idempotency key generation
-│   │   ├── location-parser.js        # Parse location strings
-│   │   ├── database.js       # MongoDB connection singleton
-│   │   └── logger.js         # Winston logger
-│   ├── workers/              # Background job scheduler
-│   └── __tests__/            # Integration tests
-├── __tests__/                # Unit tests
-├── scripts/                  # Migration/maintenance scripts
-├── docs/                     # Documentation
-└── .claude/                  # Claude AI instructions
-    └── rules/                # Code standards
+src/
+├── controllers/    # Webhook handlers, snapshot upsert logic
+├── models/         # Mongoose schemas (person, visit, scan, company, location, etc.)
+├── routes/         # API route definitions
+├── services/       # Identity resolution, change detection, search
+├── utils/          # Error classes, validation, ID extraction, logging
+├── workers/        # Background job scheduler
+└── __tests__/      # Integration tests
+__tests__/          # Unit tests
+scripts/            # Operational CLI and maintenance scripts
+docs/               # Runbook, field reference, webhook payloads
+.claude/            # Claude AI instructions and rules
 ```
 
 ## Architecture: Observation-Snapshot Pattern
