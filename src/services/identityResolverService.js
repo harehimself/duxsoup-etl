@@ -36,11 +36,14 @@ class IdentityResolverService {
 
       // Group aliases by type
       const salesNavIdAliases = [];
+      const linkedInUsernameAliases = [];
       const otherAliases = [];
 
       aliases.forEach(alias => {
         if (alias.type === 'salesNavId' && alias.value) {
           salesNavIdAliases.push(alias.value);
+        } else if (alias.type === 'linkedInUsername' && alias.value) {
+          linkedInUsernameAliases.push(alias.value);
         } else if (alias.value) {
           otherAliases.push(alias.value);
         }
@@ -52,6 +55,16 @@ class IdentityResolverService {
           const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           conditions.push({
             'aliases.type': 'salesNavId',
+            'aliases.value': { $regex: new RegExp(`^${escapedValue}$`, 'i') }
+          });
+        });
+      }
+
+      // Add case-insensitive query for linkedInUsername (LinkedIn treats usernames as case-insensitive)
+      if (linkedInUsernameAliases.length > 0) {
+        linkedInUsernameAliases.forEach(value => {
+          const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          conditions.push({
             'aliases.value': { $regex: new RegExp(`^${escapedValue}$`, 'i') }
           });
         });

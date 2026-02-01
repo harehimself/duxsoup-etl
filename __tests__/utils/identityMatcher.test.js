@@ -2,6 +2,9 @@ const {
   extractLinkedInUsername,
   extractVanityName,
   extractSalesNavId,
+  normalizeUrl,
+  normalizePublicProfileUrl,
+  normalizeDuxsoupId,
   extractIdentifiers,
   getPrimaryIdentifier,
   generateIdentityKey,
@@ -327,6 +330,105 @@ describe("Identity Matcher Utility", () => {
       // These should NOT match (no shared identifier)
       // This is a known limitation - would need graph matching
       expect(isSamePerson(scan1, scan2)).toBe(false);
+    });
+  });
+
+  describe("normalizeUrl — Item 16 robustness", () => {
+    it("should strip comma-separated tracking params from Sales Nav URLs", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com/sales/lead/ACwAAALwVAIB,NAME,o7fk",
+      );
+      expect(result).toBe("linkedin.com/sales/lead/acwaaalwvaib");
+    });
+
+    it("should strip query parameters", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com/in/john-doe?trk=search",
+      );
+      expect(result).toBe("linkedin.com/in/john-doe");
+    });
+
+    it("should strip both query and comma params", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com/sales/lead/ACwAAA123?trk=foo,NAME,bar",
+      );
+      // Query params stripped first, then comma params
+      expect(result).toBe("linkedin.com/sales/lead/acwaaa123");
+    });
+
+    it("should normalize double slashes", () => {
+      const result = normalizeUrl("https://www.linkedin.com/in//mike-hare//");
+      expect(result).toBe("linkedin.com/in/mike-hare");
+    });
+
+    it("should normalize trailing slashes", () => {
+      const result = normalizeUrl("https://www.linkedin.com/in/mike-hare/");
+      expect(result).toBe("linkedin.com/in/mike-hare");
+    });
+
+    it("should handle multiple double slashes", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com//in///mike-hare",
+      );
+      expect(result).toBe("linkedin.com/in/mike-hare");
+    });
+
+    it("should remove www subdomain", () => {
+      const result = normalizeUrl("https://www.linkedin.com/in/john-doe");
+      expect(result).toBe("linkedin.com/in/john-doe");
+    });
+
+    it("should handle http protocol", () => {
+      const result = normalizeUrl("http://linkedin.com/in/john-doe");
+      expect(result).toBe("linkedin.com/in/john-doe");
+    });
+
+    it("should return null for null/undefined input", () => {
+      expect(normalizeUrl(null)).toBeNull();
+      expect(normalizeUrl(undefined)).toBeNull();
+    });
+
+    it("should lowercase the result", () => {
+      const result = normalizeUrl("https://www.LinkedIn.com/in/John-Doe/");
+      expect(result).toBe("linkedin.com/in/john-doe");
+    });
+
+    it("should handle Sales Nav URL with NAME_SEARCH params", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com/sales/lead/ACwAAAEiQMIB,NAME_SEARCH,Z1JY",
+      );
+      expect(result).toBe("linkedin.com/sales/lead/acwaaaeiqmib");
+    });
+  });
+
+  describe("normalizeDuxsoupId — Item 16.3", () => {
+    it("should lowercase and trim", () => {
+      expect(normalizeDuxsoupId("  PID.Mike-Hare  ")).toBe("pid.mike-hare");
+    });
+
+    it("should return null for null/empty input", () => {
+      expect(normalizeDuxsoupId(null)).toBeNull();
+      expect(normalizeDuxsoupId("")).toBeNull();
+    });
+
+    it("should handle id. prefix format", () => {
+      expect(normalizeDuxsoupId("id.218248067")).toBe("id.218248067");
+    });
+  });
+
+  describe("extractLinkedInUsername — case-insensitive (Item 16.4)", () => {
+    it("should return lowercase for mixed-case Profile URL", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/Mike-HARE/",
+      };
+      expect(extractLinkedInUsername(data)).toBe("mike-hare");
+    });
+
+    it("should return lowercase for mixed-case pid DuxSoup ID", () => {
+      const data = {
+        id: "pid.Mike-Hare",
+      };
+      expect(extractLinkedInUsername(data)).toBe("mike-hare");
     });
   });
 });

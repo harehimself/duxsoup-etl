@@ -275,6 +275,13 @@ function resolvePersonIdentity(webhookData) {
   source = sourceMapping[primary.type] || primary.type;
 
   // Build aliases from all extracted identifiers
+  // Item 1.2: Derive linkedInUsername from vanityName when username extraction fails.
+  // Both are the same lowercase slug from /in/, so cross-linking ensures alias overlap
+  // between visits (which may have SalesProfile + Profile) and scans (Profile only).
+  if (!identifiers.linkedInUsername && identifiers.vanityName) {
+    identifiers.linkedInUsername = identifiers.vanityName;
+  }
+
   if (identifiers.linkedInUsername) {
     addAlias("linkedInUsername", identifiers.linkedInUsername);
   }
