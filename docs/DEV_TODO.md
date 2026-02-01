@@ -4,16 +4,16 @@ Actionable tasks derived from the security, reliability, and operational improve
 
 ---
 
-## 1. Fail-Closed Webhook Auth in Production
+## 1. ~~Fail-Closed Webhook Auth in Production~~ DONE
 
 **File:** `src/middleware/webhookAuth.js:18-23`
 **Risk:** High — unauthenticated webhook ingestion in production if `WEBHOOK_SECRET` is unset.
 
-- [ ] Add `NODE_ENV` check at the top of the early-return block (lines 18-23)
-- [ ] When `NODE_ENV === 'production'` and `WEBHOOK_SECRET` is unset, return `403` instead of calling `next()`
-- [ ] Log an error-level message (not just a warning) when rejecting in production
-- [ ] Keep the existing pass-through behavior for `development`/`test` environments
-- [ ] Add unit tests covering:
+- [x] Add `NODE_ENV` check at the top of the early-return block (lines 18-23)
+- [x] When `NODE_ENV === 'production'` and `WEBHOOK_SECRET` is unset, return `403` instead of calling `next()`
+- [x] Log an error-level message (not just a warning) when rejecting in production
+- [x] Keep the existing pass-through behavior for `development`/`test` environments
+- [x] Add unit tests covering:
   - Production + no secret → 403
   - Development + no secret → pass-through
   - Any env + valid secret → pass-through
@@ -21,14 +21,14 @@ Actionable tasks derived from the security, reliability, and operational improve
 
 ---
 
-## 2. Add Auth to Admin Routes
+## 2. ~~Add Auth to Admin Routes~~ DONE
 
 **File:** `src/routes/apiRoutes.js:168`
 **Risk:** High — admin routes (merge, rebuild, bulk operations) protected only by rate limiting.
 
-- [ ] Import `webhookAuth` middleware in `apiRoutes.js` (already imported at line 5 for the replay endpoint)
-- [ ] Add `webhookAuth` to the admin route mount: `router.use("/admin", webhookAuth, adminRateLimiter, adminRoutes)`
-- [ ] Verify the replay endpoint at line 171 doesn't double-apply auth (it already has `webhookAuth` inline)
+- [x] Import `webhookAuth` middleware in `apiRoutes.js` (already imported at line 5 for the replay endpoint)
+- [x] Add `webhookAuth` to the admin route mount: `router.use("/admin", webhookAuth, adminRateLimiter, adminRoutes)`
+- [x] Verify the replay endpoint at line 171 doesn't double-apply auth (it already has `webhookAuth` inline)
 - [ ] Add integration test confirming admin routes reject requests without valid auth header
 
 ---
