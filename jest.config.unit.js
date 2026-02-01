@@ -24,6 +24,16 @@ module.exports = {
   resetMocks: true,
   restoreMocks: true,
 
+  // Coverage thresholds - ratchet prevents regression; raise as coverage improves
+  coverageThreshold: {
+    global: {
+      branches: 35,
+      functions: 25,
+      lines: 30,
+      statements: 30,
+    },
+  },
+
   // Verbose output
   verbose: true,
 };

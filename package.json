@@ -24,6 +24,11 @@
     "dedupe:aliases": "node scripts/dedupeAliases.js --dry-run",
     "backfill:seniority": "node scripts/backfillSeniority.js",
     "import:csv": "node scripts/import-csv-visits.js",
+    "ops": "node scripts/cli.js",
+    "ops:merge": "node scripts/cli.js merge-duplicates",
+    "ops:link-orphans": "node scripts/cli.js link-orphans",
+    "ops:migrate-ids": "node scripts/cli.js migrate-url-ids",
+    "ops:rollback-merge": "node scripts/rollback-merge.js",
     "lint": "eslint src/ __tests__/",
     "prepare": "husky || true"
   },
@@ -36,11 +41,13 @@
   "author": "Mike Hare",
   "license": "MIT",
   "dependencies": {
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.0",
     "csv-writer": "^1.6.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "mongoose": "^9.1.5",
@@ -64,8 +71,14 @@
     "node": ">=20.0.0"
   },
   "lint-staged": {
-    "src/**/*.js": ["eslint --fix", "prettier --write"],
-    "__tests__/**/*.js": ["eslint --fix", "prettier --write"]
+    "src/**/*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "__tests__/**/*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   },
   "packageManager": "npm@10.8.2"
 }

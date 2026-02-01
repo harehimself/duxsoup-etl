@@ -5,6 +5,15 @@ const { getSeniorityTiers } = require('../utils/titleParser');
 const logger = require('../utils/logger');
 
 /**
+ * Escape special RegExp characters to prevent ReDoS attacks.
+ * @param {string} str - User-supplied string
+ * @returns {string} Escaped string safe for RegExp construction
+ */
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Seniority Routes
  *
  * Endpoints for filtering and analyzing people by seniority tier
@@ -171,11 +180,11 @@ router.get('/filter', async (req, res) => {
 
     if (department) {
       // Search in role titles for department keywords
-      rolesFilter['snapshot.roles.title'] = new RegExp(department, 'i');
+      rolesFilter['snapshot.roles.title'] = new RegExp(escapeRegExp(department), 'i');
     }
 
     if (company) {
-      query['snapshot.currentCompany'] = new RegExp(company, 'i');
+      query['snapshot.currentCompany'] = new RegExp(escapeRegExp(company), 'i');
     }
 
     // Apply roles filter
@@ -253,7 +262,7 @@ router.get('/search', async (req, res) => {
 
     // Build query
     const query = {
-      'snapshot.fullName': new RegExp(q, 'i'),
+      'snapshot.fullName': new RegExp(escapeRegExp(q), 'i'),
     };
 
     if (tier) {
