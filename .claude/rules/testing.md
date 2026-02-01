@@ -6,7 +6,7 @@ paths: "**/*.test.js"
 
 ## Mandatory Behavior
 **When adding or changing business logic in files matching these paths, ALWAYS:**
-1. Add or update the corresponding `.test.js` file in `tests/`
+1. Add or update the corresponding `.test.js` file in `__tests__/` (unit) or `src/__tests__/` (integration)
 2. Run `npm test -- <path-to-test-file>` before marking the task complete
 3. Verify all tests pass before proceeding to the next task
 
@@ -112,7 +112,7 @@ it('should return AppError with correct code and message', async () => {
 
 ## Running Tests
 - Full suite: `npm test`
-- Single file: `npm test -- tests/models/person.test.js`
+- Single file: `npm test -- __tests__/models/person.test.js`
 - Watch mode: `npm run test:watch`
 - Coverage: `npm run test:coverage`
 

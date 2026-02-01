@@ -298,6 +298,8 @@ const result = await Visit.findOneAndUpdate(
 | Sales Nav ID extraction | `src/utils/salesNavIdExtractor.js` |
 | Database connection | `src/utils/database.js` |
 | Testing rules | `.claude/rules/testing.md` |
+| API route conventions | `.claude/rules/api.md` |
+| JavaScript standards | `.claude/rules/javascript.md` |
 
 ## Environment Variables
 
@@ -315,6 +317,23 @@ READ_SOURCE=hybrid                 # hybrid | people | legacy
 ENABLE_SCHEDULER=true              # Enable background jobs
 CANONICAL_ID_NAMESPACE=...         # UUID namespace for canonical IDs
 ```
+
+## Webhook Security
+
+The `POST /api/webhook` endpoint is publicly accessible. Protect it:
+
+- **Rate limiting:** `express-rate-limit` is configured — verify limits are appropriate for expected DuxSoup volume
+- **Input validation:** `src/utils/validation.js` validates incoming payloads before processing
+- **IP allowlisting:** Consider restricting to DuxSoup's outbound IP ranges if available
+- **No signature verification:** DuxSoup webhooks are not signed — rely on rate limiting + validation + idempotency as defense-in-depth
+- **Idempotency:** Duplicate payloads are safely handled via `event_key` (SHA1 hash)
+
+## Deployment Considerations
+
+- **Scheduler:** If `ENABLE_SCHEDULER=true` and running multiple instances, dead-letter replay and health checks will run on every instance — use a leader-election pattern or disable scheduler on all but one instance
+- **MongoDB:** Connection string via `MONGODB_URI` env var — ensure connection pooling is appropriate for instance count
+- **CORS:** `ALLOWED_ORIGINS` controls which origins can hit read APIs — set appropriately for production
+- **Graceful shutdown:** Ensure the process handles SIGTERM to complete in-flight webhook processing
 
 ## Common Workflows
 

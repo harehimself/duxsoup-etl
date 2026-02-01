@@ -108,8 +108,7 @@ async function resolveIdentity(webhookData) {
     logger.warn('Webhook received with no stable ID', {
       profileUrl: webhookData.profileUrl
     });
-    // Move to pending_identity collection
-    await PendingIdentity.create(webhookData);
+    // Skip person upsert — observation still gets written
     return null;
   }
 
