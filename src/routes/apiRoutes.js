@@ -1,9 +1,9 @@
-const express = require('express');
-const rateLimit = require('express-rate-limit');
-const logger = require('../utils/logger');
-const { handleVisit } = require('../controllers/visitController');
-const { handleScan } = require('../controllers/scanController');
-const webhookAuth = require('../middleware/webhookAuth');
+const express = require("express");
+const rateLimit = require("express-rate-limit");
+const logger = require("../utils/logger");
+const { handleVisit } = require("../controllers/visitController");
+const { handleScan } = require("../controllers/scanController");
+const webhookAuth = require("../middleware/webhookAuth");
 const {
   getIngestionHealth,
   getParityHealth,
@@ -15,40 +15,40 @@ const {
   getDataQuality,
   getDashboard,
   testNotifications,
-} = require('../controllers/healthController');
+} = require("../controllers/healthController");
 const {
   getPersonById,
   getPersonByAlias,
   getReadMetrics,
-} = require('../controllers/personReadController');
+} = require("../controllers/personReadController");
 const {
   getCompanyById,
   getCompanyByAlias,
-} = require('../controllers/companyReadController');
+} = require("../controllers/companyReadController");
 const {
   getLocationById,
   getLocationByAlias,
-} = require('../controllers/locationReadController');
-const { replayObservation } = require('../controllers/replayController');
-const adminRoutes = require('./adminRoutes');
-const queryRoutes = require('./queryRoutes');
-const searchRoutes = require('./searchRoutes');
-const exportRoutes = require('./exportRoutes');
-const changeRoutes = require('./changeRoutes');
-const seniorityRoutes = require('./seniorityRoutes');
+} = require("../controllers/locationReadController");
+const { replayObservation } = require("../controllers/replayController");
+const adminRoutes = require("./adminRoutes");
+const queryRoutes = require("./queryRoutes");
+const searchRoutes = require("./searchRoutes");
+const exportRoutes = require("./exportRoutes");
+const changeRoutes = require("./changeRoutes");
+const seniorityRoutes = require("./seniorityRoutes");
 
 const router = express.Router();
 
 // Rate limiter for webhook endpoint
 const webhookRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: parseInt(process.env.WEBHOOK_RATE_LIMIT || '100', 10),
+  max: parseInt(process.env.WEBHOOK_RATE_LIMIT || "100", 10),
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
-    error: 'RATE_LIMITED',
-    message: 'Too many requests, please slow down',
+    error: "RATE_LIMITED",
+    message: "Too many requests, please slow down",
   },
 });
 
@@ -60,8 +60,8 @@ const readRateLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
-    error: 'RATE_LIMITED',
-    message: 'Too many requests, please slow down',
+    error: "RATE_LIMITED",
+    message: "Too many requests, please slow down",
   },
 });
 
@@ -73,111 +73,116 @@ const adminRateLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
-    error: 'RATE_LIMITED',
-    message: 'Too many admin requests, please slow down',
+    error: "RATE_LIMITED",
+    message: "Too many admin requests, please slow down",
   },
 });
 
 // Simple test route
-router.get('/test', (req, res) => {
-  res.json({ message: 'API routes working' });
+router.get("/test", (req, res) => {
+  res.json({ message: "API routes working" });
 });
 
 // Version endpoint to verify deployed code
-router.get('/version', (req, res) => {
-  const { exec } = require('child_process');
-  exec('git rev-parse --short HEAD', (error, stdout, stderr) => {
+router.get("/version", (req, res) => {
+  const { exec } = require("child_process");
+  exec("git rev-parse --short HEAD", (error, stdout, _stderr) => {
     if (error) {
       return res.json({
-        version: 'unknown',
+        version: "unknown",
         error: error.message,
         regex_test: {
-          ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACwAAA-test'),
-          ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACoAAA-test')
-        }
+          ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACwAAA-test"),
+          ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACoAAA-test"),
+        },
       });
     }
     res.json({
       commit: stdout.trim(),
       regex_test: {
-        ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACwAAA-test'),
-        ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test('ACoAAA-test')
-      }
+        ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACwAAA-test"),
+        ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACoAAA-test"),
+      },
     });
   });
 });
 
 // Health endpoints for ops monitoring
-router.get('/health/ingestion', readRateLimiter, getIngestionHealth);
-router.get('/health/parity', readRateLimiter, getParityHealth);
-router.get('/health/metrics', readRateLimiter, getMetrics);
-router.get('/health/coverage-breakdown', readRateLimiter, getCoverageBreakdown);
-router.get('/health/canonical-coverage', readRateLimiter, getCanonicalCoverage);
-router.get('/health/company-coverage', readRateLimiter, getCompanyCoverage);
-router.get('/health/location-coverage', readRateLimiter, getLocationCoverage);
-router.get('/health/data-quality', readRateLimiter, getDataQuality);
-router.get('/health/dashboard', readRateLimiter, getDashboard);
-router.get('/health/test-notifications', readRateLimiter, webhookAuth, testNotifications);
+router.get("/health/ingestion", readRateLimiter, getIngestionHealth);
+router.get("/health/parity", readRateLimiter, getParityHealth);
+router.get("/health/metrics", readRateLimiter, getMetrics);
+router.get("/health/coverage-breakdown", readRateLimiter, getCoverageBreakdown);
+router.get("/health/canonical-coverage", readRateLimiter, getCanonicalCoverage);
+router.get("/health/company-coverage", readRateLimiter, getCompanyCoverage);
+router.get("/health/location-coverage", readRateLimiter, getLocationCoverage);
+router.get("/health/data-quality", readRateLimiter, getDataQuality);
+router.get("/health/dashboard", readRateLimiter, getDashboard);
+router.get(
+  "/health/test-notifications",
+  readRateLimiter,
+  webhookAuth,
+  testNotifications,
+);
 
 // Person read endpoints (hybrid cutover)
-router.get('/people/metrics', getReadMetrics);
-router.get('/people/:id', getPersonById);
-router.get('/people/by-alias/:value', getPersonByAlias);
+router.get("/people/metrics", getReadMetrics);
+router.get("/people/:id", getPersonById);
+router.get("/people/by-alias/:value", getPersonByAlias);
 
 // Company read endpoints
-router.get('/companies/:id', getCompanyById);
-router.get('/companies/by-alias/:value', getCompanyByAlias);
+router.get("/companies/:id", getCompanyById);
+router.get("/companies/by-alias/:value", getCompanyByAlias);
 
 // Location read endpoints
-router.get('/locations/:id', getLocationById);
-router.get('/locations/by-alias/:value', getLocationByAlias);
+router.get("/locations/:id", getLocationById);
+router.get("/locations/by-alias/:value", getLocationByAlias);
 
 // Main webhook endpoint (with auth + rate limiting)
-router.post('/webhook', webhookRateLimiter, webhookAuth, (req, res) => {
+router.post("/webhook", webhookRateLimiter, webhookAuth, (req, res) => {
   const payload = req.body;
 
-  logger.info('Webhook received', {
+  logger.info("Webhook received", {
     type: payload.type,
-    id: payload.id
+    id: payload.id,
   });
 
   if (!payload.type) {
     return res.status(400).json({
-      error: 'Missing type field'
+      error: "Missing type field",
     });
   }
 
-  if (payload.type === 'visit') {
+  if (payload.type === "visit") {
     return handleVisit(req, res);
-  } else if (payload.type === 'scan') {
+  } else if (payload.type === "scan") {
     return handleScan(req, res);
   } else {
     return res.status(400).json({
-      error: 'Invalid payload type',
-      message: 'Type must be either "visit" or "scan"'
+      error: "Invalid payload type",
+      message: 'Type must be either "visit" or "scan"',
     });
   }
 });
 
 // Admin endpoints (one-time migrations, etc.)
-router.use('/admin', adminRateLimiter, adminRoutes);
+router.use("/admin", adminRateLimiter, adminRoutes);
 
 // Observation replay endpoint (admin, protected)
-router.post('/admin/replay/:observationId', webhookAuth, replayObservation);
+router.post("/admin/replay/:observationId", webhookAuth, replayObservation);
 
 // Query endpoints (search and filter people/companies)
-router.use('/query', readRateLimiter, queryRoutes);
+router.use("/query", readRateLimiter, queryRoutes);
 
 // Search endpoints (full-text search)
-router.use('/search', readRateLimiter, searchRoutes);
+router.use("/search", readRateLimiter, searchRoutes);
 
 // Export endpoints (CSV/JSON export)
-router.use('/export', readRateLimiter, exportRoutes);
+router.use("/export", readRateLimiter, exportRoutes);
 
 // Change endpoints (job changes, promotions, title changes)
-router.use('/changes', readRateLimiter, changeRoutes);
+router.use("/changes", readRateLimiter, changeRoutes);
 
 // Seniority endpoints (filter and analyze by seniority tier)
-router.use('/seniority', readRateLimiter, seniorityRoutes);
+router.use("/seniority", readRateLimiter, seniorityRoutes);
 
 module.exports = router;
