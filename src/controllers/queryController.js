@@ -1,6 +1,6 @@
-const { queryPeople, queryCompanies } = require('../services/queryBuilder');
-const { AppError } = require('../utils/errors');
-const logger = require('../utils/logger');
+const { queryPeople, queryCompanies } = require("../services/queryBuilder");
+const { AppError: _AppError } = require("../utils/errors");
+const logger = require("../utils/logger");
 
 /**
  * Query Controller
@@ -34,7 +34,7 @@ async function queryPeopleHandler(req, res, next) {
   try {
     const { filters, sort, limit, skip, fields } = req.body;
 
-    logger.info('Received people query request', {
+    logger.info("Received people query request", {
       filters,
       sort,
       limit,
@@ -63,7 +63,7 @@ async function queryPeopleHandler(req, res, next) {
       },
     });
   } catch (err) {
-    logger.error('Error executing people query', {
+    logger.error("Error executing people query", {
       error: err.message,
       stack: err.stack,
     });
@@ -93,7 +93,7 @@ async function queryCompaniesHandler(req, res, next) {
   try {
     const { filters, limit } = req.body;
 
-    logger.info('Received companies query request', { filters, limit });
+    logger.info("Received companies query request", { filters, limit });
 
     const result = await queryCompanies({
       filters,
@@ -108,7 +108,7 @@ async function queryCompaniesHandler(req, res, next) {
       },
     });
   } catch (err) {
-    logger.error('Error executing companies query', {
+    logger.error("Error executing companies query", {
       error: err.message,
       stack: err.stack,
     });
@@ -131,7 +131,7 @@ function getQueryHelp(req, res) {
     ALLOWED_FILTER_FIELDS,
     ALLOWED_SORT_FIELDS,
     MAX_LIMIT,
-  } = require('../utils/queryValidation');
+  } = require("../utils/queryValidation");
 
   res.json({
     success: true,
@@ -139,55 +139,57 @@ function getQueryHelp(req, res) {
       allowedFilterFields: ALLOWED_FILTER_FIELDS,
       allowedSortFields: ALLOWED_SORT_FIELDS,
       allowedOperators: [
-        '$eq',
-        '$ne',
-        '$gt',
-        '$gte',
-        '$lt',
-        '$lte',
-        '$in',
-        '$nin',
-        '$regex',
-        '$options',
-        '$exists',
-        '$and',
-        '$or',
+        "$eq",
+        "$ne",
+        "$gt",
+        "$gte",
+        "$lt",
+        "$lte",
+        "$in",
+        "$nin",
+        "$regex",
+        "$options",
+        "$exists",
+        "$and",
+        "$or",
       ],
       maxLimit: MAX_LIMIT,
       examples: [
         {
-          description: 'Find VPs at Google in San Francisco',
+          description: "Find VPs at Google in San Francisco",
           query: {
             filters: {
-              'snapshot.currentTitle': {
-                $regex: 'VP|Vice President',
-                $options: 'i',
+              "snapshot.currentTitle": {
+                $regex: "VP|Vice President",
+                $options: "i",
               },
-              'snapshot.currentCompany': 'Google',
-              'snapshot.city': 'San Francisco',
+              "snapshot.currentCompany": "Google",
+              "snapshot.city": "San Francisco",
             },
-            sort: { 'snapshot.connections': -1 },
+            sort: { "snapshot.connections": -1 },
             limit: 50,
           },
         },
         {
-          description: 'Find engineers with 500+ connections',
+          description: "Find engineers with 500+ connections",
           query: {
             filters: {
-              'snapshot.currentTitle': { $regex: 'Engineer', $options: 'i' },
-              'snapshot.connections': { $gte: 500 },
+              "snapshot.currentTitle": { $regex: "Engineer", $options: "i" },
+              "snapshot.connections": { $gte: 500 },
             },
-            sort: { 'snapshot.connections': -1 },
+            sort: { "snapshot.connections": -1 },
             limit: 100,
           },
         },
         {
-          description: 'Find people at tech companies OR finance companies',
+          description: "Find people at tech companies OR finance companies",
           query: {
             filters: {
               $or: [
-                { 'snapshot.industry': { $regex: 'Technology', $options: 'i' } },
-                { 'snapshot.industry': { $regex: 'Finance', $options: 'i' } },
+                {
+                  "snapshot.industry": { $regex: "Technology", $options: "i" },
+                },
+                { "snapshot.industry": { $regex: "Finance", $options: "i" } },
               ],
             },
             limit: 100,

@@ -9,11 +9,12 @@ const visitSchema = new mongoose.Schema(
       index: true,
       // --- ADDED CUSTOM VALIDATOR HERE ---
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           // Ensures 'v' exists, is a string, and is not just whitespace
-          return v && typeof v === 'string' && v.trim().length > 0;
+          return v && typeof v === "string" && v.trim().length > 0;
         },
-        message: props => `${props.value} is not a valid DuxSoup ID. It must be a non-empty string.`,
+        message: (props) =>
+          `${props.value} is not a valid DuxSoup ID. It must be a non-empty string.`,
       },
       // --- END CUSTOM VALIDATOR ---
     },
@@ -90,17 +91,17 @@ const visitSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       required: false,
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           if (!v) return true; // Allow null/undefined
           try {
             const size = JSON.stringify(v).length;
             return size <= 1000000; // Max 1MB serialized size
-          } catch (e) {
+          } catch (_e) {
             return false; // Invalid JSON
           }
         },
-        message: 'rawData exceeds maximum size of 1MB'
-      }
+        message: "rawData exceeds maximum size of 1MB",
+      },
     },
 
     // Idempotency key to prevent duplicate observations
@@ -117,7 +118,7 @@ const visitSchema = new mongoose.Schema(
   },
   {
     timestamps: true, // Keep this for createdAt and updatedAt
-  }
+  },
 );
 
 // Compound indexes for common query patterns
