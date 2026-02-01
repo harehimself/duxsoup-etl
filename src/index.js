@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const helmet = require("helmet");
 const cors = require("cors");
 
 const logger = require("./utils/logger");
@@ -18,31 +19,40 @@ try {
 const config = getConfig();
 const app = express();
 
+// Security headers
+app.use(helmet());
+
 // CORS configuration - restrictive by default
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : false; // Reject all cross-origin requests when not configured
 
 if (!process.env.ALLOWED_ORIGINS) {
-  logger.warn('ALLOWED_ORIGINS not set - CORS will reject all cross-origin browser requests. Server-to-server webhooks are unaffected.');
+  logger.warn(
+    "ALLOWED_ORIGINS not set - CORS will reject all cross-origin browser requests. Server-to-server webhooks are unaffected.",
+  );
 }
 
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
-app.use(express.json({
-  limit: '10mb',
-  strict: true
-}));
+app.use(
+  express.json({
+    limit: "10mb",
+    strict: true,
+  }),
+);
 
 // Request logging middleware
 app.use((req, res, next) => {
   logger.debug(`${req.method} ${req.path}`, {
     ip: req.ip,
-    userAgent: req.get('user-agent')
+    userAgent: req.get("user-agent"),
   });
   next();
 });
@@ -50,26 +60,26 @@ app.use((req, res, next) => {
 // Database readiness check - reject requests if DB is not ready
 app.use((req, res, next) => {
   // Skip DB check for health endpoint
-  if (req.path === '/health' || req.path === '/') {
+  if (req.path === "/health" || req.path === "/") {
     return next();
   }
 
   if (!database.isReady()) {
     const status = database.getConnectionStatus();
-    logger.warn('Request rejected - database not ready', {
+    logger.warn("Request rejected - database not ready", {
       path: req.path,
       method: req.method,
-      dbState: status.readyStateText
+      dbState: status.readyStateText,
     });
 
     return res.status(503).json({
       success: false,
-      error: 'SERVICE_UNAVAILABLE',
-      message: 'Database connection not ready. Please retry in a few seconds.',
+      error: "SERVICE_UNAVAILABLE",
+      message: "Database connection not ready. Please retry in a few seconds.",
       details: {
         dbState: status.readyStateText,
-        readyState: status.readyState
-      }
+        readyState: status.readyState,
+      },
     });
   }
 
@@ -106,6 +116,28 @@ app.get("/", (req, res) => {
   });
 });
 
+// Global error handler - must be after all route definitions
+app.use((err, req, res, _next) => {
+  logger.error("Unhandled error", {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
+
+  const status = err.status || err.statusCode || 500;
+  const response = {
+    success: false,
+    error: "INTERNAL_ERROR",
+    message:
+      process.env.NODE_ENV === "production"
+        ? "An unexpected error occurred"
+        : err.message,
+  };
+
+  res.status(status).json(response);
+});
+
 // Initialize server - start listening IMMEDIATELY, then connect to DB
 async function startServer() {
   // CRITICAL: Start HTTP server BEFORE connecting to database
@@ -118,7 +150,7 @@ async function startServer() {
       port,
       host,
       nodeEnv: config.nodeEnv,
-      message: `Listening on ${host}:${port}`
+      message: `Listening on ${host}:${port}`,
     });
     logger.info(`Health check endpoint: http://${host}:${port}/health`);
   });
@@ -131,16 +163,18 @@ async function startServer() {
     logger.info("Database connected successfully");
 
     // Start background job scheduler (if enabled) after DB is ready
-    if (process.env.ENABLE_SCHEDULER !== 'false') {
-      const { startScheduler } = require('./workers/scheduler');
+    if (process.env.ENABLE_SCHEDULER !== "false") {
+      const { startScheduler } = require("./workers/scheduler");
       startScheduler();
       logger.info("Background scheduler started");
     } else {
-      logger.info('Background scheduler disabled (ENABLE_SCHEDULER=false)');
+      logger.info("Background scheduler disabled (ENABLE_SCHEDULER=false)");
     }
   } catch (error) {
     logger.error("Failed to connect to database:", error);
-    logger.warn("Server continues running but database operations will fail until connection succeeds");
+    logger.warn(
+      "Server continues running but database operations will fail until connection succeeds",
+    );
     // DO NOT exit - let the server keep running and retry DB connection
   }
 
@@ -153,7 +187,7 @@ process.on("SIGTERM", async () => {
 
   // Stop scheduler
   try {
-    const { stopScheduler } = require('./workers/scheduler');
+    const { stopScheduler } = require("./workers/scheduler");
     stopScheduler();
   } catch (err) {
     logger.error("Error stopping scheduler:", err);
@@ -168,7 +202,7 @@ process.on("SIGINT", async () => {
 
   // Stop scheduler
   try {
-    const { stopScheduler } = require('./workers/scheduler');
+    const { stopScheduler } = require("./workers/scheduler");
     stopScheduler();
   } catch (err) {
     logger.error("Error stopping scheduler:", err);

@@ -85,7 +85,7 @@ function extractPublicProfileUrl(url) {
       .trim();
 
     // Pattern: /in/username or /pub/username
-    const publicPattern = /^\/(in|pub)\/([^\/\?]+)/;
+    const publicPattern = /^\/(in|pub)\/([^/?]+)/;
     const match = normalized.match(publicPattern);
 
     return match ? `linkedin.com${match[0]}` : null;
@@ -149,7 +149,7 @@ function extractCompanyProfileUrl(url) {
       .replace(/\/$/, "")
       .trim();
 
-    const companyPattern = /^\/company\/([^\/\?]+)/;
+    const companyPattern = /^\/company\/([^/?]+)/;
     const match = normalized.match(companyPattern);
 
     return match ? `linkedin.com${match[0]}` : null;
@@ -275,6 +275,13 @@ function resolvePersonIdentity(webhookData) {
   source = sourceMapping[primary.type] || primary.type;
 
   // Build aliases from all extracted identifiers
+  // Item 1.2: Derive linkedInUsername from vanityName when username extraction fails.
+  // Both are the same lowercase slug from /in/, so cross-linking ensures alias overlap
+  // between visits (which may have SalesProfile + Profile) and scans (Profile only).
+  if (!identifiers.linkedInUsername && identifiers.vanityName) {
+    identifiers.linkedInUsername = identifiers.vanityName;
+  }
+
   if (identifiers.linkedInUsername) {
     addAlias("linkedInUsername", identifiers.linkedInUsername);
   }

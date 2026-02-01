@@ -116,3 +116,10 @@ backups/
 CLAUDE.local.md
 .claude/CLAUDE.local.md
 .mcp.json
+# Phase execution data files
+historical-extraction.csv
+import-log.txt
+test-sample.csv
+test-tiny.csv
+orphaned-observations-report.json
+orphaned-observations-sample-report.json

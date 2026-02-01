@@ -52,6 +52,18 @@ const changeSchema = new mongoose.Schema(
 
     company: String, // For promotions (company where promotion occurred)
 
+    // Enriched change context
+    fromCompanyId: String,
+    toCompanyId: String,
+    tenureDaysAtPreviousRole: Number,
+
+    // Rolling 90-day flag for "recent job change" queries
+    recentJobChange: {
+      type: Boolean,
+      default: false,
+    },
+    recentJobChangeExpiresAt: Date,
+
     // When the change was detected
     timestamp: {
       type: Date,
@@ -84,6 +96,7 @@ changeSchema.index({ type: 1, timestamp: -1 });
 changeSchema.index({ person_id: 1, type: 1 });
 changeSchema.index({ notified: 1, timestamp: -1 }); // For pending notifications
 changeSchema.index({ createdAt: -1 });
+changeSchema.index({ recentJobChange: 1, timestamp: -1 });
 
 // Compound index for deduplication (prevent duplicate change records)
 changeSchema.index(

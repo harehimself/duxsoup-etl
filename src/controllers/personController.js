@@ -2,16 +2,13 @@ const Person = require("../models/person");
 const identityResolverService = require("../services/identityResolverService");
 const {
   resolvePersonIdentity,
-  resolveCompanyIdentity,
+  _resolveCompanyIdentity,
 } = require("../utils/identityResolver");
 const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
-const {
-  parseTitle,
-  getHighestSeniorityRole,
-} = require("../utils/titleParser");
+const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
 
 /**
  * Person Controller
@@ -33,17 +30,17 @@ const {
  */
 function parseConnections(value) {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'number') return value;
+  if (typeof value === "number") return value;
 
   const str = String(value).trim();
-  if (str === '') return null;
+  if (str === "") return null;
 
   // Remove "+" suffix if present
-  const cleaned = str.replace(/\+$/, '');
+  const cleaned = str.replace(/\+$/, "");
 
   const num = parseInt(cleaned, 10);
   if (isNaN(num) || num < 0) {
-    logger.warn('Invalid connections value', { value });
+    logger.warn("Invalid connections value", { value });
     return null;
   }
 
@@ -58,10 +55,10 @@ function parseConnections(value) {
  */
 function parseDegree(value) {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'number') return value;
+  if (typeof value === "number") return value;
 
   const str = String(value).trim().toLowerCase();
-  if (str === '') return null;
+  if (str === "") return null;
 
   // Handle "1st", "2nd", "3rd" format
   const ordinalMatch = str.match(/^(\d+)(st|nd|rd|th)?$/);
@@ -70,7 +67,7 @@ function parseDegree(value) {
     if (num >= 1 && num <= 3) {
       return num;
     }
-    logger.warn('Degree out of range (1-3)', { value });
+    logger.warn("Degree out of range (1-3)", { value });
     return null;
   }
 
@@ -80,7 +77,7 @@ function parseDegree(value) {
     return num;
   }
 
-  logger.warn('Invalid degree value', { value });
+  logger.warn("Invalid degree value", { value });
   return null;
 }
 
@@ -100,8 +97,8 @@ function shouldOverwrite(existingMeta, incomingMeta) {
   // Check if incoming value is empty/blank
   const isIncomingEmpty = (value) => {
     if (value === null || value === undefined) return true;
-    if (typeof value === 'string' && value.trim() === '') return true;
-    if (typeof value === 'number' && isNaN(value)) return true;
+    if (typeof value === "string" && value.trim() === "") return true;
+    if (typeof value === "number" && isNaN(value)) return true;
     return false;
   };
 
@@ -141,7 +138,7 @@ function shouldOverwrite(existingMeta, incomingMeta) {
  */
 function normalizeField(snapshot, fieldPath, incomingValue, observationMeta) {
   // Get existing metadata
-  const metaPath = `_meta.${fieldPath}`;
+  const _metaPath = `_meta.${fieldPath}`;
   const existingMeta = snapshot._meta?.[fieldPath];
 
   const incomingMeta = {
@@ -253,7 +250,7 @@ function enrichRoleWithSeniority(role) {
  * @param {Object} observationMeta - { observed_at, source, observation_id }
  * @returns {boolean} True if roles were updated
  */
-function updateRolesTimeline(person, observationData, observationMeta) {
+function updateRolesTimeline(person, observationData, _observationMeta) {
   let updated = false;
 
   // Extract positions from extended data (visits) or current position (scans)
@@ -266,7 +263,7 @@ function updateRolesTimeline(person, observationData, observationMeta) {
   // If we have extended positions, process them
   if (positions.length > 0) {
     positions.forEach((pos) => {
-      const roleKey = `${pos.Title}|${pos.Company}|${pos.From}`;
+      const _roleKey = `${pos.Title}|${pos.Company}|${pos.From}`;
 
       // Check if role already exists
       const parsedFromDate = parseSafeDate(pos.From);
@@ -363,7 +360,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     // Step 2: Resolve or create canonical person
     let person = await identityResolverService.resolveOrCreate(identity, {
-      reason: 'duplicate_detection', // Valid enum value for when merge is needed
+      reason: "duplicate_detection", // Valid enum value for when merge is needed
       sourceObservationId: observationDoc._id,
     });
 
@@ -416,7 +413,9 @@ async function upsertFromObservation(observationDoc, sourceType) {
     }
 
     // Capture old snapshot for change detection (deep clone)
-    const oldSnapshot = person.snapshot ? JSON.parse(JSON.stringify(person.snapshot)) : null;
+    const oldSnapshot = person.snapshot
+      ? JSON.parse(JSON.stringify(person.snapshot))
+      : null;
 
     // Normalize basic fields
     normalizeField(
@@ -468,10 +467,20 @@ async function upsertFromObservation(observationDoc, sourceType) {
     if (person.snapshot.currentTitle) {
       const parsed = parseTitle(person.snapshot.currentTitle);
       if (parsed.seniority) {
-        normalizeField(person.snapshot, "parsedSeniority", parsed.seniority, observationMeta);
+        normalizeField(
+          person.snapshot,
+          "parsedSeniority",
+          parsed.seniority,
+          observationMeta,
+        );
       }
       if (parsed.department) {
-        normalizeField(person.snapshot, "parsedDepartment", parsed.department, observationMeta);
+        normalizeField(
+          person.snapshot,
+          "parsedDepartment",
+          parsed.department,
+          observationMeta,
+        );
       }
     }
 
@@ -708,17 +717,17 @@ async function upsertFromObservation(observationDoc, sourceType) {
     person.derived = computeDerivedMetrics(person.snapshot.roles);
 
     // Step 10.5: Detect changes (job changes, promotions, title changes)
-    let detectedChanges = [];
+    let _detectedChanges = [];
     try {
       const changes = await detectChanges(
         person,
         oldSnapshot,
         person.snapshot,
-        observationRef
+        observationRef,
       );
 
       if (changes && changes.length > 0) {
-        detectedChanges = changes;
+        _detectedChanges = changes;
         logger.info("Changes detected during person update", {
           person_id: person._id,
           changeCount: changes.length,

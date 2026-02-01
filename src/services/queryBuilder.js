@@ -1,6 +1,6 @@
-const Person = require('../models/person');
-const { validateQuery } = require('../utils/queryValidation');
-const logger = require('../utils/logger');
+const Person = require("../models/person");
+const { validateQuery } = require("../utils/queryValidation");
+const logger = require("../utils/logger");
 
 /**
  * Query Builder Service
@@ -26,7 +26,7 @@ async function queryPeople(queryParams) {
   const { filters, sort, limit, skip } = validated;
   const { fields } = queryParams;
 
-  logger.info('Executing people query', {
+  logger.info("Executing people query", {
     filters,
     sort,
     limit,
@@ -39,7 +39,7 @@ async function queryPeople(queryParams) {
 
   // Apply field selection if specified
   if (fields && Array.isArray(fields) && fields.length > 0) {
-    const projection = fields.join(' ');
+    const projection = fields.join(" ");
     query = query.select(projection);
   }
 
@@ -48,7 +48,7 @@ async function queryPeople(queryParams) {
     query = query.sort(sort);
   } else {
     // Default sort by last observed (most recent first)
-    query = query.sort({ 'meta.lastObservedAt': -1 });
+    query = query.sort({ "meta.lastObservedAt": -1 });
   }
 
   // Apply pagination
@@ -60,7 +60,7 @@ async function queryPeople(queryParams) {
     Person.countDocuments(filters),
   ]);
 
-  logger.info('Query executed successfully', {
+  logger.info("Query executed successfully", {
     resultCount: results.length,
     totalCount,
     hasMore: skip + results.length < totalCount,
@@ -90,7 +90,7 @@ async function queryPeople(queryParams) {
 async function queryCompanies(queryParams) {
   const { filters = {}, limit = 100 } = queryParams;
 
-  logger.info('Executing companies query', { filters, limit });
+  logger.info("Executing companies query", { filters, limit });
 
   // Build aggregation pipeline
   const pipeline = [];
@@ -103,27 +103,27 @@ async function queryCompanies(queryParams) {
   // Group by company
   pipeline.push({
     $group: {
-      _id: '$snapshot.currentCompany',
-      companyId: { $first: '$snapshot.currentCompanyId' },
+      _id: "$snapshot.currentCompany",
+      companyId: { $first: "$snapshot.currentCompanyId" },
       employeeCount: { $sum: 1 },
       employees: {
         $push: {
-          id: '$_id',
-          fullName: '$snapshot.fullName',
-          title: '$snapshot.currentTitle',
-          connections: '$snapshot.connections',
+          id: "$_id",
+          fullName: "$snapshot.fullName",
+          title: "$snapshot.currentTitle",
+          connections: "$snapshot.connections",
         },
       },
-      avgConnections: { $avg: '$snapshot.connections' },
-      cities: { $addToSet: '$snapshot.city' },
-      industries: { $addToSet: '$snapshot.industry' },
+      avgConnections: { $avg: "$snapshot.connections" },
+      cities: { $addToSet: "$snapshot.city" },
+      industries: { $addToSet: "$snapshot.industry" },
     },
   });
 
   // Filter out null/empty companies
   pipeline.push({
     $match: {
-      _id: { $ne: null, $ne: '' },
+      _id: { $ne: null, $nin: [""] },
     },
   });
 
@@ -139,11 +139,11 @@ async function queryCompanies(queryParams) {
   pipeline.push({
     $project: {
       _id: 0,
-      companyName: '$_id',
+      companyName: "$_id",
       companyId: 1,
       employeeCount: 1,
-      employees: { $slice: ['$employees', 10] }, // Limit employee list to 10
-      avgConnections: { $round: ['$avgConnections', 0] },
+      employees: { $slice: ["$employees", 10] }, // Limit employee list to 10
+      avgConnections: { $round: ["$avgConnections", 0] },
       cities: 1,
       industries: 1,
     },
@@ -151,7 +151,7 @@ async function queryCompanies(queryParams) {
 
   const results = await Person.aggregate(pipeline);
 
-  logger.info('Company query executed', { resultCount: results.length });
+  logger.info("Company query executed", { resultCount: results.length });
 
   return {
     results,
@@ -170,7 +170,7 @@ async function queryCompanies(queryParams) {
  */
 function buildSeniorityFilter(level) {
   const patterns = {
-    'c-level': /Chief|CEO|CFO|CTO|COO|CMO|CSO|CIO|CPO|CRO/i,
+    "c-level": /Chief|CEO|CFO|CTO|COO|CMO|CSO|CIO|CPO|CRO/i,
     vp: /VP|Vice President|V\.P\./i,
     director: /Director|Dir\./i,
     senior: /Senior|Sr\.|Lead/i,
@@ -182,12 +182,12 @@ function buildSeniorityFilter(level) {
 
   if (!pattern) {
     throw new Error(
-      `Invalid seniority level: ${level}. Valid levels: ${Object.keys(patterns).join(', ')}`,
+      `Invalid seniority level: ${level}. Valid levels: ${Object.keys(patterns).join(", ")}`,
     );
   }
 
   return {
-    'snapshot.currentTitle': { $regex: pattern.source, $options: 'i' },
+    "snapshot.currentTitle": { $regex: pattern.source, $options: "i" },
   };
 }
 
@@ -200,7 +200,7 @@ function buildSeniorityFilter(level) {
 function buildConnectionsFilter(range) {
   const ranges = {
     influencer: { $gte: 1000 },
-    'well-connected': { $gte: 500, $lt: 1000 },
+    "well-connected": { $gte: 500, $lt: 1000 },
     connected: { $gte: 100, $lt: 500 },
     new: { $lt: 100 },
   };
@@ -209,12 +209,12 @@ function buildConnectionsFilter(range) {
 
   if (!filter) {
     throw new Error(
-      `Invalid connections range: ${range}. Valid ranges: ${Object.keys(ranges).join(', ')}`,
+      `Invalid connections range: ${range}. Valid ranges: ${Object.keys(ranges).join(", ")}`,
     );
   }
 
   return {
-    'snapshot.connections': filter,
+    "snapshot.connections": filter,
   };
 }
 

@@ -23,7 +23,9 @@
     "audit:canonical-id": "node -e \"const mongoose=require('mongoose');const Person=require('./src/models/person');(async()=>{const uri=process.env.MONGODB_URI||'mongodb://localhost:27017/duxsoup-etl';await mongoose.connect(uri);const missing=await Person.countDocuments({\\$or:[{canonical_id:{\\$exists:false}},{canonical_id:null},{canonical_id:''}]});const total=await Person.countDocuments({});const sample=await Person.find({canonical_id:{\\$exists:true}}).limit(3).select('_id canonical_id aliases').lean();console.log({total,missing,sample});await mongoose.disconnect();})();\"",
     "dedupe:aliases": "node scripts/dedupeAliases.js --dry-run",
     "backfill:seniority": "node scripts/backfillSeniority.js",
-    "import:csv": "node scripts/import-csv-visits.js"
+    "import:csv": "node scripts/import-csv-visits.js",
+    "lint": "eslint src/ __tests__/",
+    "prepare": "husky || true"
   },
   "keywords": [
     "linkedin",
@@ -40,6 +42,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
     "mongoose": "^9.1.5",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.13",
@@ -48,14 +51,21 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "eslint": "^9.39.2",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
+    "lint-staged": "^16.2.7",
     "nodemon": "^3.1.11",
     "prettier": "^3.8.1",
     "supertest": "^7.2.2"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "lint-staged": {
+    "src/**/*.js": ["eslint --fix", "prettier --write"],
+    "__tests__/**/*.js": ["eslint --fix", "prettier --write"]
   },
   "packageManager": "npm@10.8.2"
 }

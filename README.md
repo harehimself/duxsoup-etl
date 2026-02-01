@@ -190,6 +190,12 @@ Instant rollback via env change.
 
 ## Operations & Debugging
 
+For detailed guidance on running maintenance scripts, see the **[Operational Runbook](docs/RUNBOOK.md)**.
+
+For webhook field reference, see **[Webhook Payloads](docs/WEBHOOK_PAYLOADS.md)**.
+
+Common scripts:
+
 ```bash
 node scripts/replayDeadLetters.js
 node scripts/rebuildPeople.js
