@@ -54,7 +54,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.13",
     "twilio": "^5.12.0",
-    "uuid": "^9.0.1",
+    "uuid": "^13.0.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {
