@@ -3,7 +3,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const compression = require("compression");
-const mongoSanitize = require("express-mongo-sanitize");
+const { sanitize: mongoSanitize } = require("express-mongo-sanitize");
 const crypto = require("crypto");
 
 const logger = require("./utils/logger");
@@ -29,7 +29,14 @@ app.use(helmet());
 app.use(compression());
 
 // Sanitize MongoDB operator injection from req.body, req.query, req.params
-app.use(mongoSanitize());
+// Note: express-mongo-sanitize middleware is incompatible with Express 5
+// (req.query is a read-only getter in Express 5), so we call sanitize() directly
+app.use((req, res, next) => {
+  if (req.body) mongoSanitize(req.body);
+  if (req.query) mongoSanitize(req.query);
+  if (req.params) mongoSanitize(req.params);
+  next();
+});
 
 // Request correlation IDs
 app.use((req, res, next) => {
