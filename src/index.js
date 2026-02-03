@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ override: true });
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -21,6 +21,9 @@ try {
 
 const config = getConfig();
 const app = express();
+
+// Trust first proxy (Render's reverse proxy) for correct req.ip and rate limiting
+app.set("trust proxy", 1);
 
 // Security headers
 app.use(helmet());
