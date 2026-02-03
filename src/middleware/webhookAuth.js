@@ -4,7 +4,7 @@ const logger = require('../utils/logger');
  * Webhook Authentication Middleware
  *
  * Validates incoming webhook requests using a shared secret.
- * Checks the X-Webhook-Secret header or Authorization: Bearer <token>.
+ * Checks the X-Webhook-Secret header, Authorization: Bearer <token>, or ?secret= query parameter.
  *
  * When WEBHOOK_SECRET is not set, all requests pass through (with a startup warning).
  */
@@ -44,6 +44,11 @@ function webhookAuth(req, res, next) {
     if (parts.length === 2 && parts[0].toLowerCase() === 'bearer' && parts[1] === secret) {
       return next();
     }
+  }
+
+  // Check ?secret= query parameter (for providers that don't support custom headers)
+  if (req.query && req.query.secret === secret) {
+    return next();
   }
 
   logger.warn('Webhook authentication failed', {

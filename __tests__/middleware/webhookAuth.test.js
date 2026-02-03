@@ -21,6 +21,7 @@ describe('webhookAuth middleware', () => {
 
     req = {
       headers: {},
+      query: {},
       ip: '127.0.0.1',
       path: '/api/webhook',
       method: 'POST',
@@ -135,6 +136,30 @@ describe('webhookAuth middleware', () => {
   it('should reject with 401 when no secret header is provided but env var is set', () => {
     process.env.WEBHOOK_SECRET = 'my-secret-token';
     webhookAuth = require('../../src/middleware/webhookAuth');
+
+    webhookAuth(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('should pass through when correct secret query parameter is provided', () => {
+    process.env.WEBHOOK_SECRET = 'my-secret-token';
+    webhookAuth = require('../../src/middleware/webhookAuth');
+
+    req.query.secret = 'my-secret-token';
+
+    webhookAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('should reject with 401 when wrong secret query parameter is provided', () => {
+    process.env.WEBHOOK_SECRET = 'my-secret-token';
+    webhookAuth = require('../../src/middleware/webhookAuth');
+
+    req.query.secret = 'wrong-secret';
 
     webhookAuth(req, res, next);
 
