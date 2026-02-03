@@ -137,8 +137,8 @@ router.get("/companies/by-alias/:value", getCompanyByAlias);
 router.get("/locations/:id", getLocationById);
 router.get("/locations/by-alias/:value", getLocationByAlias);
 
-// Main webhook endpoint (with auth + rate limiting)
-router.post("/webhook", webhookRateLimiter, webhookAuth, (req, res) => {
+// Main webhook endpoint (rate limited, no auth — DuxSoup cannot send credentials)
+router.post("/webhook", webhookRateLimiter, (req, res) => {
   const payload = req.body;
 
   logger.info("Webhook received", {
