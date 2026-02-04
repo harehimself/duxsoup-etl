@@ -233,6 +233,7 @@ describe('PersonController', () => {
 2. **Read before modifying:** Use Read tool before editing any file
 3. **Update docs** if changing data schema (see `docs/`)
 4. **Use environment variables:** Never commit secrets
+5. **Check the backlog** before starting work: `.claude/BACKLOG.md`
 
 ### Never Do
 1. **Skip tests** for "small changes"
@@ -266,6 +267,8 @@ const result = await Visit.findOneAndUpdate(
 | Testing rules | `.claude/rules/testing.md` |
 | API route conventions | `.claude/rules/api.md` |
 | JavaScript standards | `.claude/rules/javascript.md` |
+| Backlog management | `.claude/rules/backlog.md` |
+| Project backlog | `.claude/BACKLOG.md` |
 
 ## Environment Variables
 
