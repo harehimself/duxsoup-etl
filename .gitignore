@@ -111,6 +111,12 @@ Thumbs.db
 backup/
 backups/
 
+# Local workspace and scratch files
+.history/
+*.code-workspace
+playground-*.mongodb.js
+*.png
+
 # Claude Code local files (personal overrides, not shared with team)
 .claude/settings.local.json
 CLAUDE.local.md
