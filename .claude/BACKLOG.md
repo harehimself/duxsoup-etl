@@ -12,11 +12,10 @@
 
 ### High Priority
 
-- [ ] **Leader-election for multi-instance scheduler** — Prevent duplicate cron jobs (dead-letter replay, health checks) when running multiple instances behind a load balancer
+- [x] **Leader-election for multi-instance scheduler** — Prevent duplicate cron jobs (dead-letter replay, health checks) when running multiple instances behind a load balancer
   - Category: `infra`
   - Files: `src/workers/scheduler.js`
-  - Context: CLAUDE.md documents this gap under Deployment Considerations. `node-cron` runs on every instance; need a coordination mechanism (e.g., MongoDB-based lock, `SCHEDULER_LEADER` env var, or advisory lock) so only one instance executes scheduled jobs.
-  - Acceptance: Only one instance runs dead-letter replay and health checks at a time; other instances skip gracefully with a log message.
+  - Completed: 2026-02-05
 
 - [ ] **IP allowlisting for webhook endpoint** — Restrict `POST /api/webhook` to known DuxSoup outbound IPs
   - Category: `security`

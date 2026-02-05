@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const logger = require('./logger');
 
 /**
@@ -53,6 +54,9 @@ function getConfig() {
     isProduction: process.env.NODE_ENV === 'production',
     allowedOrigins: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['*'],
     readSource: readSource, // hybrid (default) | people | legacy
+    schedulerInstanceId: process.env.INSTANCE_ID || crypto.randomUUID(),
+    leaderLockTtlSeconds: parseInt(process.env.LEADER_LOCK_TTL_SECONDS, 10) || 30,
+    leaderRenewIntervalSeconds: parseInt(process.env.LEADER_RENEW_INTERVAL_SECONDS, 10) || 10,
   };
 }
 

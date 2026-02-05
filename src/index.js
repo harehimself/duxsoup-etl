@@ -9,7 +9,11 @@ const crypto = require("crypto");
 const logger = require("./utils/logger");
 const database = require("./utils/database");
 const { validateEnvironment, getConfig } = require("./utils/env");
+const LeaderElectionService = require("./services/leaderElectionService");
 const apiRoutes = require("./routes/apiRoutes");
+
+// Module-level reference for shutdown handlers
+let leaderElection = null;
 
 // Validate environment variables before starting
 try {
@@ -192,9 +196,25 @@ async function startServer() {
 
     // Start background job scheduler (if enabled) after DB is ready
     if (process.env.ENABLE_SCHEDULER !== "false") {
+      // Leader election: only one instance runs cron jobs
+      leaderElection = new LeaderElectionService({
+        instanceId: config.schedulerInstanceId,
+        ttlSeconds: config.leaderLockTtlSeconds,
+        renewIntervalSeconds: config.leaderRenewIntervalSeconds,
+      });
+
+      const isLeader = await leaderElection.tryAcquire();
+      if (isLeader) {
+        leaderElection.startRenewal();
+      }
+
       const { startScheduler } = require("./workers/scheduler");
-      startScheduler();
-      logger.info("Background scheduler started");
+      startScheduler(isLeader);
+      logger.info(
+        isLeader
+          ? "Background scheduler started (leader)"
+          : "Background scheduler skipped (not leader)",
+      );
     } else {
       logger.info("Background scheduler disabled (ENABLE_SCHEDULER=false)");
     }
@@ -210,8 +230,8 @@ async function startServer() {
 }
 
 // Handle graceful shutdown
-process.on("SIGTERM", async () => {
-  logger.info("SIGTERM received, shutting down gracefully");
+async function gracefulShutdown(signal) {
+  logger.info(`${signal} received, shutting down gracefully`);
 
   // Stop scheduler
   try {
@@ -221,23 +241,21 @@ process.on("SIGTERM", async () => {
     logger.error("Error stopping scheduler:", err);
   }
 
-  await database.disconnect();
-  process.exit(0);
-});
-
-process.on("SIGINT", async () => {
-  logger.info("SIGINT received, shutting down gracefully");
-
-  // Stop scheduler
-  try {
-    const { stopScheduler } = require("./workers/scheduler");
-    stopScheduler();
-  } catch (err) {
-    logger.error("Error stopping scheduler:", err);
+  // Release leader lock before disconnecting DB
+  if (leaderElection) {
+    try {
+      leaderElection.stopRenewal();
+      await leaderElection.release();
+    } catch (err) {
+      logger.error("Error releasing leader lock:", err);
+    }
   }
 
   await database.disconnect();
   process.exit(0);
-});
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 startServer();

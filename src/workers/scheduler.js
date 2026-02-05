@@ -16,13 +16,18 @@ let schedulerStarted = false;
  *
  * Initializes all cron jobs
  */
-function startScheduler() {
+function startScheduler(isLeader = true) {
   if (schedulerStarted) {
     logger.warn('Scheduler already started, skipping');
     return;
   }
 
-  logger.info('Starting background job scheduler');
+  if (!isLeader) {
+    logger.info('Scheduler: this instance is not the leader, skipping cron registration');
+    return;
+  }
+
+  logger.info('Starting background job scheduler (leader instance)');
 
   // Job 1: Dead letter replay (every hour)
   cron.schedule('0 * * * *', async () => {
