@@ -1,14 +1,6 @@
 const Company = require("../models/company");
-const { getConfig } = require("../utils/env");
-const _logger = require("../utils/logger");
 
 async function findCompanyById(companyId) {
-  const config = getConfig();
-
-  if (config.readSource === "legacy") {
-    return null;
-  }
-
   const company =
     (await Company.findOne({ canonical_id: companyId })) ||
     (await Company.findById(companyId));
@@ -21,12 +13,6 @@ async function findCompanyById(companyId) {
 }
 
 async function findCompanyByAlias(aliasValue) {
-  const config = getConfig();
-
-  if (config.readSource === "legacy") {
-    return null;
-  }
-
   const company = await Company.findOne({
     "aliases.value": aliasValue,
   });

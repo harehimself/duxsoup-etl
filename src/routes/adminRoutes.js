@@ -186,7 +186,7 @@ router.get("/check-upgradable", async (req, res) => {
 
     const recommendation =
       upgradable === 0
-        ? "No upgradable people - linking job will not help. Operate in hybrid mode."
+        ? "No upgradable people - linking job will not help."
         : upgradable < 100
           ? "Few upgradable people - minimal improvement expected."
           : upgradable < 1000
@@ -206,11 +206,7 @@ router.get("/check-upgradable", async (req, res) => {
               "  node scripts/linkIdentities.js --commit --limit=100 --batch-size=10",
               "Or use the POST /api/admin/run-linking endpoint",
             ]
-          : [
-              "Linking job not needed",
-              "Operate in hybrid mode with current coverage",
-              "Set READ_SOURCE=hybrid in environment variables",
-            ],
+          : ["Linking job not needed", "No action required"],
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

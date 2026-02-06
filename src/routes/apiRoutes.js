@@ -19,7 +19,6 @@ const {
 const {
   getPersonById,
   getPersonByAlias,
-  getReadMetrics,
 } = require("../controllers/personReadController");
 const {
   getCompanyById,
@@ -124,8 +123,7 @@ router.get(
   testNotifications,
 );
 
-// Person read endpoints (hybrid cutover)
-router.get("/people/metrics", getReadMetrics);
+// Person read endpoints
 router.get("/people/:id", getPersonById);
 router.get("/people/by-alias/:value", getPersonByAlias);
 
