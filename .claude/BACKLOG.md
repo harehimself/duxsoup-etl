@@ -24,6 +24,12 @@
   - Context: The Person collection should be well-populated by now. If all people have snapshots, hybrid mode adds complexity with no benefit. The legacy read path has a comment acknowledging it's incomplete ("adjust based on your actual legacy structure").
   - Acceptance: Run a coverage query — if >99% of visits/scans have corresponding Person records, remove hybrid mode and delete the legacy fallback code. If gaps exist, backfill first, then remove.
 
+- [ ] **Fix `classifySalesNavId` misclassification in salesNavId audit script** — The `lowercase`/`mixed` branch in `classifySalesNavId()` does not check for a valid ACw/ACo prefix, so IDs with non-standard prefixes (e.g. `ZZZ123`) are misclassified as `lowercase` or `mixed` instead of `nonstandard`
+  - Category: `data-quality`
+  - Files: `scripts/audit-salesnavid-case.js` (the `classifySalesNavId` function)
+  - Context: `normalizeToCanonicalCase()` returns the input unchanged for non-ACw/ACo values. The `hasCanonicalPrefix` check only gates the `'canonical'` return, not the `'lowercase'`/`'mixed'` branch. Fix by adding `&& hasCanonicalPrefix` to the case-insensitive equality check, or by returning `'nonstandard'` early when the prefix is invalid.
+  - Acceptance: IDs without ACw/ACo prefixes are classified as `nonstandard`. Audit counts accurately reflect prefix validity. Unit tests cover non-standard prefix inputs.
+
 ### Low Priority / Tech Debt
 
 - [ ] **Parallelize CSV enrichment row processing** — Add configurable concurrency for large imports
