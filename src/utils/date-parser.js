@@ -47,7 +47,56 @@ function parseLinkedInDate(dateValue) {
   return parseSafeDate(dateValue);
 }
 
+/**
+ * Check whether a date string contains an explicit 4-digit year.
+ * Rejects strings like "March 14", "Jan 5", "12/25" that Node's Date()
+ * silently coerces to year 2001.
+ * @param {string} value - The raw date string
+ * @returns {boolean} true if a 4-digit year is present
+ */
+function containsYear(value) {
+  if (typeof value !== "string") return false;
+  return /\b\d{4}\b/.test(value);
+}
+
+/**
+ * Parse a birthday date string, rejecting year-less inputs.
+ * LinkedIn commonly sends birthdays as "March 14" (no year), which
+ * Node coerces to 2001-03-14. This function detects that case and
+ * returns the raw string instead so the caller can store it separately.
+ *
+ * @param {string|Date|null|undefined} dateValue - The birthday value
+ * @returns {{ date: Date|null, raw: string|null }}
+ *   - date: Valid Date when the input includes a year, null otherwise
+ *   - raw: Original string when no year is present, null otherwise
+ */
+function parseBirthdayDate(dateValue) {
+  if (!dateValue || dateValue === "") {
+    return { date: null, raw: null };
+  }
+
+  // Already a Date object — trust it (caller constructed it)
+  if (dateValue instanceof Date) {
+    const valid = !isNaN(dateValue.getTime());
+    return { date: valid ? dateValue : null, raw: null };
+  }
+
+  // String input — check for an explicit year before parsing
+  if (typeof dateValue === "string") {
+    if (!containsYear(dateValue)) {
+      // Year-less input like "March 14" — return as raw, don't coerce
+      return { date: null, raw: dateValue.trim() };
+    }
+  }
+
+  // Has a year — parse normally
+  const parsed = parseSafeDate(dateValue);
+  return { date: parsed, raw: null };
+}
+
 module.exports = {
   parseSafeDate,
   parseLinkedInDate,
+  containsYear,
+  parseBirthdayDate,
 };

@@ -74,14 +74,14 @@ const roleSchema = new mongoose.Schema(
       type: String,
       maxlength: 50,
       enum: [
-        'Owner',
-        'CXO',
-        'SVP',
-        'VP',
-        'Managing Director',
-        'Manager',
-        'In Training',
-        'Individual Contributor',
+        "Owner",
+        "CXO",
+        "SVP",
+        "VP",
+        "Managing Director",
+        "Manager",
+        "In Training",
+        "Individual Contributor",
       ],
     },
     // Seniority rank (1-8, higher = more senior)
@@ -163,6 +163,7 @@ const personSchema = new mongoose.Schema(
       lastName: { type: String, maxlength: 100 },
       fullName: { type: String, maxlength: 300 },
       birthday: { type: Date },
+      birthdayRaw: { type: String, maxlength: 50 }, // Month/day only when year is missing
 
       // Current position
       currentTitle: { type: String, maxlength: 1000 }, // Increased for keyword-rich titles
@@ -313,7 +314,11 @@ personSchema.index({ "snapshot.currentCompany": 1 });
 personSchema.index({ createdAt: -1 });
 personSchema.index({ "snapshot.currentCompany": 1, createdAt: -1 });
 personSchema.index({ "snapshot.country": 1 });
-personSchema.index({ "snapshot.city": 1, "snapshot.state": 1, "snapshot.country": 1 });
+personSchema.index({
+  "snapshot.city": 1,
+  "snapshot.state": 1,
+  "snapshot.country": 1,
+});
 personSchema.index({ "derived.highestSeniorityRank": -1 });
 
 // Full-text search index (weighted by relevance)

@@ -24,12 +24,10 @@
   - Context: Breaks the standardized pagination contract for any query that only matches via fuzzy search. Clients relying on `hasMore` or `nextSkip` for pagination will mis-handle the response.
   - Acceptance: `fuzzySearchPeople` returns `limit`, `totalCount`, `hasMore`, and `nextSkip` in its metadata. Alternatively, the controller computes them from the request/response. Unit test covers the fuzzy fallback pagination envelope.
 
-- [ ] **Birthday field: reject year-less date strings** — `parseSafeDate("March 14")` silently returns `2001-03-14` because Node's `new Date()` defaults missing years to 2001. LinkedIn commonly shows birthdays without a year.
+- [x] **Birthday field: reject year-less date strings** — `parseSafeDate("March 14")` silently returns `2001-03-14` because Node's `new Date()` defaults missing years to 2001. LinkedIn commonly shows birthdays without a year.
   - Category: `data-quality`
   - Files: `src/controllers/personController.js:437`, `src/utils/date-parser.js`
-  - Context: The `parseSafeDate` utility has no awareness of year-less inputs. When the webhook `Birthday` field contains "March 14" or similar, Node produces a valid Date with a fabricated 2001 year, which gets stored in `Person.snapshot.birthday` as if it were a real date.
-  - Fix: Add a date-validation guard before `parseSafeDate` (or inside it) that detects inputs without a 4-digit year. For year-less strings, either store `null` (discard) or store as a `birthdayRaw` string field (month/day only) rather than coercing to a full Date. Also consider a migration to null out any existing 2001-year birthdays that lack a real year.
-  - Acceptance: Year-less birthday strings (e.g., "March 14", "January 5") do not produce a Date with a fabricated year. Includes unit tests for edge cases. Existing 2001-year birthdays reviewed/corrected.
+  - **Completed:** 2026-02-06, branch `claude/birthday-field-date-validation-7Kjts`. Added `containsYear()` and `parseBirthdayDate()` to date-parser.js; added `birthdayRaw` field to Person model; updated personController to store year-less strings in `birthdayRaw` and clear any coerced Date. 40 date-parser tests + 4 personController birthday tests pass.
 
 - [ ] **Fix CLAUDE.md schema + endpoint docs drift** — Align person snapshot example and query/search/export routes with current models and routes
   - Category: `docs`
