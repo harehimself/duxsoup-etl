@@ -17,7 +17,7 @@
  */
 const SENIORITY_TIERS = [
   {
-    tier: 'Owner',
+    tier: "Owner",
     tier_rank: 8,
     patterns: [
       /\b(Founder|Co-?Founder|Owner|Co-?Owner|Sole\s+Proprietor)\b/i,
@@ -27,24 +27,24 @@ const SENIORITY_TIERS = [
       // "Senior Partner" only when standalone (not part of job function)
       /\bSenior\s+Partner(?!\s+(Manager|Marketing|Client|Talent|Account|Acquisition))\b/i,
     ],
-    description: 'Business owners, founders, and partners',
+    description: "Business owners, founders, and partners",
   },
   {
-    tier: 'CXO',
+    tier: "CXO",
     tier_rank: 7,
     patterns: [
       // Match "Chief" followed by any officer title
       /\bChief\s+\w+\s+Officer\b/i,
       /\bChief\b/i,
       // Match C-level abbreviations (CEO, CFO, CTO, etc.)
-      /\bC[A-Z]O\b/,
+      /\bC[A-Za-z]O\b/i,
       // Specific C-suite titles
-      /\b(CEO|CFO|CTO|COO|CMO|CIO|CISO|CRO|CPO|CDO|CCO|CLO|CHRO|CSO)\b/,
+      /\b(CEO|CFO|CTO|COO|CMO|CIO|CISO|CRO|CPO|CDO|CCO|CLO|CHRO|CSO)\b/i,
     ],
-    description: 'C-suite executives and chiefs',
+    description: "C-suite executives and chiefs",
   },
   {
-    tier: 'SVP',
+    tier: "SVP",
     tier_rank: 6,
     patterns: [
       // Senior VP variations (must come before general VP)
@@ -57,12 +57,12 @@ const SENIORITY_TIERS = [
       /\bExecutive\s+VP\b/i,
       // General Manager (often at SVP level)
       /\bGeneral\s+Manager\b/i,
-      /\bGM\b/,
+      /\bGM\b/i,
     ],
-    description: 'Senior and Executive Vice Presidents, General Managers',
+    description: "Senior and Executive Vice Presidents, General Managers",
   },
   {
-    tier: 'VP',
+    tier: "VP",
     tier_rank: 5,
     patterns: [
       // Vice President (excluding SVP/EVP which are caught above)
@@ -74,21 +74,21 @@ const SENIORITY_TIERS = [
       // Head of titles (typically VP-level)
       /\bHead\s+of\b/i,
     ],
-    description: 'Vice Presidents and Head of titles',
+    description: "Vice Presidents and Head of titles",
   },
   {
-    tier: 'Managing Director',
+    tier: "Managing Director",
     tier_rank: 4,
     patterns: [
       // Managing Director (must be specific - not just "Director")
       /\bManaging\s+Director\b/i,
       /\bManaging\s+Dir\.?\b/i,
-      /\b(MD)\b/,
+      /\b(MD)\b/i,
     ],
-    description: 'Managing Directors',
+    description: "Managing Directors",
   },
   {
-    tier: 'Manager',
+    tier: "Manager",
     tier_rank: 3,
     patterns: [
       /\b(Manager|Mgr\.?)\b/i,
@@ -106,19 +106,19 @@ const SENIORITY_TIERS = [
       // Specific manager types
       /\b(Program\s+Manager|Project\s+Manager|Product\s+Manager|Engineering\s+Manager)\b/i,
     ],
-    description: 'Managers, directors, team leads, and supervisors',
+    description: "Managers, directors, team leads, and supervisors",
   },
   {
-    tier: 'In Training',
+    tier: "In Training",
     tier_rank: 2,
     patterns: [
       /\b(Student|Intern|Internship|Apprentice|Trainee|Co-?op|Candidate)\b/i,
       /\bEntry[\s-]?Level\b/i,
     ],
-    description: 'Students, interns, and trainees',
+    description: "Students, interns, and trainees",
   },
   {
-    tier: 'Individual Contributor',
+    tier: "Individual Contributor",
     tier_rank: 1,
     patterns: [
       // This is the default/fallback tier
@@ -127,7 +127,7 @@ const SENIORITY_TIERS = [
       /\b(Senior|Sr\.?|Staff|Principal)\b/i,
       /\b(Junior|Jr\.?)\b/i,
     ],
-    description: 'Individual contributors without management responsibilities',
+    description: "Individual contributors without management responsibilities",
   },
 ];
 
@@ -136,76 +136,68 @@ const SENIORITY_TIERS = [
  */
 const DEPARTMENTS = [
   {
-    department: 'engineering',
+    department: "engineering",
     patterns: [
       /\b(Engineer|Engineering|Software|Developer|Development|SWE|SDE|DevOps|Backend|Frontend|Full[\s-]?Stack|Platform|Infrastructure|Architect|Technical|Technology)\b/i,
     ],
   },
   {
-    department: 'data',
+    department: "data",
     patterns: [
       /\b(Data|Analytics|Data\s+Science|Machine\s+Learning|ML|AI|Artificial\s+Intelligence|BI|Business\s+Intelligence)\b/i,
     ],
   },
   {
-    department: 'product',
-    patterns: [
-      /\b(Product|Product\s+Management|Product\s+Manager|PM)\b/i,
-    ],
+    department: "product",
+    patterns: [/\b(Product|Product\s+Management|Product\s+Manager|PM)\b/i],
   },
   {
-    department: 'design',
+    department: "design",
     patterns: [
       /\b(Design|UX|UI|User\s+Experience|User\s+Interface|Creative|Graphic|Visual)\b/i,
     ],
   },
   {
-    department: 'marketing',
+    department: "marketing",
     patterns: [
       /\b(Marketing|Growth|Brand|Content|Digital\s+Marketing|SEO|SEM|Demand\s+Gen|Communications|PR|Public\s+Relations)\b/i,
     ],
   },
   {
-    department: 'sales',
+    department: "sales",
     patterns: [
       /\b(Sales|Account\s+Executive|AE|BDR|SDR|Business\s+Development|Revenue|Account\s+Manager|Inside\s+Sales)\b/i,
     ],
   },
   {
-    department: 'customer_success',
+    department: "customer_success",
     patterns: [
       /\b(Customer\s+Success|CS|Customer\s+Support|Support|Client\s+Services|Customer\s+Experience|CX)\b/i,
     ],
   },
   {
-    department: 'finance',
+    department: "finance",
     patterns: [
       /\b(Finance|Accounting|Financial|Controller|Treasury|FP&A|Audit)\b/i,
     ],
   },
   {
-    department: 'hr',
+    department: "hr",
     patterns: [
       /\b(HR|Human\s+Resources|People\s+Operations|People\s+Ops|Talent|Recruiting|Recruiter|Recruitment)\b/i,
     ],
   },
   {
-    department: 'legal',
-    patterns: [
-      /\b(Legal|Counsel|Attorney|Lawyer|Compliance|Regulatory)\b/i,
-    ],
+    department: "legal",
+    patterns: [/\b(Legal|Counsel|Attorney|Lawyer|Compliance|Regulatory)\b/i],
   },
   {
-    department: 'operations',
-    patterns: [
-      /\b(Operations|Ops|Supply\s+Chain|Logistics|Procurement)\b/i,
-    ],
+    department: "operations",
+    patterns: [/\b(Operations|Ops|Supply\s+Chain|Logistics|Procurement)\b/i],
   },
   {
-    department: 'consulting',
-    patterns: [
-      /\b(Consultant|Consulting|Advisory|Advisor)\b/i,
-    ],
+    department: "consulting",
+    patterns: [/\b(Consultant|Consulting|Advisory|Advisor)\b/i],
   },
 ];
 
@@ -224,12 +216,12 @@ function parseTitle(title) {
     seniority: null,
     seniorityRank: null,
     department: null,
-    normalized: '',
+    normalized: "",
   };
 
   // Handle invalid input - return defaults
-  if (!title || typeof title !== 'string' || title.trim() === '') {
-    result.seniority = 'Individual Contributor';
+  if (!title || typeof title !== "string" || title.trim() === "") {
+    result.seniority = "Individual Contributor";
     result.seniorityRank = 1;
     return result;
   }
@@ -251,7 +243,7 @@ function parseTitle(title) {
 
   // Default to Individual Contributor if no match found
   if (!result.seniority) {
-    result.seniority = 'Individual Contributor';
+    result.seniority = "Individual Contributor";
     result.seniorityRank = 1;
   }
 
@@ -328,8 +320,12 @@ function getHighestSeniorityRole(roles) {
 
   // Find role with highest tier_rank
   return rolesWithSeniority.reduce((highest, current) => {
-    const currentTier = SENIORITY_TIERS.find((t) => t.tier === current.seniority);
-    const highestTier = SENIORITY_TIERS.find((t) => t.tier === highest.seniority);
+    const currentTier = SENIORITY_TIERS.find(
+      (t) => t.tier === current.seniority,
+    );
+    const highestTier = SENIORITY_TIERS.find(
+      (t) => t.tier === highest.seniority,
+    );
 
     const currentRank = currentTier?.tier_rank || 0;
     const highestRank = highestTier?.tier_rank || 0;
