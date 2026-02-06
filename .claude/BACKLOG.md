@@ -43,7 +43,19 @@
   - Context: The Person collection should be well-populated by now. If all people have snapshots, hybrid mode adds complexity with no benefit. The legacy read path has a comment acknowledging it's incomplete ("adjust based on your actual legacy structure").
   - Acceptance: Run a coverage query — if >99% of visits/scans have corresponding Person records, remove hybrid mode and delete the legacy fallback code. If gaps exist, backfill first, then remove.
 
+- [ ] **Atlas Search index targets wrong database** — `scripts/atlas-search-indexes.json` hard-codes `"database": "duxsoup"`, but all scripts and documented environments use `duxsoup-etl` (or `duxsoup-etl-prod`)
+  - Category: `bug`
+  - Files: `scripts/atlas-search-indexes.json:7`, `scripts/createAtlasSearchIndex.js:121`
+  - Context: The `--create` flag in `createAtlasSearchIndex.js` sends `peopleIndex.database` directly to the Atlas API. With the wrong database name, the search index is created on a non-existent or empty database, so Atlas Search silently fails. The `--output` path is unaffected (only prints mapping definition). Fix: either derive database from `MONGODB_URI` at runtime, or update the JSON config to `duxsoup-etl`.
+  - Acceptance: `--create` targets the correct database. Config matches documented DB names. Integration with `MONGODB_URI` preferred so it works across environments.
+
 ### Low Priority / Tech Debt
+
+- [ ] **`findSalesNavIdDuplicates` misses persons with multiple salesNavId aliases** — `extractSalesNavIdFromPersonRecord()` uses `aliases.find()` which only returns the first `salesNavId` alias; merged persons with multiple salesNavIds are only grouped under one ID
+  - Category: `bug`
+  - Files: `src/services/identityResolverService.js:632`
+  - Context: After merges, a person can carry multiple `salesNavId` values (e.g., `ACwAAA111` and `ACwAAA222`). The function only returns the first match, so duplicates keyed on subsequent IDs are silently missed. This only affects the diagnostic `findSalesNavIdDuplicates()` — the core identity resolution path (`resolveOrCreate`, `findByAnyAlias`) handles multiple aliases correctly.
+  - Acceptance: `extractSalesNavIdFromPersonRecord()` returns all salesNavIds for a person. `findSalesNavIdDuplicates()` groups the person under every salesNavId it carries. Existing test updated to cover multi-alias case.
 
 - [ ] **Parallelize CSV enrichment row processing** — Add configurable concurrency for large imports
   - Category: `performance`
