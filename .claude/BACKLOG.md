@@ -10,58 +10,63 @@
 
 ## Active Sprint
 
-### High Priority
-
-- [x] **Leader-election for multi-instance scheduler** — Prevent duplicate cron jobs (dead-letter replay, health checks) when running multiple instances behind a load balancer
-  - Category: `infra`
-  - Files: `src/workers/scheduler.js`
-  - Completed: 2026-02-05
-
-- [ ] **IP allowlisting for webhook endpoint** — Restrict `POST /api/webhook` to known DuxSoup outbound IPs
-  - Category: `security`
-  - Files: `src/routes/apiRoutes.js`, new middleware
-  - Context: CLAUDE.md notes this as a recommended hardening step. Currently the endpoint relies on rate limiting + validation + idempotency only.
-  - Acceptance: Configurable allowlist via `WEBHOOK_IP_ALLOWLIST` env var (comma-separated CIDRs). Falls back to open (allow-all) if env var is unset. Requests from non-allowed IPs return 403. Includes tests.
-
 ### Medium Priority
 
-- [ ] **CSV enrichment creation logic** — Create new person records when enrichment CSV contains people not yet in the database
+- [ ] **CSV enrichment: create new person records** — Implement the stubbed-out creation path in the enrichment import script
   - Category: `enrichment`
-  - Files: `scripts/importCsvEnrichment.js:461`, `src/controllers/personController.js`
-  - Context: Current code only enriches existing records; the else-branch logs "would create" but never writes.
-  - Ref: `// TODO(enrichment): Implement creation logic if needed`
-  - Acceptance: New person records created from CSV data when no alias match is found. Dry-run mode respected. Includes tests.
+  - Files: `scripts/importCsvEnrichment.js:461`
+  - Context: The else-branch increments `stats.created` and logs "Would create new person from CSV" but never writes to the database. The `// TODO(enrichment): Implement creation logic if needed` is the only explicit TODO remaining in the codebase.
+  - Acceptance: New Person records created from CSV rows when no alias match exists. Respects `--dry-run`. Populates aliases, _meta provenance, and canonical_id. Includes unit tests.
 
-- [ ] **Deprecate legacy identityResolver.js** — Migrate remaining callers to `identityMatcher.js`
+- [ ] **Sunset hybrid read mode** — Evaluate whether `READ_SOURCE=hybrid` and the legacy personReadService fallback are still needed
   - Category: `tech-debt`
-  - Files: `src/utils/identityResolver.js`, callers
-  - Context: Migration note at line 21 says "New code should use identityMatcher.js directly." Need to find remaining callers, migrate them, then remove the legacy file.
-  - Acceptance: No imports of `identityResolver.js` remain. File deleted. All identity resolution goes through `identityMatcher.js`. Tests pass.
+  - Files: `src/services/personReadService.js` (lines 155-179 contain a "simplified example" placeholder)
+  - Context: The Person collection should be well-populated by now. If all people have snapshots, hybrid mode adds complexity with no benefit. The legacy read path has a comment acknowledging it's incomplete ("adjust based on your actual legacy structure").
+  - Acceptance: Run a coverage query — if >99% of visits/scans have corresponding Person records, remove hybrid mode and delete the legacy fallback code. If gaps exist, backfill first, then remove.
 
 ### Low Priority / Tech Debt
 
-- [ ] **Parallelize CSV enrichment row processing** — Process enrichment rows concurrently for large imports
+- [ ] **Parallelize CSV enrichment row processing** — Add configurable concurrency for large imports
   - Category: `performance`
   - Files: `scripts/importCsvEnrichment.js:553`
-  - Context: Comment notes rows are processed sequentially and "could parallelize later."
-  - Acceptance: Configurable concurrency (e.g., `--concurrency=N`, default 1 for backwards compat). Includes progress logging.
+  - Context: Rows are processed sequentially with `for...of` + `await`. Fine for small imports, bottleneck for large ones.
+  - Acceptance: `--concurrency=N` flag (default 1). Uses batched Promise.allSettled or similar. Progress logging shows throughput.
 
-- [ ] **Refine legacy personReadService path** — Review and harden the legacy read fallback in hybrid mode
-  - Category: `tech-debt`
-  - Files: `src/services/personReadService.js:161`
-  - Context: Comment notes "This is a simplified example — adjust based on your actual legacy structure."
-  - Acceptance: Legacy read path correctly maps all fields from Visit/Scan collections. Includes integration test coverage.
+---
+
+## Recommendations
+
+> New items to consider. Move to Active Sprint when prioritized.
+
+- [ ] **API documentation (OpenAPI/Swagger)** — No machine-readable API spec exists. Adding one would make the read APIs self-documenting and enable client codegen.
+  - Category: `dx`
+  - Impact: Easier onboarding for any consumers of the people/company/location endpoints.
+
+- [ ] **Dead letter alerting integration test** — The notification service supports email (nodemailer) and SMS (Twilio), but the health check → alert pipeline lacks end-to-end test coverage.
+  - Category: `reliability`
+  - Impact: Confidence that alerts actually fire when dead letter backlog grows.
+
+- [ ] **Data quality dashboard** — Expose a `/api/health/quality` endpoint showing: alias coverage, canonical_id coverage, Person records without roles, people without stable IDs (salesNavId or numericId).
+  - Category: `observability`
+  - Impact: Proactive detection of identity resolution gaps or enrichment drift.
+
+- [ ] **Dependency audit** — 3 Dependabot PRs/branches exist. Mongoose 9.x, Express 5.x, and Jest 30.x are current, but a full `npm audit` pass would catch transitive vulnerabilities.
+  - Category: `security`
 
 ---
 
 ## Icebox
 
-<!-- Items parked for later consideration. Move to Active Sprint when ready. -->
+- ~~**IP allowlisting for webhook endpoint**~~ — Removed from active sprint. DuxSoup does not publish stable outbound IPs, making a static allowlist impractical. The endpoint is already defended by rate limiting (100/min), input validation, idempotency (event_key SHA1), and CORS. Revisit only if DuxSoup publishes IP ranges.
 
 ---
 
 ## Completed
 
+- [x] **Eliminate legacy identityResolver.js wrapper** — 2026-02-06, migrated 23 callers (8 production, 7 scripts, 8 tests) to `identityMatcher.js`, deleted 525-line wrapper
+- [x] **Clean up stale remote branches** — 2026-02-06, deleted 8 remote + 2 local stale branches, pruned 18 tracking refs
+- [x] **Leader-election for multi-instance scheduler** — 2026-02-05, `cf5b696`
+- [x] **Replace uuid with crypto.randomUUID()** — 2026-02-05, `c6e494e`
 - [x] **Audit and label TODO comments** — 2026-02-04, branch `claude/audit-todo-comments-jrdRA`
 - [x] **Graceful shutdown handler (SIGTERM/SIGINT)** — Already implemented in `src/index.js:212-241`
 - [x] **Remove webhook auth** — DuxSoup cannot send credentials — `8e9bcb0`

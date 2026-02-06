@@ -12,7 +12,7 @@ const {
   upsertLocationFromObservation,
 } = require("../controllers/locationController");
 const DeadLetter = require("../models/deadLetter");
-const { resolvePersonIdentity } = require("../utils/identityResolver");
+const { resolvePersonIdentity } = require("../utils/identityMatcher");
 
 // Mock all dependencies
 jest.mock("../models/visit");
@@ -24,7 +24,7 @@ jest.mock("../controllers/personController");
 jest.mock("../controllers/companyController");
 jest.mock("../controllers/locationController");
 jest.mock("../models/deadLetter");
-jest.mock("../utils/identityResolver");
+jest.mock("../utils/identityMatcher");
 
 describe("visitController", () => {
   let req, res;

@@ -1,6 +1,6 @@
 const Location = require("../models/location");
 const logger = require("../utils/logger");
-const { resolveLocationIdentity } = require("../utils/identityResolver");
+const { resolveLocationIdentity } = require("../utils/identityMatcher");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 
 async function upsertLocationFromObservation(observationDoc, sourceType) {
@@ -24,7 +24,10 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
   const observationId = observationDoc._id;
 
   let location = await Location.findOne({
-    $or: [{ _id: identity.location_id }, { canonical_id: identity.canonical_id }],
+    $or: [
+      { _id: identity.location_id },
+      { canonical_id: identity.canonical_id },
+    ],
   });
 
   if (!location) {

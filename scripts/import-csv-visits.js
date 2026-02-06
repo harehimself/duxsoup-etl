@@ -11,7 +11,7 @@ const Company = require('../src/models/company');
 const Location = require('../src/models/location');
 const { parseLocation } = require('../src/utils/location-parser');
 const { parseSafeDate, parseLinkedInDate } = require('../src/utils/date-parser');
-const { computeCanonicalId } = require('../src/utils/identityResolver');
+const { computeCanonicalId } = require('../src/utils/identityMatcher');
 const identityResolver = require('../src/services/identityResolverService');
 const logger = require('../src/utils/logger');
 

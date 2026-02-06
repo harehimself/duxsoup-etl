@@ -1,9 +1,6 @@
 const Person = require("../models/person");
 const identityResolverService = require("../services/identityResolverService");
-const {
-  resolvePersonIdentity,
-  _resolveCompanyIdentity,
-} = require("../utils/identityResolver");
+const { resolvePersonIdentity } = require("../utils/identityMatcher");
 const logger = require("../utils/logger");
 const { parseSafeDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
@@ -514,7 +511,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
       );
     } else if (person.snapshot.currentCompanyProfile) {
       // Fallback to normalized CompanyProfile if no numeric ID
-      const { extractCompanyProfileUrl } = require("../utils/identityResolver");
+      const { extractCompanyProfileUrl } = require("../utils/identityMatcher");
       const normalizedUrl = extractCompanyProfileUrl(
         person.snapshot.currentCompanyProfile,
       );

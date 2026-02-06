@@ -1,65 +1,12 @@
 const {
-  extractSalesNavId,
-  extractNumericId,
   extractPublicProfileUrl,
   extractCompanyId,
   resolvePersonIdentity,
   resolveCompanyIdentity,
   resolveLocationIdentity,
-} = require("../utils/identityResolver");
+} = require("../utils/identityMatcher");
 
 describe("Identity Resolution Utility", () => {
-  describe("extractSalesNavId()", () => {
-    it("should extract Sales Navigator ID from sales lead URL", () => {
-      const url =
-        "https://www.linkedin.com/sales/lead/ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ,NAME_SEARCH,vVb7";
-      const result = extractSalesNavId(url);
-
-      expect(result).toBe("ACwAAALwVAIBAlYW8bgTnsx7olXcSj4WBeNZygQ");
-    });
-
-    it("should extract Sales Navigator ID from recruiter profile URL", () => {
-      const url = "https://www.linkedin.com/talent/profile/ACwAAABCDEFGHIJ";
-      const result = extractSalesNavId(url);
-
-      expect(result).toBe("ACwAAABCDEFGHIJ");
-    });
-
-    it("should return null for public profile URL", () => {
-      const url = "https://www.linkedin.com/in/johndoe";
-      const result = extractSalesNavId(url);
-
-      expect(result).toBeNull();
-    });
-
-    it("should return null for invalid input", () => {
-      expect(extractSalesNavId(null)).toBeNull();
-      expect(extractSalesNavId("")).toBeNull();
-      expect(extractSalesNavId(123)).toBeNull();
-    });
-  });
-
-  describe("extractNumericId()", () => {
-    it("should extract numeric member ID from profile URL", () => {
-      const url = "https://www.linkedin.com/profile/12345678";
-      const result = extractNumericId(url);
-
-      expect(result).toBe("12345678");
-    });
-
-    it("should return null when no numeric ID present", () => {
-      const url = "https://www.linkedin.com/in/johndoe";
-      const result = extractNumericId(url);
-
-      expect(result).toBeNull();
-    });
-
-    it("should return null for invalid input", () => {
-      expect(extractNumericId(null)).toBeNull();
-      expect(extractNumericId("")).toBeNull();
-    });
-  });
-
   describe("extractPublicProfileUrl()", () => {
     it("should extract and normalize public profile username", () => {
       const url = "https://www.linkedin.com/in/johndoe/";

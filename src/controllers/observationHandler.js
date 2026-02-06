@@ -4,7 +4,7 @@ const {
   validateRequiredFields,
   createErrorResponse,
   createSuccessResponse,
-  handleDatabaseError
+  handleDatabaseError,
 } = require("../utils/validation");
 const { getConfig } = require("../utils/env");
 const { computeEventKey } = require("../utils/eventKey");
@@ -12,7 +12,7 @@ const { upsertFromObservation } = require("./personController");
 const { upsertCompanyFromObservation } = require("./companyController");
 const { upsertLocationFromObservation } = require("./locationController");
 const DeadLetter = require("../models/deadLetter");
-const { resolvePersonIdentity } = require("../utils/identityResolver");
+const { resolvePersonIdentity } = require("../utils/identityMatcher");
 
 /**
  * Generic observation handler for Visit and Scan webhooks
@@ -44,14 +44,18 @@ async function handleObservation(config, req, res) {
     });
 
     // Validate required fields
-    const fieldsValidation = validateRequiredFields(profileData, config.requiredFields, config.type);
+    const fieldsValidation = validateRequiredFields(
+      profileData,
+      config.requiredFields,
+      config.type,
+    );
 
     if (!fieldsValidation.isValid) {
       return res.status(400).json(
         createErrorResponse(fieldsValidation.error, {
           missingFields: fieldsValidation.missingFields,
-          required: config.requiredFields
-        })
+          required: config.requiredFields,
+        }),
       );
     }
 
@@ -75,7 +79,7 @@ async function handleObservation(config, req, res) {
           new: true,
           upsert: true,
           runValidators: true,
-        }
+        },
       );
 
       // First insert - not a duplicate
@@ -91,10 +95,13 @@ async function handleObservation(config, req, res) {
     } catch (dbError) {
       // E11000 duplicate key error - webhook retried, find existing observation
       if (dbError.code === 11000 && dbError.keyPattern?.event_key) {
-        logger.info("Duplicate event_key detected, returning existing observation", {
-          event_key: eventKey,
-          type: config.type,
-        });
+        logger.info(
+          "Duplicate event_key detected, returning existing observation",
+          {
+            event_key: eventKey,
+            type: config.type,
+          },
+        );
 
         observation = await config.model.findOne({ event_key: eventKey });
         isDuplicate = true;
@@ -106,12 +113,19 @@ async function handleObservation(config, req, res) {
 
         if (!observation) {
           // Should never happen, but log and fail
-          logger.error(`E11000 but cannot find ${config.type} by event_key`, { event_key: eventKey });
+          logger.error(`E11000 but cannot find ${config.type} by event_key`, {
+            event_key: eventKey,
+          });
           return res.status(500).json({ error: "Duplicate detection failed" });
         }
       } else {
         // Other DB error - fail the webhook
-        const errorResponse = handleDatabaseError(dbError, config.type, profileData.id, envConfig.isProduction);
+        const errorResponse = handleDatabaseError(
+          dbError,
+          config.type,
+          profileData.id,
+          envConfig.isProduction,
+        );
         return res.status(500).json(errorResponse);
       }
     }
@@ -180,7 +194,7 @@ async function handleObservation(config, req, res) {
             config.type,
             peopleError,
             identityHints,
-            payload
+            payload,
           );
 
           logger.info("Logged failed person upsert to dead_letters", {
@@ -199,7 +213,11 @@ async function handleObservation(config, req, res) {
     }
 
     // Always return success if legacy write succeeded
-    const response = createSuccessResponse(config.type, observation, profileData);
+    const response = createSuccessResponse(
+      config.type,
+      observation,
+      profileData,
+    );
     response.people_upsert = peopleUpsertSuccess;
     response.company_upsert = companyUpsertSuccess;
     response.location_upsert = locationUpsertSuccess;
@@ -214,7 +232,7 @@ async function handleObservation(config, req, res) {
 
     const errorResponse = {
       error: `Failed to process ${config.type} data`,
-      message: error.message
+      message: error.message,
     };
 
     // Don't expose stack traces in production

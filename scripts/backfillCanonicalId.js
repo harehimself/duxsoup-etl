@@ -23,7 +23,7 @@ const {
   extractPublicProfileUrl,
   buildCanonicalKey,
   computeCanonicalId,
-} = require('../src/utils/identityResolver');
+} = require('../src/utils/identityMatcher');
 
 function parseArgs() {
   const args = {

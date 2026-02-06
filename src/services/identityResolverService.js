@@ -1,7 +1,13 @@
-const Person = require('../models/person');
-const { computeCanonicalId, buildCanonicalKey } = require('../utils/identityResolver');
-const { extractSalesNavId, normalizeToCanonicalCase } = require('../utils/salesNavIdExtractor');
-const logger = require('../utils/logger');
+const Person = require("../models/person");
+const {
+  computeCanonicalId,
+  buildCanonicalKey,
+} = require("../utils/identityMatcher");
+const {
+  extractSalesNavId,
+  normalizeToCanonicalCase,
+} = require("../utils/salesNavIdExtractor");
+const logger = require("../utils/logger");
 
 /**
  * Identity Resolver Service
@@ -39,10 +45,10 @@ class IdentityResolverService {
       const linkedInUsernameAliases = [];
       const otherAliases = [];
 
-      aliases.forEach(alias => {
-        if (alias.type === 'salesNavId' && alias.value) {
+      aliases.forEach((alias) => {
+        if (alias.type === "salesNavId" && alias.value) {
           salesNavIdAliases.push(alias.value);
-        } else if (alias.type === 'linkedInUsername' && alias.value) {
+        } else if (alias.type === "linkedInUsername" && alias.value) {
           linkedInUsernameAliases.push(alias.value);
         } else if (alias.value) {
           otherAliases.push(alias.value);
@@ -51,21 +57,21 @@ class IdentityResolverService {
 
       // Add case-insensitive query for salesNavId
       if (salesNavIdAliases.length > 0) {
-        salesNavIdAliases.forEach(value => {
-          const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        salesNavIdAliases.forEach((value) => {
+          const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           conditions.push({
-            'aliases.type': 'salesNavId',
-            'aliases.value': { $regex: new RegExp(`^${escapedValue}$`, 'i') }
+            "aliases.type": "salesNavId",
+            "aliases.value": { $regex: new RegExp(`^${escapedValue}$`, "i") },
           });
         });
       }
 
       // Add case-insensitive query for linkedInUsername (LinkedIn treats usernames as case-insensitive)
       if (linkedInUsernameAliases.length > 0) {
-        linkedInUsernameAliases.forEach(value => {
-          const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        linkedInUsernameAliases.forEach((value) => {
+          const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           conditions.push({
-            'aliases.value': { $regex: new RegExp(`^${escapedValue}$`, 'i') }
+            "aliases.value": { $regex: new RegExp(`^${escapedValue}$`, "i") },
           });
         });
       }
@@ -73,7 +79,7 @@ class IdentityResolverService {
       // Add exact match query for other aliases
       if (otherAliases.length > 0) {
         conditions.push({
-          'aliases.value': { $in: otherAliases }
+          "aliases.value": { $in: otherAliases },
         });
       }
 
@@ -83,12 +89,12 @@ class IdentityResolverService {
 
       // Find people matching any condition
       const people = await Person.find({
-        $or: conditions
+        $or: conditions,
       });
 
       return people;
     } catch (error) {
-      logger.error('Failed to find people by aliases', {
+      logger.error("Failed to find people by aliases", {
         error: error.message,
         aliasCount: aliases.length,
       });
@@ -111,8 +117,10 @@ class IdentityResolverService {
 
     try {
       // Filter out aliases that already exist
-      const existingValues = new Set(person.aliases.map(a => a.value));
-      const uniqueAliases = newAliases.filter(a => !existingValues.has(a.value));
+      const existingValues = new Set(person.aliases.map((a) => a.value));
+      const uniqueAliases = newAliases.filter(
+        (a) => !existingValues.has(a.value),
+      );
 
       if (uniqueAliases.length === 0) {
         return person;
@@ -126,17 +134,17 @@ class IdentityResolverService {
             aliases: { $each: uniqueAliases },
           },
         },
-        { new: true }
+        { new: true },
       );
 
-      logger.info('Merged aliases into person', {
+      logger.info("Merged aliases into person", {
         person_id: person._id,
         newAliasCount: uniqueAliases.length,
       });
 
       return updated;
     } catch (error) {
-      logger.error('Failed to merge aliases', {
+      logger.error("Failed to merge aliases", {
         person_id: person._id,
         error: error.message,
       });
@@ -157,7 +165,7 @@ class IdentityResolverService {
    */
   determineWinner(people) {
     if (people.length === 0) {
-      throw new Error('Cannot determine winner from empty array');
+      throw new Error("Cannot determine winner from empty array");
     }
 
     if (people.length === 1) {
@@ -178,8 +186,12 @@ class IdentityResolverService {
       }
 
       // Rule 2: Prefer most observations
-      const winnerObsCount = (winner.observations.visits?.length || 0) + (winner.observations.scans?.length || 0);
-      const candidateObsCount = (candidate.observations.visits?.length || 0) + (candidate.observations.scans?.length || 0);
+      const winnerObsCount =
+        (winner.observations.visits?.length || 0) +
+        (winner.observations.scans?.length || 0);
+      const candidateObsCount =
+        (candidate.observations.visits?.length || 0) +
+        (candidate.observations.scans?.length || 0);
 
       if (candidateObsCount > winnerObsCount) {
         return candidate;
@@ -262,7 +274,7 @@ class IdentityResolverService {
 
     // If we can't determine the existing source, be conservative
     // Only update if the new ID is salesNavId (highest priority)
-    return newPrimaryIdType === 'salesNavId';
+    return newPrimaryIdType === "salesNavId";
   }
 
   /**
@@ -282,10 +294,10 @@ class IdentityResolverService {
     }
 
     try {
-      logger.info('Merging people', {
+      logger.info("Merging people", {
         winner_id: winner._id,
-        loser_ids: losers.map(l => l._id),
-        reason: mergeReason.reason || 'alias_conflict',
+        loser_ids: losers.map((l) => l._id),
+        reason: mergeReason.reason || "alias_conflict",
       });
 
       // Capture winner state before merge for rollback
@@ -293,10 +305,10 @@ class IdentityResolverService {
 
       // Collect all unique aliases
       const allAliases = [...winner.aliases];
-      const aliasValues = new Set(allAliases.map(a => a.value));
+      const aliasValues = new Set(allAliases.map((a) => a.value));
 
-      losers.forEach(loser => {
-        loser.aliases.forEach(alias => {
+      losers.forEach((loser) => {
+        loser.aliases.forEach((alias) => {
           if (!aliasValues.has(alias.value)) {
             allAliases.push(alias);
             aliasValues.add(alias.value);
@@ -308,9 +320,13 @@ class IdentityResolverService {
       const allVisits = new Set([...(winner.observations.visits || [])]);
       const allScans = new Set([...(winner.observations.scans || [])]);
 
-      losers.forEach(loser => {
-        (loser.observations.visits || []).forEach(v => allVisits.add(v.toString()));
-        (loser.observations.scans || []).forEach(s => allScans.add(s.toString()));
+      losers.forEach((loser) => {
+        (loser.observations.visits || []).forEach((v) =>
+          allVisits.add(v.toString()),
+        );
+        (loser.observations.scans || []).forEach((s) =>
+          allScans.add(s.toString()),
+        );
       });
 
       // Merge roles (deduplicate by title + company + dates)
@@ -326,7 +342,7 @@ class IdentityResolverService {
       };
 
       (winner.snapshot.roles || []).forEach(addRole);
-      losers.forEach(loser => {
+      losers.forEach((loser) => {
         (loser.snapshot.roles || []).forEach(addRole);
       });
 
@@ -343,14 +359,14 @@ class IdentityResolverService {
       };
 
       (winner.snapshot.education || []).forEach(addEducation);
-      losers.forEach(loser => {
+      losers.forEach((loser) => {
         (loser.snapshot.education || []).forEach(addEducation);
       });
 
       // Merge skills (deduplicate)
       const allSkills = new Set([...(winner.snapshot.skills || [])]);
-      losers.forEach(loser => {
-        (loser.snapshot.skills || []).forEach(skill => allSkills.add(skill));
+      losers.forEach((loser) => {
+        (loser.snapshot.skills || []).forEach((skill) => allSkills.add(skill));
       });
 
       // Update winner with merged data
@@ -364,29 +380,29 @@ class IdentityResolverService {
       await winner.save();
 
       // Create merge audit record with rollback snapshots
-      const Merge = require('../models/merge');
+      const Merge = require("../models/merge");
       await Merge.create({
         winner_id: winner._id,
-        loser_ids: losers.map(l => l._id),
-        reason: mergeReason.reason || 'alias_conflict',
+        loser_ids: losers.map((l) => l._id),
+        reason: mergeReason.reason || "alias_conflict",
         sourceObservationId: mergeReason.sourceObservationId,
         timestamp: new Date(),
         winnerSnapshotBefore: mergeReason._winnerSnapshot || null,
-        loserSnapshots: losers.map(l => l.toObject()),
+        loserSnapshots: losers.map((l) => l.toObject()),
       });
 
       // Delete loser documents
-      const loserIds = losers.map(l => l._id);
+      const loserIds = losers.map((l) => l._id);
       await Person.deleteMany({ _id: { $in: loserIds } });
 
-      logger.info('Successfully merged people', {
+      logger.info("Successfully merged people", {
         winner_id: winner._id,
         merged_count: losers.length,
       });
 
       return winner;
     } catch (error) {
-      logger.error('Failed to merge people', {
+      logger.error("Failed to merge people", {
         winner_id: winner._id,
         error: error.message,
       });
@@ -404,15 +420,17 @@ class IdentityResolverService {
    */
   async resolveOrCreate(identity, mergeReason = {}) {
     if (!identity || !identity.person_id) {
-      throw new Error('Identity must include person_id');
+      throw new Error("Identity must include person_id");
     }
 
-    const canonicalKey = identity.canonical_key
-      || buildCanonicalKey(identity.primary_id_type, identity.person_id);
-    const canonicalId = identity.canonical_id || computeCanonicalId(canonicalKey);
+    const canonicalKey =
+      identity.canonical_key ||
+      buildCanonicalKey(identity.primary_id_type, identity.person_id);
+    const canonicalId =
+      identity.canonical_id || computeCanonicalId(canonicalKey);
 
     if (!canonicalId) {
-      throw new Error('Identity must include canonical_id');
+      throw new Error("Identity must include canonical_id");
     }
 
     try {
@@ -432,7 +450,7 @@ class IdentityResolverService {
 
       if (matches.length === 0) {
         // No matches - create new person
-        logger.info('Creating new person', {
+        logger.info("Creating new person", {
           person_id: identity.person_id,
           source: identity.source,
         });
@@ -450,7 +468,7 @@ class IdentityResolverService {
 
       if (matches.length === 1) {
         // Single match - merge aliases and return
-        logger.info('Found existing person by alias', {
+        logger.info("Found existing person by alias", {
           person_id: matches[0]._id,
           matched_alias: identity.aliases?.[0]?.value,
         });
@@ -464,11 +482,11 @@ class IdentityResolverService {
           const shouldUpdate = this.shouldUpdateCanonicalId(
             person,
             canonicalId,
-            identity.primary_id_type
+            identity.primary_id_type,
           );
 
           if (shouldUpdate) {
-            logger.info('Updating canonical_id to higher-priority identifier', {
+            logger.info("Updating canonical_id to higher-priority identifier", {
               person_id: person._id,
               old_canonical_id: person.canonical_id,
               new_canonical_id: canonicalId,
@@ -478,12 +496,15 @@ class IdentityResolverService {
             person.canonical_id = canonicalId;
             await person.save();
           } else {
-            logger.warn('Canonical ID mismatch on alias match (keeping existing)', {
-              person_id: person._id,
-              existing_canonical_id: person.canonical_id,
-              incoming_canonical_id: canonicalId,
-              incoming_primary_id_type: identity.primary_id_type,
-            });
+            logger.warn(
+              "Canonical ID mismatch on alias match (keeping existing)",
+              {
+                person_id: person._id,
+                existing_canonical_id: person.canonical_id,
+                incoming_canonical_id: canonicalId,
+                incoming_primary_id_type: identity.primary_id_type,
+              },
+            );
           }
         }
 
@@ -492,17 +513,20 @@ class IdentityResolverService {
       }
 
       // Step 3: Multiple matches - merge scenario
-      logger.warn('Multiple people match aliases - triggering merge', {
+      logger.warn("Multiple people match aliases - triggering merge", {
         person_id: identity.person_id,
         match_count: matches.length,
-        matched_ids: matches.map(m => m._id),
+        matched_ids: matches.map((m) => m._id),
       });
 
-      const canonicalMatches = matches.filter(m => m.canonical_id === canonicalId);
-      const winner = canonicalMatches.length > 0
-        ? this.determineWinner(canonicalMatches)
-        : this.determineWinner(matches);
-      const losers = matches.filter(m => m._id !== winner._id);
+      const canonicalMatches = matches.filter(
+        (m) => m.canonical_id === canonicalId,
+      );
+      const winner =
+        canonicalMatches.length > 0
+          ? this.determineWinner(canonicalMatches)
+          : this.determineWinner(matches);
+      const losers = matches.filter((m) => m._id !== winner._id);
 
       if (!winner.canonical_id) {
         winner.canonical_id = canonicalId;
@@ -512,31 +536,37 @@ class IdentityResolverService {
         const shouldUpdate = this.shouldUpdateCanonicalId(
           winner,
           canonicalId,
-          identity.primary_id_type
+          identity.primary_id_type,
         );
 
         if (shouldUpdate) {
-          logger.info('Updating canonical_id to higher-priority identifier on merge', {
-            winner_id: winner._id,
-            old_canonical_id: winner.canonical_id,
-            new_canonical_id: canonicalId,
-            new_primary_id_type: identity.primary_id_type,
-          });
+          logger.info(
+            "Updating canonical_id to higher-priority identifier on merge",
+            {
+              winner_id: winner._id,
+              old_canonical_id: winner.canonical_id,
+              new_canonical_id: canonicalId,
+              new_primary_id_type: identity.primary_id_type,
+            },
+          );
 
           winner.canonical_id = canonicalId;
           await winner.save();
         } else {
-          logger.warn('Canonical ID mismatch on merge winner (keeping existing)', {
-            winner_id: winner._id,
-            existing_canonical_id: winner.canonical_id,
-            incoming_canonical_id: canonicalId,
-            incoming_primary_id_type: identity.primary_id_type,
-          });
+          logger.warn(
+            "Canonical ID mismatch on merge winner (keeping existing)",
+            {
+              winner_id: winner._id,
+              existing_canonical_id: winner.canonical_id,
+              incoming_canonical_id: canonicalId,
+              incoming_primary_id_type: identity.primary_id_type,
+            },
+          );
         }
       }
 
       person = await this.mergePeople(winner, losers, {
-        reason: mergeReason.reason || 'alias_conflict_detected',
+        reason: mergeReason.reason || "alias_conflict_detected",
         sourceObservationId: mergeReason.sourceObservationId,
       });
 
@@ -547,7 +577,7 @@ class IdentityResolverService {
 
       return person;
     } catch (error) {
-      logger.error('Failed to resolve or create person', {
+      logger.error("Failed to resolve or create person", {
         person_id: identity.person_id,
         error: error.message,
       });
@@ -600,7 +630,7 @@ function extractSalesNavIdFromPersonRecord(person) {
 
   const aliases = person.aliases || [];
   const explicitAlias = aliases.find(
-    (alias) => alias?.type === 'salesNavId' && alias?.value,
+    (alias) => alias?.type === "salesNavId" && alias?.value,
   );
 
   if (explicitAlias) {
@@ -626,16 +656,16 @@ function buildSalesNavExtractionData(aliases = []) {
     }
 
     switch (alias.type) {
-      case 'salesUrl':
+      case "salesUrl":
         data.salesUrl = alias.value;
         break;
-      case 'recruiterUrl':
+      case "recruiterUrl":
         data.recruiterUrl = alias.value;
         break;
-      case 'profileUrl':
+      case "profileUrl":
         data.profileUrl = alias.value;
         break;
-      case 'publicUrl':
+      case "publicUrl":
         data.PublicProfile = alias.value;
         break;
       default:

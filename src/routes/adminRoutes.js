@@ -310,7 +310,7 @@ router.post("/run-linking", async (req, res) => {
         const {
           buildCanonicalKey,
           computeCanonicalId,
-        } = require("../utils/identityResolver");
+        } = require("../utils/identityMatcher");
 
         if (!stableId) {
           stats.skipped++;
@@ -725,7 +725,7 @@ router.get("/inspect-observations", async (req, res) => {
   try {
     const Scan = require("../models/scan");
     const _Visit = require("../models/visit");
-    const { resolvePersonIdentity } = require("../utils/identityResolver");
+    const { resolvePersonIdentity } = require("../utils/identityMatcher");
 
     // Get a scan with Sales Nav URL
     const scanWithSalesNav = await Scan.findOne({

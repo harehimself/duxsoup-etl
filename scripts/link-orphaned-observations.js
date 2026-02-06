@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 const Person = require('../src/models/person');
 const Visit = require('../src/models/visit');
 const Scan = require('../src/models/scan');
-const { resolvePersonIdentity } = require('../src/utils/identityResolver');
+const { resolvePersonIdentity } = require('../src/utils/identityMatcher');
 const identityResolverService = require('../src/services/identityResolverService');
 
 const isDryRun = process.argv.includes('--dry-run');
