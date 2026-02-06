@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs").promises;
 const { createObjectCsvWriter } = require("csv-writer");
@@ -84,7 +84,7 @@ async function createExportJob(params) {
     fields && fields.length > 0 ? fields : DEFAULT_CSV_FIELDS;
 
   // Create job ID
-  const jobId = uuidv4();
+  const jobId = crypto.randomUUID();
 
   // Calculate expiration
   const expiresAt = new Date(Date.now() + EXPORT_TTL_HOURS * 60 * 60 * 1000);
