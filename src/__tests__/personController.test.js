@@ -669,6 +669,97 @@ describe("PersonController", () => {
     });
   });
 
+  describe("birthday field handling (via normalizeField + parseBirthdayDate)", () => {
+    const { parseBirthdayDate } = require("../../src/utils/date-parser");
+
+    it("should store Date when birthday has a year", () => {
+      const snapshot = { _meta: {} };
+      const observationMeta = {
+        observedAt: new Date("2024-06-01"),
+        source: "visit",
+        observation_id: "obs1",
+      };
+
+      const { date } = parseBirthdayDate("March 14, 1990");
+      const updated = normalizeField(
+        snapshot,
+        "birthday",
+        date,
+        observationMeta,
+      );
+
+      expect(updated).toBe(true);
+      expect(snapshot.birthday).toBeInstanceOf(Date);
+      expect(snapshot.birthday.getFullYear()).toBe(1990);
+    });
+
+    it("should store raw string when birthday lacks a year", () => {
+      const snapshot = { _meta: {} };
+      const observationMeta = {
+        observedAt: new Date("2024-06-01"),
+        source: "visit",
+        observation_id: "obs1",
+      };
+
+      const { date, raw } = parseBirthdayDate("March 14");
+      expect(date).toBeNull();
+      expect(raw).toBe("March 14");
+
+      // Controller logic: when date is null and raw is present,
+      // skip normalizeField for birthday and store birthdayRaw instead
+      const rawUpdated = normalizeField(
+        snapshot,
+        "birthdayRaw",
+        raw,
+        observationMeta,
+      );
+      expect(rawUpdated).toBe(true);
+      expect(snapshot.birthdayRaw).toBe("March 14");
+      expect(snapshot.birthday).toBeUndefined(); // never set
+    });
+
+    it("should not fabricate year 2001 for year-less birthday", () => {
+      const { date } = parseBirthdayDate("January 5");
+      // The critical assertion: no Date with a fabricated year
+      expect(date).toBeNull();
+    });
+
+    it("should clear existing birthday Date when year-less birthday arrives", () => {
+      // Simulate: snapshot already has a (possibly bogus) birthday Date
+      const snapshot = {
+        birthday: new Date("2001-03-14"),
+        _meta: {
+          birthday: {
+            value: new Date("2001-03-14"),
+            observedAt: new Date("2024-01-01"),
+            source: "scan",
+            observation_id: "old",
+          },
+        },
+      };
+
+      const { date, raw } = parseBirthdayDate("March 14");
+      expect(date).toBeNull();
+      expect(raw).toBe("March 14");
+
+      // Controller logic: when raw is present, clear birthday and set birthdayRaw
+      if (raw) {
+        snapshot.birthday = null;
+        delete snapshot._meta.birthday;
+        const observationMeta = {
+          observedAt: new Date("2024-06-01"),
+          source: "visit",
+          observation_id: "obs2",
+        };
+        normalizeField(snapshot, "birthdayRaw", raw, observationMeta);
+      }
+
+      expect(snapshot.birthday).toBeNull();
+      expect(snapshot._meta.birthday).toBeUndefined();
+      expect(snapshot.birthdayRaw).toBe("March 14");
+    });
+  });
+
   // Note: Integration tests for upsertFromObservation() moved to separate file
   // See personController.integration.test.js for DB-backed tests
 });

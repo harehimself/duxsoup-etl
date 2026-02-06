@@ -2,7 +2,7 @@ const Person = require("../models/person");
 const identityResolverService = require("../services/identityResolverService");
 const { resolvePersonIdentity } = require("../utils/identityMatcher");
 const logger = require("../utils/logger");
-const { parseSafeDate } = require("../utils/date-parser");
+const { parseSafeDate, parseBirthdayDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
@@ -467,12 +467,28 @@ async function upsertFromObservation(observationDoc, sourceType) {
       observationMeta,
     );
 
-    normalizeField(
-      person.snapshot,
-      "birthday",
-      parseSafeDate(webhookData.Birthday),
-      observationMeta,
-    );
+    // Birthday: reject year-less strings to avoid fabricated 2001 dates
+    const birthdayResult = parseBirthdayDate(webhookData.Birthday);
+    if (birthdayResult.date) {
+      normalizeField(
+        person.snapshot,
+        "birthday",
+        birthdayResult.date,
+        observationMeta,
+      );
+    } else if (birthdayResult.raw) {
+      // Year-less birthday (e.g. "March 14") — store as raw string, clear any coerced Date
+      normalizeField(
+        person.snapshot,
+        "birthdayRaw",
+        birthdayResult.raw,
+        observationMeta,
+      );
+      if (person.snapshot.birthday) {
+        person.snapshot.birthday = null;
+        delete person.snapshot._meta.birthday;
+      }
+    }
 
     // Compute full name if we have components
     if (person.snapshot.firstName || person.snapshot.lastName) {
