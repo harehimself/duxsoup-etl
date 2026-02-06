@@ -12,6 +12,13 @@
 
 ### Medium Priority
 
+- [ ] **Guard `normalizeUrl` against non-URL alias values** — The `normalizeUrl` function in `identityMatcher.js` accepts any string without validating it's a URL. Any backfill or tooling that calls `normalizeUrl` on all alias values (regardless of type) and adds a `profileUrl` alias when the result differs will misclassify non-URL identifiers (e.g., SalesNav IDs, numeric IDs) as `profileUrl`, corrupting alias data and risking incorrect identity merges.
+  - Category: `data-integrity`
+  - Files: `src/utils/identityMatcher.js:140-160` (`normalizeUrl`), proposed `scripts/backfill-alias-normalization.js`
+  - Context: `normalizeUrl` lowercases and strips protocol/query params but never checks for a URL scheme or host. A SalesNav ID like `ACwAAA_TEST123` gets lowercased to `acwaaa_test123`, differs from the original, and would be added as a `profileUrl` alias. The proposed `backfill-alias-normalization.js` loops over ALL alias values and applies `normalizeUrl` indiscriminately, triggering this issue.
+  - Fix options: (1) Add URL validation to `normalizeUrl` (check for `linkedin.com` or a scheme), (2) only call `normalizeUrl` on aliases with URL-typed `type` fields (`profileUrl`, `publicUrl`, `recruiterUrl`, `salesUrl`), or (3) rename `normalizeUrl` to clarify its URL-only purpose and add a guard in the backfill script.
+  - Acceptance: `normalizeUrl` either validates its input is a URL or the backfill script only normalizes URL-typed aliases. Non-URL identifiers are never reclassified as `profileUrl`. Unit test confirms SalesNav IDs and numeric IDs pass through `normalizeUrl` unchanged (or are rejected).
+
 - [ ] **CSV enrichment: create new person records** — Implement the stubbed-out creation path in the enrichment import script
   - Category: `enrichment`
   - Files: `scripts/importCsvEnrichment.js:461`
