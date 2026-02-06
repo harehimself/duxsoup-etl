@@ -1,15 +1,12 @@
-const Person = require('../models/person');
-const Visit = require('../models/visit');
-const Scan = require('../models/scan');
-const DeadLetter = require('../models/deadLetter');
-const logger = require('../utils/logger');
-const { getConfig } = require('../utils/env');
-const personReadService = require('../services/personReadService');
-
+const Person = require("../models/person");
+const Visit = require("../models/visit");
+const Scan = require("../models/scan");
+const DeadLetter = require("../models/deadLetter");
+const logger = require("../utils/logger");
 /**
  * Health Controller - Ops monitoring endpoints
  *
- * Provides metrics for cutover gate decisions and operational health.
+ * Provides metrics for operational health.
  */
 
 /**
@@ -22,14 +19,15 @@ async function getIngestionHealth(req, res) {
     const last24h = new Date(now - 24 * 60 * 60 * 1000);
 
     // Count dead letters
-    const [deadLettersPending, deadLettersFailed, totalObservations24h] = await Promise.all([
-      DeadLetter.countDocuments({ status: 'pending' }),
-      DeadLetter.countDocuments({ status: 'failed_again' }),
-      Promise.all([
-        Visit.countDocuments({ createdAt: { $gte: last24h } }),
-        Scan.countDocuments({ createdAt: { $gte: last24h } }),
-      ]).then(([visits, scans]) => visits + scans),
-    ]);
+    const [deadLettersPending, deadLettersFailed, totalObservations24h] =
+      await Promise.all([
+        DeadLetter.countDocuments({ status: "pending" }),
+        DeadLetter.countDocuments({ status: "failed_again" }),
+        Promise.all([
+          Visit.countDocuments({ createdAt: { $gte: last24h } }),
+          Scan.countDocuments({ createdAt: { $gte: last24h } }),
+        ]).then(([visits, scans]) => visits + scans),
+      ]);
 
     // Calculate success rate
     const deadLettersCreated24h = await DeadLetter.countDocuments({
@@ -38,7 +36,8 @@ async function getIngestionHealth(req, res) {
 
     const peopleUpsertAttempts24h = totalObservations24h;
     const peopleUpsertFailures24h = deadLettersCreated24h;
-    const peopleUpsertSuccesses24h = peopleUpsertAttempts24h - peopleUpsertFailures24h;
+    const peopleUpsertSuccesses24h =
+      peopleUpsertAttempts24h - peopleUpsertFailures24h;
 
     const successRate =
       peopleUpsertAttempts24h > 0
@@ -46,7 +45,12 @@ async function getIngestionHealth(req, res) {
         : 100;
 
     const health = {
-      status: successRate >= 95 ? 'healthy' : successRate >= 90 ? 'degraded' : 'unhealthy',
+      status:
+        successRate >= 95
+          ? "healthy"
+          : successRate >= 90
+            ? "degraded"
+            : "unhealthy",
       metrics: {
         people_upsert_success_rate_24h: Math.round(successRate * 100) / 100,
         total_observations_24h: totalObservations24h,
@@ -61,35 +65,35 @@ async function getIngestionHealth(req, res) {
     // Generate alerts
     if (successRate < 95) {
       health.alerts.push({
-        level: successRate < 90 ? 'critical' : 'warning',
+        level: successRate < 90 ? "critical" : "warning",
         message: `People upsert success rate below threshold: ${successRate.toFixed(2)}%`,
       });
     }
 
     if (deadLettersPending > 100) {
       health.alerts.push({
-        level: 'warning',
+        level: "warning",
         message: `High number of pending dead letters: ${deadLettersPending}`,
       });
     }
 
     if (deadLettersFailed > 10) {
       health.alerts.push({
-        level: 'critical',
+        level: "critical",
         message: `Dead letters failing to replay: ${deadLettersFailed}`,
       });
     }
 
     res.json(health);
   } catch (error) {
-    logger.error('Failed to get ingestion health', {
+    logger.error("Failed to get ingestion health", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      status: 'error',
-      error: 'Failed to compute ingestion health',
+      status: "error",
+      error: "Failed to compute ingestion health",
       message: error.message,
     });
   }
@@ -103,8 +107,8 @@ async function getParityHealth(req, res) {
   try {
     // Count distinct people in observations using union strategy
     const [visitProfiles, scanProfiles, totalPeopleCount] = await Promise.all([
-      Visit.distinct('Profile'),
-      Scan.distinct('Profile'),
+      Visit.distinct("Profile"),
+      Scan.distinct("Profile"),
       Person.countDocuments(),
     ]);
 
@@ -120,7 +124,12 @@ async function getParityHealth(req, res) {
       estimatedLegacyPeople > 0 ? totalPeopleCount / estimatedLegacyPeople : 0;
 
     const health = {
-      status: coverageRatio >= 0.98 ? 'ready' : coverageRatio >= 0.90 ? 'building' : 'incomplete',
+      status:
+        coverageRatio >= 0.98
+          ? "ready"
+          : coverageRatio >= 0.9
+            ? "building"
+            : "incomplete",
       metrics: {
         people_count: totalPeopleCount,
         distinct_people_in_visits: visitPeopleCount,
@@ -136,7 +145,9 @@ async function getParityHealth(req, res) {
     };
 
     // Check dead letters status
-    const deadLettersPending = await DeadLetter.countDocuments({ status: 'pending' });
+    const deadLettersPending = await DeadLetter.countDocuments({
+      status: "pending",
+    });
     health.cutover_gates.dead_letters_near_zero = deadLettersPending < 10;
 
     // Determine if ready for cutover
@@ -150,24 +161,26 @@ async function getParityHealth(req, res) {
       health.blockers = [];
       if (!health.cutover_gates.coverage_ratio_ge_98) {
         health.blockers.push(
-          `Coverage ratio ${(coverageRatio * 100).toFixed(2)}% below 98% threshold`
+          `Coverage ratio ${(coverageRatio * 100).toFixed(2)}% below 98% threshold`,
         );
       }
       if (!health.cutover_gates.dead_letters_near_zero) {
-        health.blockers.push(`${deadLettersPending} pending dead letters (threshold: < 10)`);
+        health.blockers.push(
+          `${deadLettersPending} pending dead letters (threshold: < 10)`,
+        );
       }
     }
 
     res.json(health);
   } catch (error) {
-    logger.error('Failed to get parity health', {
+    logger.error("Failed to get parity health", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      status: 'error',
-      error: 'Failed to compute parity health',
+      status: "error",
+      error: "Failed to compute parity health",
       message: error.message,
     });
   }
@@ -183,11 +196,11 @@ async function getCoverageBreakdown(req, res) {
 
     // Count by primary identity source (what _id format they use)
     const salesNavPeople = await Person.countDocuments({
-      _id: { $regex: /^AC[ow]AA/ }
+      _id: { $regex: /^AC[ow]AA/ },
     });
 
     const numericPeople = await Person.countDocuments({
-      _id: { $regex: /^\d{8,}$/ }
+      _id: { $regex: /^\d{8,}$/ },
     });
 
     const urlFallbackPeople = totalPeople - salesNavPeople - numericPeople;
@@ -196,15 +209,13 @@ async function getCoverageBreakdown(req, res) {
     // These are people who have NO salesNavId or numericId aliases
     const urlFallbackOnlyPeople = await Person.countDocuments({
       _id: { $regex: /^linkedin\.com/ }, // URL format _id
-      $and: [
-        { 'aliases.type': { $nin: ['salesNavId', 'numericId'] } }
-      ]
+      $and: [{ "aliases.type": { $nin: ["salesNavId", "numericId"] } }],
     });
 
     // Also count people who DO have stable IDs in aliases but not as primary
     const upgradablePeople = await Person.countDocuments({
       _id: { $regex: /^linkedin\.com/ }, // URL format _id
-      'aliases.type': { $in: ['salesNavId', 'numericId'] }
+      "aliases.type": { $in: ["salesNavId", "numericId"] },
     });
 
     const breakdown = {
@@ -215,9 +226,12 @@ async function getCoverageBreakdown(req, res) {
         public_url_fallback: urlFallbackPeople,
       },
       percentages: {
-        sales_nav_id: Math.round((salesNavPeople / totalPeople) * 100 * 100) / 100,
-        member_numeric_id: Math.round((numericPeople / totalPeople) * 100 * 100) / 100,
-        public_url_fallback: Math.round((urlFallbackPeople / totalPeople) * 100 * 100) / 100,
+        sales_nav_id:
+          Math.round((salesNavPeople / totalPeople) * 100 * 100) / 100,
+        member_numeric_id:
+          Math.round((numericPeople / totalPeople) * 100 * 100) / 100,
+        public_url_fallback:
+          Math.round((urlFallbackPeople / totalPeople) * 100 * 100) / 100,
       },
       url_fallback_analysis: {
         url_fallback_only: urlFallbackOnlyPeople,
@@ -230,7 +244,7 @@ async function getCoverageBreakdown(req, res) {
     // Generate recommendations
     if (upgradablePeople > 0) {
       breakdown.recommendations.push({
-        action: 'run_linking_job',
+        action: "run_linking_job",
         message: `${upgradablePeople} people have stable IDs in aliases but URL as primary. Run linking job to upgrade them.`,
         impact: `Could reduce URL-fallback count by ${upgradablePeople}`,
       });
@@ -238,21 +252,21 @@ async function getCoverageBreakdown(req, res) {
 
     if (urlFallbackOnlyPeople - upgradablePeople > 0) {
       breakdown.recommendations.push({
-        action: 'investigate_observations',
+        action: "investigate_observations",
         message: `${urlFallbackOnlyPeople - upgradablePeople} people are stuck with only URL identity. Check their observations for missing ID fields.`,
-        impact: 'May require webhook payload fixes or manual data enrichment',
+        impact: "May require webhook payload fixes or manual data enrichment",
       });
     }
 
     res.json(breakdown);
   } catch (error) {
-    logger.error('Failed to get coverage breakdown', {
+    logger.error("Failed to get coverage breakdown", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      error: 'Failed to compute coverage breakdown',
+      error: "Failed to compute coverage breakdown",
       message: error.message,
     });
   }
@@ -270,7 +284,7 @@ async function getCanonicalCoverage(req, res) {
         $or: [
           { canonical_id: { $exists: false } },
           { canonical_id: null },
-          { canonical_id: '' },
+          { canonical_id: "" },
         ],
       }),
     ]);
@@ -286,13 +300,13 @@ async function getCanonicalCoverage(req, res) {
       coverage_percent: Math.round(coverageRatio * 100 * 100) / 100,
     });
   } catch (error) {
-    logger.error('Failed to get canonical coverage', {
+    logger.error("Failed to get canonical coverage", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      error: 'Failed to compute canonical coverage',
+      error: "Failed to compute canonical coverage",
       message: error.message,
     });
   }
@@ -303,7 +317,7 @@ async function getCanonicalCoverage(req, res) {
  * Coverage of canonical_id across companies
  */
 async function getCompanyCoverage(req, res) {
-  const Company = require('../models/company');
+  const Company = require("../models/company");
   try {
     const [totalCompanies, missingCanonical] = await Promise.all([
       Company.countDocuments(),
@@ -311,7 +325,7 @@ async function getCompanyCoverage(req, res) {
         $or: [
           { canonical_id: { $exists: false } },
           { canonical_id: null },
-          { canonical_id: '' },
+          { canonical_id: "" },
         ],
       }),
     ]);
@@ -327,13 +341,13 @@ async function getCompanyCoverage(req, res) {
       coverage_percent: Math.round(coverageRatio * 100 * 100) / 100,
     });
   } catch (error) {
-    logger.error('Failed to get company coverage', {
+    logger.error("Failed to get company coverage", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      error: 'Failed to compute company coverage',
+      error: "Failed to compute company coverage",
       message: error.message,
     });
   }
@@ -344,7 +358,7 @@ async function getCompanyCoverage(req, res) {
  * Coverage of canonical_id across locations
  */
 async function getLocationCoverage(req, res) {
-  const Location = require('../models/location');
+  const Location = require("../models/location");
   try {
     const [totalLocations, missingCanonical] = await Promise.all([
       Location.countDocuments(),
@@ -352,7 +366,7 @@ async function getLocationCoverage(req, res) {
         $or: [
           { canonical_id: { $exists: false } },
           { canonical_id: null },
-          { canonical_id: '' },
+          { canonical_id: "" },
         ],
       }),
     ]);
@@ -368,13 +382,13 @@ async function getLocationCoverage(req, res) {
       coverage_percent: Math.round(coverageRatio * 100 * 100) / 100,
     });
   } catch (error) {
-    logger.error('Failed to get location coverage', {
+    logger.error("Failed to get location coverage", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      error: 'Failed to compute location coverage',
+      error: "Failed to compute location coverage",
       message: error.message,
     });
   }
@@ -393,7 +407,7 @@ async function getMetrics(req, res) {
         const last24h = new Date(now - 24 * 60 * 60 * 1000);
 
         const [deadLettersPending, totalObs] = await Promise.all([
-          DeadLetter.countDocuments({ status: 'pending' }),
+          DeadLetter.countDocuments({ status: "pending" }),
           Promise.all([
             Visit.countDocuments({ createdAt: { $gte: last24h } }),
             Scan.countDocuments({ createdAt: { $gte: last24h } }),
@@ -405,7 +419,9 @@ async function getMetrics(req, res) {
         });
 
         const successRate =
-          totalObs > 0 ? ((totalObs - deadLettersCreated) / totalObs) * 100 : 100;
+          totalObs > 0
+            ? ((totalObs - deadLettersCreated) / totalObs) * 100
+            : 100;
 
         return {
           success_rate_24h: Math.round(successRate * 100) / 100,
@@ -420,31 +436,19 @@ async function getMetrics(req, res) {
       })(),
     ]);
 
-    // Get read metrics (cutover monitoring)
-    const config = getConfig();
-    const readMetrics = personReadService.getMetrics();
-
     res.json({
-      read_source: config.readSource,
       ingestion: ingestionHealth,
       parity: parityHealth,
-      reads: {
-        people_read_success_rate_24h: readMetrics.people_read_success_rate,
-        people_read_not_found_rate_24h: readMetrics.people_read_not_found_rate,
-        legacy_fallback_hit_rate_24h: readMetrics.legacy_fallback_hit_rate,
-        legacy_fallback_hits_24h: readMetrics.legacy_fallback_hits,
-        people_read_attempts: readMetrics.people_read_attempts,
-      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('Failed to get metrics', {
+    logger.error("Failed to get metrics", {
       error: error.message,
       stack: error.stack,
     });
 
     res.status(500).json({
-      error: 'Failed to compute metrics',
+      error: "Failed to compute metrics",
       message: error.message,
     });
   }
@@ -459,60 +463,92 @@ async function getDataQuality(req, res) {
     const totalPeople = await Person.countDocuments();
 
     // Count people missing key fields
-    const [missingTitle, missingCompany, missingLocation, missingEmail, missingConnections] =
-      await Promise.all([
-        Person.countDocuments({
-          $or: [
-            { 'snapshot.currentTitle': { $exists: false } },
-            { 'snapshot.currentTitle': null },
-            { 'snapshot.currentTitle': '' },
-          ],
-        }),
-        Person.countDocuments({
-          $or: [
-            { 'snapshot.currentCompany': { $exists: false } },
-            { 'snapshot.currentCompany': null },
-            { 'snapshot.currentCompany': '' },
-          ],
-        }),
-        Person.countDocuments({
-          $or: [
-            { 'snapshot.location': { $exists: false } },
-            { 'snapshot.location': null },
-            { 'snapshot.location': '' },
-          ],
-        }),
-        Person.countDocuments({
-          $or: [
-            { 'snapshot.email': { $exists: false } },
-            { 'snapshot.email': null },
-            { 'snapshot.email': '' },
-          ],
-        }),
-        Person.countDocuments({
-          $or: [
-            { 'snapshot.connections': { $exists: false } },
-            { 'snapshot.connections': null },
-          ],
-        }),
-      ]);
+    const [
+      missingTitle,
+      missingCompany,
+      missingLocation,
+      missingEmail,
+      missingConnections,
+    ] = await Promise.all([
+      Person.countDocuments({
+        $or: [
+          { "snapshot.currentTitle": { $exists: false } },
+          { "snapshot.currentTitle": null },
+          { "snapshot.currentTitle": "" },
+        ],
+      }),
+      Person.countDocuments({
+        $or: [
+          { "snapshot.currentCompany": { $exists: false } },
+          { "snapshot.currentCompany": null },
+          { "snapshot.currentCompany": "" },
+        ],
+      }),
+      Person.countDocuments({
+        $or: [
+          { "snapshot.location": { $exists: false } },
+          { "snapshot.location": null },
+          { "snapshot.location": "" },
+        ],
+      }),
+      Person.countDocuments({
+        $or: [
+          { "snapshot.email": { $exists: false } },
+          { "snapshot.email": null },
+          { "snapshot.email": "" },
+        ],
+      }),
+      Person.countDocuments({
+        $or: [
+          { "snapshot.connections": { $exists: false } },
+          { "snapshot.connections": null },
+        ],
+      }),
+    ]);
 
     const pct = (missing) =>
-      totalPeople > 0 ? Math.round(((totalPeople - missing) / totalPeople) * 100 * 100) / 100 : 0;
+      totalPeople > 0
+        ? Math.round(((totalPeople - missing) / totalPeople) * 100 * 100) / 100
+        : 0;
 
     const quality = {
       totalPeople,
       fields: {
-        currentTitle: { present: totalPeople - missingTitle, missing: missingTitle, coverage: pct(missingTitle) },
-        currentCompany: { present: totalPeople - missingCompany, missing: missingCompany, coverage: pct(missingCompany) },
-        location: { present: totalPeople - missingLocation, missing: missingLocation, coverage: pct(missingLocation) },
-        email: { present: totalPeople - missingEmail, missing: missingEmail, coverage: pct(missingEmail) },
-        connections: { present: totalPeople - missingConnections, missing: missingConnections, coverage: pct(missingConnections) },
+        currentTitle: {
+          present: totalPeople - missingTitle,
+          missing: missingTitle,
+          coverage: pct(missingTitle),
+        },
+        currentCompany: {
+          present: totalPeople - missingCompany,
+          missing: missingCompany,
+          coverage: pct(missingCompany),
+        },
+        location: {
+          present: totalPeople - missingLocation,
+          missing: missingLocation,
+          coverage: pct(missingLocation),
+        },
+        email: {
+          present: totalPeople - missingEmail,
+          missing: missingEmail,
+          coverage: pct(missingEmail),
+        },
+        connections: {
+          present: totalPeople - missingConnections,
+          missing: missingConnections,
+          coverage: pct(missingConnections),
+        },
       },
       overallCompleteness:
         totalPeople > 0
           ? Math.round(
-              ((5 * totalPeople - missingTitle - missingCompany - missingLocation - missingEmail - missingConnections) /
+              ((5 * totalPeople -
+                missingTitle -
+                missingCompany -
+                missingLocation -
+                missingEmail -
+                missingConnections) /
                 (5 * totalPeople)) *
                 100 *
                 100,
@@ -523,8 +559,17 @@ async function getDataQuality(req, res) {
 
     res.json({ success: true, data: quality });
   } catch (error) {
-    logger.error('Failed to get data quality', { error: error.message, stack: error.stack });
-    res.status(500).json({ success: false, error: 'Failed to compute data quality', message: error.message });
+    logger.error("Failed to get data quality", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to compute data quality",
+        message: error.message,
+      });
   }
 }
 
@@ -538,8 +583,8 @@ async function getDashboard(req, res) {
     const last24h = new Date(now - 24 * 60 * 60 * 1000);
     const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
-    const Change = require('../models/change');
-    const Company = require('../models/company');
+    const Change = require("../models/change");
+    const Company = require("../models/company");
 
     const [
       totalPeople,
@@ -559,15 +604,20 @@ async function getDashboard(req, res) {
       Scan.countDocuments(),
       Visit.countDocuments({ createdAt: { $gte: last24h } }),
       Scan.countDocuments({ createdAt: { $gte: last24h } }),
-      DeadLetter.countDocuments({ status: 'pending' }),
-      DeadLetter.countDocuments({ status: 'failed_again' }),
+      DeadLetter.countDocuments({ status: "pending" }),
+      DeadLetter.countDocuments({ status: "failed_again" }),
       Change.countDocuments({ timestamp: { $gte: last7d } }),
       Change.find().sort({ timestamp: -1 }).limit(5).lean(),
     ]);
 
-    const deadLettersCreated24h = await DeadLetter.countDocuments({ createdAt: { $gte: last24h } });
+    const deadLettersCreated24h = await DeadLetter.countDocuments({
+      createdAt: { $gte: last24h },
+    });
     const totalObs24h = visits24h + scans24h;
-    const successRate = totalObs24h > 0 ? ((totalObs24h - deadLettersCreated24h) / totalObs24h) * 100 : 100;
+    const successRate =
+      totalObs24h > 0
+        ? ((totalObs24h - deadLettersCreated24h) / totalObs24h) * 100
+        : 100;
 
     const dashboard = {
       summary: {
@@ -582,7 +632,12 @@ async function getDashboard(req, res) {
         scans24h,
         deadLettersPending,
         deadLettersFailed,
-        status: successRate >= 95 ? 'healthy' : successRate >= 90 ? 'degraded' : 'unhealthy',
+        status:
+          successRate >= 95
+            ? "healthy"
+            : successRate >= 90
+              ? "degraded"
+              : "unhealthy",
       },
       changes: {
         last7Days: changesLast7d,
@@ -593,8 +648,17 @@ async function getDashboard(req, res) {
 
     res.json({ success: true, data: dashboard });
   } catch (error) {
-    logger.error('Failed to get dashboard', { error: error.message, stack: error.stack });
-    res.status(500).json({ success: false, error: 'Failed to compute dashboard', message: error.message });
+    logger.error("Failed to get dashboard", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to compute dashboard",
+        message: error.message,
+      });
   }
 }
 
@@ -604,7 +668,7 @@ async function getDashboard(req, res) {
  */
 async function testNotifications(req, res) {
   try {
-    const notificationService = require('../services/notificationService');
+    const notificationService = require("../services/notificationService");
     const results = await notificationService.testNotifications();
 
     res.json({
@@ -612,8 +676,17 @@ async function testNotifications(req, res) {
       data: results,
     });
   } catch (error) {
-    logger.error('Failed to test notifications', { error: error.message, stack: error.stack });
-    res.status(500).json({ success: false, error: 'Failed to test notifications', message: error.message });
+    logger.error("Failed to test notifications", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to test notifications",
+        message: error.message,
+      });
   }
 }
 

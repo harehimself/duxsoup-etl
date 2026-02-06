@@ -282,7 +282,6 @@ MONGODB_URI=mongodb+srv://...      # MongoDB connection string
 NODE_ENV=development               # development | production
 PORT=3000                          # Server port
 ALLOWED_ORIGINS=http://localhost   # CORS origins (comma-separated)
-READ_SOURCE=hybrid                 # hybrid | people | legacy
 ENABLE_SCHEDULER=true              # Enable background jobs
 CANONICAL_ID_NAMESPACE=...         # UUID namespace for canonical IDs
 ```
