@@ -38,6 +38,25 @@ const indexDefinitions = require('./atlas-search-indexes.json');
 
 const ATLAS_API_BASE = 'cloud.mongodb.com/api/atlas/v1.0';
 
+/**
+ * Extract the database name from a MongoDB connection URI.
+ * Falls back to the value in atlas-search-indexes.json if parsing fails.
+ */
+function getDatabaseName(mongoUri, fallback) {
+  if (!mongoUri) return fallback;
+  try {
+    const url = new URL(mongoUri);
+    // pathname is "/<dbname>" or "/<dbname>?options"
+    const dbName = url.pathname.split('/')[1];
+    if (dbName) return dbName;
+  } catch {
+    // Non-standard URI format — try regex as fallback
+    const match = mongoUri.match(/\/\/[^/]+\/([^?]+)/);
+    if (match && match[1]) return match[1];
+  }
+  return fallback;
+}
+
 async function listSearchIndexes() {
   console.log('📋 Listing current search indexes...\n');
 
@@ -110,15 +129,18 @@ async function createViaAtlasAPI() {
     process.exit(1);
   }
 
-  console.log('🚀 Creating Atlas Search index via API...\n');
+  const mongoUri = process.env.MONGODB_URI;
 
   const peopleIndex = indexDefinitions.indexes.find(
     (idx) => idx.collectionName === 'people'
   );
 
+  const database = getDatabaseName(mongoUri, peopleIndex.database);
+  console.log(`🚀 Creating Atlas Search index via API (database: ${database})...\n`);
+
   const requestBody = JSON.stringify({
     collectionName: peopleIndex.collectionName,
-    database: peopleIndex.database,
+    database,
     name: peopleIndex.name,
     mappings: peopleIndex.definition.mappings,
   });
@@ -180,8 +202,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  logger.error('Script failed', { error: error.message });
-  console.error('Error:', error.message);
-  process.exit(1);
-});
+// Only run when executed directly (not when required for testing)
+if (require.main === module) {
+  main().catch((error) => {
+    logger.error('Script failed', { error: error.message });
+    console.error('Error:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { getDatabaseName };

@@ -1,10 +1,10 @@
 {
-  "$comment": "Atlas Search Index Definitions for duxsoup database. Apply via Atlas UI or mongocli.",
+  "$comment": "Atlas Search Index Definitions. Apply via Atlas UI or mongocli. The database field is a default; --create derives the actual database from MONGODB_URI.",
   "indexes": [
     {
       "name": "default",
       "collectionName": "people",
-      "database": "duxsoup",
+      "database": "duxsoup-etl",
       "type": "search",
       "definition": {
         "mappings": {
