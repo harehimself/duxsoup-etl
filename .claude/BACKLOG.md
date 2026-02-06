@@ -12,26 +12,25 @@
 
 ### Medium Priority
 
-- [x] ~~**Fix stale parsedSeniority/parsedDepartment on title changes**~~ — Done, see Completed section.
-
-- [x] **Fix undefined pagination fields in fuzzy search fallback** — When text search finds no results and `smartSearch` falls back to `fuzzySearchPeople`, the metadata lacks `limit`, `totalCount`, `hasMore`, and `nextSkip`. The search controller reads these fields unconditionally, producing a pagination envelope with `undefined` values.
-  - Category: `bug`
-  - Files: `src/services/searchService.js:139-147`, `src/controllers/searchController.js:47-54`
-  - Context: Breaks the standardized pagination contract for any query that only matches via fuzzy search. Clients relying on `hasMore` or `nextSkip` for pagination will mis-handle the response.
-  - Acceptance: `fuzzySearchPeople` returns `limit`, `totalCount`, `hasMore`, and `nextSkip` in its metadata. Alternatively, the controller computes them from the request/response. Unit test covers the fuzzy fallback pagination envelope.
-
-- [x] **Birthday field: reject year-less date strings** — `parseSafeDate("March 14")` silently returns `2001-03-14` because Node's `new Date()` defaults missing years to 2001. LinkedIn commonly shows birthdays without a year.
-  - Category: `data-quality`
-  - Files: `src/controllers/personController.js:437`, `src/utils/date-parser.js`
-  - **Completed:** 2026-02-06, branch `claude/birthday-field-date-validation-7Kjts`. Added `containsYear()` and `parseBirthdayDate()` to date-parser.js; added `birthdayRaw` field to Person model; updated personController to store year-less strings in `birthdayRaw` and clear any coerced Date. 40 date-parser tests + 4 personController birthday tests pass.
-
 - [ ] **Fix CLAUDE.md schema + endpoint docs drift** — Align person snapshot example and query/search/export routes with current models and routes
   - Category: `docs`
   - Files: `.claude/CLAUDE.md`, `src/models/person.js`, `src/routes/queryRoutes.js`, `src/routes/searchRoutes.js`, `src/routes/exportRoutes.js`
   - Context: The person model example documents snapshot fields at the top level and lists GET-based query/search/export endpoints that no longer match the implementation. This can mislead users into querying/updating incorrect paths or hitting 404/method errors.
   - Acceptance: Update the Person example to reflect `snapshot`, `snapshot._meta`, and `meta.observationsCount` nesting; correct query/search/export endpoint paths and HTTP verbs.
 
-- [x] ~~**Atlas Search index targets wrong database**~~ — Done, see Completed section.
+- [ ] **Tighten Sales Navigator ID detection across identity resolution** — The prefix-only regex `/^(ACwAA|ACoAA)/` in `determineWinner()` can misclassify username-based `_id` values (e.g., `ACoAAlex`) as Sales Nav IDs, causing incorrect merge winner selection.
+  - Category: `bug`
+  - Files: `src/services/identityResolverService.js:177` (`determineWinner` regex), `src/utils/salesNavIdExtractor.js` (canonical format)
+  - Context: Production impact — merge winner selection could favor a non-Sales-Nav person if their username happens to start with `ACwAA` or `ACoAA`.
+  - Fix: Replace prefix-only check with a full canonical format regex (e.g., `^AC[wo]AA[A-Za-z0-9_-]{10,}$` case-insensitive) that requires sufficient length to distinguish from usernames.
+  - Acceptance: `determineWinner()` does not match short username-based IDs. Unit tests for edge cases like `ACoAAlex`, `ACwAABob`.
+
+- [ ] **Add URL validation guard to `normalizeUrl()`** — `normalizeUrl()` in `identityMatcher.js` accepts any string without validating it's a URL. Non-URL identifiers (SalesNav IDs, numeric IDs, usernames) would be mangled if passed through it.
+  - Category: `bug`
+  - Files: `src/utils/identityMatcher.js:140-160`
+  - Context: Current production code only calls `normalizeUrl` on known URL fields, so the risk is contained. But the function has no guard, making it a trap for future callers (backfill scripts, enrichment paths).
+  - Fix: Add URL validation (check for `linkedin.com` or URL scheme) inside `normalizeUrl()`, or rename to clarify URL-only purpose and add an assertion.
+  - Acceptance: `normalizeUrl('ACwAAA_TEST123')` returns `null` (or the input unchanged). Unit test confirms non-URL inputs are rejected.
 
 ### Low Priority / Tech Debt
 
@@ -78,6 +77,8 @@
 
 ## Completed
 
+- [x] **CSV enrichment: create new person records** — 2026-02-06. Implemented `createPersonFromCsv()` with full snapshot, aliases, `_meta` provenance, derived metrics, E11000 race-condition handling. 19 unit tests.
+- [x] **Birthday field: reject year-less date strings** — 2026-02-06, branch `claude/birthday-field-date-validation-7Kjts`. Added `containsYear()` and `parseBirthdayDate()` to date-parser.js; added `birthdayRaw` field to Person model.
 - [x] **Fix stale parsedSeniority/parsedDepartment on title changes** — 2026-02-06, branch `claude/review-queue-items-AnAP2`. Added `clearDerivedField()` to bypass the "never overwrite with empty" rule for derived fields, clearing stale values when `parseTitle` returns null.
 - [x] **Sunset hybrid read mode** — 2026-02-06, branch `claude/sunset-hybrid-read-mode-3nGbp`. Removed `READ_SOURCE` env var, hybrid/legacy read modes, legacy fallback code, cutover metrics, `/api/people/metrics` endpoint, and cutover scripts. All reads now go directly to people/company/location collections.
 - [x] **Fix Atlas Search index targets wrong database** — 2026-02-06, branch `claude/fix-atlas-search-index-AoyDV`. JSON config hardcoded `"duxsoup"` instead of `"duxsoup-etl"`; `--create` now derives database from `MONGODB_URI` at runtime.
