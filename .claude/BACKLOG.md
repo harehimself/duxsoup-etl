@@ -14,7 +14,7 @@
 
 - [x] ~~**Fix stale parsedSeniority/parsedDepartment on title changes**~~ — Done, see Completed section.
 
-- [ ] **Fix undefined pagination fields in fuzzy search fallback** — When text search finds no results and `smartSearch` falls back to `fuzzySearchPeople`, the metadata lacks `limit`, `totalCount`, `hasMore`, and `nextSkip`. The search controller reads these fields unconditionally, producing a pagination envelope with `undefined` values.
+- [x] **Fix undefined pagination fields in fuzzy search fallback** — When text search finds no results and `smartSearch` falls back to `fuzzySearchPeople`, the metadata lacks `limit`, `totalCount`, `hasMore`, and `nextSkip`. The search controller reads these fields unconditionally, producing a pagination envelope with `undefined` values.
   - Category: `bug`
   - Files: `src/services/searchService.js:139-147`, `src/controllers/searchController.js:47-54`
   - Context: Breaks the standardized pagination contract for any query that only matches via fuzzy search. Clients relying on `hasMore` or `nextSkip` for pagination will mis-handle the response.
@@ -81,6 +81,7 @@
 - [x] **Fix stale parsedSeniority/parsedDepartment on title changes** — 2026-02-06, branch `claude/review-queue-items-AnAP2`. Added `clearDerivedField()` to bypass the "never overwrite with empty" rule for derived fields, clearing stale values when `parseTitle` returns null.
 - [x] **Sunset hybrid read mode** — 2026-02-06, branch `claude/sunset-hybrid-read-mode-3nGbp`. Removed `READ_SOURCE` env var, hybrid/legacy read modes, legacy fallback code, cutover metrics, `/api/people/metrics` endpoint, and cutover scripts. All reads now go directly to people/company/location collections.
 - [x] **Fix Atlas Search index targets wrong database** — 2026-02-06, branch `claude/fix-atlas-search-index-AoyDV`. JSON config hardcoded `"duxsoup"` instead of `"duxsoup-etl"`; `--create` now derives database from `MONGODB_URI` at runtime.
+- [x] **Fix undefined pagination fields in fuzzy search fallback** — 2026-02-06, branch `claude/review-next-task-DOaSc`. `fuzzySearchPeople` now returns `totalCount`, `limit`, `skip`, `hasMore`, and `nextSkip` in metadata; supports `skip` param for pagination. 3 new unit tests.
 - [x] **Fix case-sensitive CXO/GM/MD regex patterns in titleParser** — 2026-02-06, branch `claude/fix-cxo-pattern-HxciY`. Four patterns in `SENIORITY_TIERS` lacked the `i` flag, causing lowercase/mixed-case C-suite abbreviations (e.g., "ceo", "Cto") to misclassify as Individual Contributor.
 - [x] **Eliminate legacy identityResolver.js wrapper** — 2026-02-06, migrated 23 callers (8 production, 7 scripts, 8 tests) to `identityMatcher.js`, deleted 525-line wrapper
 - [x] **Clean up stale remote branches** — 2026-02-06, deleted 8 remote + 2 local stale branches, pruned 18 tracking refs

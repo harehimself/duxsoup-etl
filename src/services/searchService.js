@@ -1,6 +1,6 @@
-const Person = require('../models/person');
-const logger = require('../utils/logger');
-const { AppError } = require('../utils/errors');
+const Person = require("../models/person");
+const logger = require("../utils/logger");
+const { AppError } = require("../utils/errors");
 
 /**
  * Search Service
@@ -23,46 +23,50 @@ async function searchPeople(params) {
   const { query, limit = 20, skip = 0, fields } = params;
 
   // Validate query
-  if (!query || typeof query !== 'string') {
-    throw new AppError('INVALID_QUERY', 'Search query is required');
+  if (!query || typeof query !== "string") {
+    throw new AppError("INVALID_QUERY", "Search query is required");
   }
 
   if (query.trim().length === 0) {
-    throw new AppError('INVALID_QUERY', 'Search query cannot be empty');
+    throw new AppError("INVALID_QUERY", "Search query cannot be empty");
   }
 
   // Validate limit
   const parsedLimit = parseInt(limit, 10);
   if (isNaN(parsedLimit) || parsedLimit < 1) {
-    throw new AppError('INVALID_LIMIT', 'Limit must be a positive integer');
+    throw new AppError("INVALID_LIMIT", "Limit must be a positive integer");
   }
 
   if (parsedLimit > 100) {
-    throw new AppError('LIMIT_EXCEEDED', 'Limit cannot exceed 100');
+    throw new AppError("LIMIT_EXCEEDED", "Limit cannot exceed 100");
   }
 
   // Validate skip
   const parsedSkip = parseInt(skip, 10);
   if (isNaN(parsedSkip) || parsedSkip < 0) {
-    throw new AppError('INVALID_SKIP', 'Skip must be a non-negative integer');
+    throw new AppError("INVALID_SKIP", "Skip must be a non-negative integer");
   }
 
-  logger.info('Executing text search', { query, limit: parsedLimit, skip: parsedSkip });
+  logger.info("Executing text search", {
+    query,
+    limit: parsedLimit,
+    skip: parsedSkip,
+  });
 
   // Build search query
   let searchQuery = Person.find(
     { $text: { $search: query } },
-    { score: { $meta: 'textScore' } },
+    { score: { $meta: "textScore" } },
   );
 
   // Apply field selection if specified
   if (fields && Array.isArray(fields) && fields.length > 0) {
-    const projection = fields.join(' ');
+    const projection = fields.join(" ");
     searchQuery = searchQuery.select(projection);
   }
 
   // Sort by relevance score (text score)
-  searchQuery = searchQuery.sort({ score: { $meta: 'textScore' } });
+  searchQuery = searchQuery.sort({ score: { $meta: "textScore" } });
 
   // Apply pagination
   searchQuery = searchQuery.skip(parsedSkip).limit(parsedLimit);
@@ -75,7 +79,7 @@ async function searchPeople(params) {
     $text: { $search: query },
   });
 
-  logger.info('Search executed successfully', {
+  logger.info("Search executed successfully", {
     query,
     resultCount: results.length,
     totalCount,
@@ -90,7 +94,10 @@ async function searchPeople(params) {
       limit: parsedLimit,
       skip: parsedSkip,
       hasMore: parsedSkip + results.length < totalCount,
-      nextSkip: parsedSkip + results.length < totalCount ? parsedSkip + parsedLimit : null,
+      nextSkip:
+        parsedSkip + results.length < totalCount
+          ? parsedSkip + parsedLimit
+          : null,
     },
   };
 }
@@ -106,34 +113,42 @@ async function searchPeople(params) {
  * @returns {Promise<Object>} Search results
  */
 async function fuzzySearchPeople(params) {
-  const { query, limit = 20 } = params;
+  const { query, limit = 20, skip = 0 } = params;
 
-  if (!query || typeof query !== 'string' || query.trim().length === 0) {
-    throw new AppError('INVALID_QUERY', 'Search query is required');
+  if (!query || typeof query !== "string" || query.trim().length === 0) {
+    throw new AppError("INVALID_QUERY", "Search query is required");
   }
 
-  logger.info('Executing fuzzy search (text search returned no results)', { query });
+  const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const parsedSkip = Math.max(parseInt(skip, 10) || 0, 0);
+
+  logger.info("Executing fuzzy search (text search returned no results)", {
+    query,
+  });
 
   // Escape special regex characters to prevent regex injection, then split on whitespace for OR matching
-  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = escaped.replace(/\s+/g, '|');
-  const regex = new RegExp(pattern, 'i');
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = escaped.replace(/\s+/g, "|");
+  const regex = new RegExp(pattern, "i");
+
+  const filter = {
+    $or: [
+      { "snapshot.fullName": regex },
+      { "snapshot.currentTitle": regex },
+      { "snapshot.currentCompany": regex },
+    ],
+  };
 
   // Search across multiple fields
-  const results = await Person.find({
-    $or: [
-      { 'snapshot.fullName': regex },
-      { 'snapshot.currentTitle': regex },
-      { 'snapshot.currentCompany': regex },
-    ],
-  })
-    .limit(limit)
-    .lean()
-    .exec();
+  const [results, totalCount] = await Promise.all([
+    Person.find(filter).skip(parsedSkip).limit(parsedLimit).lean().exec(),
+    Person.countDocuments(filter),
+  ]);
 
-  logger.info('Fuzzy search completed', {
+  logger.info("Fuzzy search completed", {
     query,
     resultCount: results.length,
+    totalCount,
   });
 
   return {
@@ -141,8 +156,16 @@ async function fuzzySearchPeople(params) {
     metadata: {
       query,
       count: results.length,
+      totalCount,
+      limit: parsedLimit,
+      skip: parsedSkip,
+      hasMore: parsedSkip + results.length < totalCount,
+      nextSkip:
+        parsedSkip + results.length < totalCount
+          ? parsedSkip + parsedLimit
+          : null,
       fuzzy: true,
-      message: 'Using fuzzy matching (no exact text matches found)',
+      message: "Using fuzzy matching (no exact text matches found)",
     },
   };
 }
@@ -159,7 +182,7 @@ async function smartSearch(params) {
 
   // If no results, try fuzzy search
   if (textResults.results.length === 0) {
-    logger.info('Text search returned no results, trying fuzzy search', {
+    logger.info("Text search returned no results, trying fuzzy search", {
       query: params.query,
     });
 
