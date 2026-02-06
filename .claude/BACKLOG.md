@@ -31,6 +31,12 @@
   - Fix: Add a date-validation guard before `parseSafeDate` (or inside it) that detects inputs without a 4-digit year. For year-less strings, either store `null` (discard) or store as a `birthdayRaw` string field (month/day only) rather than coercing to a full Date. Also consider a migration to null out any existing 2001-year birthdays that lack a real year.
   - Acceptance: Year-less birthday strings (e.g., "March 14", "January 5") do not produce a Date with a fabricated year. Includes unit tests for edge cases. Existing 2001-year birthdays reviewed/corrected.
 
+- [ ] **Fix CLAUDE.md schema + endpoint docs drift** — Align person snapshot example and query/search/export routes with current models and routes
+  - Category: `docs`
+  - Files: `.claude/CLAUDE.md`, `src/models/person.js`, `src/routes/queryRoutes.js`, `src/routes/searchRoutes.js`, `src/routes/exportRoutes.js`
+  - Context: The person model example documents snapshot fields at the top level and lists GET-based query/search/export endpoints that no longer match the implementation. This can mislead users into querying/updating incorrect paths or hitting 404/method errors.
+  - Acceptance: Update the Person example to reflect `snapshot`, `snapshot._meta`, and `meta.observationsCount` nesting; correct query/search/export endpoint paths and HTTP verbs.
+
 - [ ] **Sunset hybrid read mode** — Evaluate whether `READ_SOURCE=hybrid` and the legacy personReadService fallback are still needed
   - Category: `tech-debt`
   - Files: `src/services/personReadService.js` (lines 155-179 contain a "simplified example" placeholder)
