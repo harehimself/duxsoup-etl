@@ -12,6 +12,18 @@
 
 ### Medium Priority
 
+- [ ] **Fix stale parsedSeniority/parsedDepartment on title changes** — When a person's title changes from a parsable role to one that doesn't match any patterns, the old `parsedSeniority`/`parsedDepartment` values remain in the snapshot because `normalizeField` is only called when `parseTitle` returns non-null. Additionally, `normalizeField` itself refuses to overwrite with null (via `shouldOverwrite`), so the fix must directly clear these derived fields and their `_meta` entries when the parser returns no match.
+  - Category: `bug`
+  - Files: `src/controllers/personController.js:463-482`
+  - Context: These are derived (not observed) fields — the "never overwrite with empty" rule designed for observed data should not apply. Stale classifications will skew downstream filters/analytics that rely on `parsedSeniority` or `parsedDepartment`.
+  - Acceptance: When `parseTitle` returns null for seniority or department, the corresponding snapshot field is set to `null` and `_meta` is updated. Unit test confirms clearing behavior when title changes from parsable to unparsable.
+
+- [ ] **Fix undefined pagination fields in fuzzy search fallback** — When text search finds no results and `smartSearch` falls back to `fuzzySearchPeople`, the metadata lacks `limit`, `totalCount`, `hasMore`, and `nextSkip`. The search controller reads these fields unconditionally, producing a pagination envelope with `undefined` values.
+  - Category: `bug`
+  - Files: `src/services/searchService.js:139-147`, `src/controllers/searchController.js:47-54`
+  - Context: Breaks the standardized pagination contract for any query that only matches via fuzzy search. Clients relying on `hasMore` or `nextSkip` for pagination will mis-handle the response.
+  - Acceptance: `fuzzySearchPeople` returns `limit`, `totalCount`, `hasMore`, and `nextSkip` in its metadata. Alternatively, the controller computes them from the request/response. Unit test covers the fuzzy fallback pagination envelope.
+
 - [ ] **CSV enrichment: create new person records** — Implement the stubbed-out creation path in the enrichment import script
   - Category: `enrichment`
   - Files: `scripts/importCsvEnrichment.js:461`
