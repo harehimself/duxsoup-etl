@@ -125,6 +125,39 @@ function shouldOverwrite(existingMeta, incomingMeta) {
 }
 
 /**
+ * Clear a derived (computed) field, bypassing the "never overwrite with empty" rule.
+ *
+ * Derived fields like parsedSeniority and parsedDepartment are computed from
+ * observed data, not observed directly. The shouldOverwrite guard that prevents
+ * nulling observed fields must not apply here — when the source value no longer
+ * produces a derived result, the derived field must be cleared.
+ *
+ * @param {Object} snapshot - Current snapshot object
+ * @param {string} fieldPath - Field to clear (e.g., 'parsedDepartment')
+ * @param {Object} observationMeta - { observedAt, source, observationId }
+ * @returns {boolean} True if field was cleared (false if already null)
+ */
+function clearDerivedField(snapshot, fieldPath, observationMeta) {
+  if (snapshot[fieldPath] == null) {
+    return false; // Already null/undefined, nothing to clear
+  }
+
+  snapshot[fieldPath] = null;
+
+  if (!snapshot._meta) {
+    snapshot._meta = {};
+  }
+  snapshot._meta[fieldPath] = {
+    value: null,
+    observedAt: observationMeta.observedAt,
+    source: observationMeta.source,
+    observationId: observationMeta.observationId,
+  };
+
+  return true;
+}
+
+/**
  * Normalize a field with provenance tracking
  *
  * @param {Object} snapshot - Current snapshot object
@@ -470,6 +503,8 @@ async function upsertFromObservation(observationDoc, sourceType) {
           parsed.seniority,
           observationMeta,
         );
+      } else {
+        clearDerivedField(person.snapshot, "parsedSeniority", observationMeta);
       }
       if (parsed.department) {
         normalizeField(
@@ -478,6 +513,8 @@ async function upsertFromObservation(observationDoc, sourceType) {
           parsed.department,
           observationMeta,
         );
+      } else {
+        clearDerivedField(person.snapshot, "parsedDepartment", observationMeta);
       }
     }
 
@@ -766,6 +803,7 @@ module.exports = {
   upsertFromObservation,
   shouldOverwrite, // Export for testing
   normalizeField, // Export for testing
+  clearDerivedField, // Export for testing
   computeDerivedMetrics, // Export for testing
   updateRolesTimeline, // Export for testing
 };
