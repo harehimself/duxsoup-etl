@@ -28,6 +28,9 @@ const { parseSafeDate } = require('../src/utils/date-parser');
 const logger = require('../src/utils/logger');
 const database = require('../src/utils/database');
 const identityMatcher = require('../src/utils/identityMatcher');
+const identityResolverService = require('../src/services/identityResolverService');
+const { computeDerivedMetrics } = require('../src/controllers/personController');
+const { parseTitle } = require('../src/utils/titleParser');
 
 // Statistics tracking
 const stats = {
@@ -53,6 +56,9 @@ const stats = {
   startTime: null,
   endTime: null,
 };
+
+// Track current CSV file name for provenance metadata
+let currentCsvFileName = null;
 
 /**
  * Extract Sales Navigator ID from SalesProfile URL
@@ -341,7 +347,7 @@ async function enrichPerson(person, csvData, dryRun = true) {
   if (fieldsEnriched.length > 0) {
     person.snapshot._enrichment = {
       csvImportDate: new Date(),
-      csvFileName: 'dux-soup-visit-data@2025-01-17 12h13.csv',
+      csvFileName: currentCsvFileName || 'unknown',
       fieldsEnriched,
       csvVisitTime: csvVisitTime,
       csvRowId: csvData.csvRowId,
@@ -356,6 +362,229 @@ async function enrichPerson(person, csvData, dryRun = true) {
   }
 
   return { updated: false, fieldsEnriched: [] };
+}
+
+/**
+ * Parse connections string to number
+ * Handles: "500", "1234", "500+" (strips +)
+ */
+function parseConnections(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  const str = String(value).trim();
+  if (str === '') return null;
+  const num = parseInt(str.replace(/\+$/, ''), 10);
+  return isNaN(num) || num < 0 ? null : num;
+}
+
+/**
+ * Parse degree string to number (1-3)
+ * Handles: "1", "2", "3", "1st", "2nd", "3rd"
+ */
+function parseDegree(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  const str = String(value).trim().toLowerCase();
+  if (str === '') return null;
+  const match = str.match(/^(\d+)(st|nd|rd|th)?$/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return num >= 1 && num <= 3 ? num : null;
+  }
+  return null;
+}
+
+/**
+ * Create a new Person record from a CSV row.
+ * Uses identityResolverService to handle dedup and race conditions.
+ *
+ * @param {Object} row - Raw CSV row
+ * @param {Object} csvData - Transformed CSV data from transformCsvRow()
+ * @param {Object} identifiers - Extracted identifiers from identityMatcher
+ * @param {boolean} dryRun - If true, skip DB writes
+ * @returns {Object} { created, enriched, error, person_id }
+ */
+async function createPersonFromCsv(row, csvData, identifiers, dryRun) {
+  // Build webhook-shaped data for resolvePersonIdentity
+  const webhookShaped = {
+    Profile: csvData.profileUrl,
+    SalesProfile: row.SalesProfile,
+    PublicProfile: row.PublicProfile,
+    RecruiterProfile: row.RecruiterProfile,
+    id: csvData.csvRowId,
+  };
+
+  const identity = identityMatcher.resolvePersonIdentity(webhookShaped);
+
+  if (!identity.person_id) {
+    logger.warn('Cannot create person from CSV: no stable identity', {
+      csvRowId: csvData.csvRowId,
+      profileUrl: csvData.profileUrl,
+    });
+    return { created: false, error: 'no_stable_identity' };
+  }
+
+  if (dryRun) {
+    return { created: true, person_id: identity.person_id };
+  }
+
+  // Resolve or create via the identity service (handles dedup, race conditions)
+  let person;
+  try {
+    person = await identityResolverService.resolveOrCreate(identity);
+  } catch (err) {
+    logger.error('Failed to resolve/create person from CSV', {
+      person_id: identity.person_id,
+      error: err.message,
+    });
+    return { created: false, error: err.message };
+  }
+
+  // If the person already has a populated snapshot (race condition or
+  // created between our lookup and now), fall back to enrichPerson()
+  if (person.snapshot && person.snapshot.firstName) {
+    const enrichResult = await enrichPerson(person, csvData, false);
+    return { created: false, enriched: true, person_id: person._id, fieldsEnriched: enrichResult.fieldsEnriched };
+  }
+
+  // Populate snapshot fields with _meta provenance
+  const now = csvData.visitTime || new Date();
+  const observationMeta = {
+    observedAt: now,
+    source: 'csv',
+    observationId: null,
+  };
+
+  if (!person.snapshot) {
+    person.snapshot = {};
+  }
+  if (!person.snapshot._meta) {
+    person.snapshot._meta = {};
+  }
+
+  // Helper: set field value and record provenance
+  const setField = (fieldName, value) => {
+    if (value === null || value === undefined) return;
+    if (typeof value === 'string' && value.trim() === '') return;
+    person.snapshot[fieldName] = value;
+    person.snapshot._meta[fieldName] = {
+      value,
+      observedAt: observationMeta.observedAt,
+      source: observationMeta.source,
+      observationId: observationMeta.observationId,
+    };
+  };
+
+  // Basic info
+  setField('firstName', csvData.firstName);
+  setField('middleName', csvData.middleName);
+  setField('lastName', csvData.lastName);
+
+  // Compute fullName
+  const fullName = [csvData.firstName, csvData.middleName, csvData.lastName]
+    .filter(Boolean)
+    .join(' ');
+  if (fullName) {
+    setField('fullName', fullName);
+  }
+
+  // Current position
+  setField('currentTitle', csvData.currentTitle);
+  setField('currentCompany', csvData.currentCompany);
+
+  // Parse title for seniority + department
+  if (csvData.currentTitle) {
+    const parsed = parseTitle(csvData.currentTitle);
+    if (parsed.seniority) setField('parsedSeniority', parsed.seniority);
+    if (parsed.department) setField('parsedDepartment', parsed.department);
+  }
+
+  // Location
+  setField('location', csvData.location);
+  if (csvData.location) {
+    const parsedLocation = parseLocation(csvData.location);
+    setField('city', parsedLocation.city);
+    setField('state', parsedLocation.state);
+    setField('stateCode', parsedLocation.stateCode);
+    setField('country', parsedLocation.country);
+    setField('countryCode', parsedLocation.countryCode);
+    setField('province', parsedLocation.province);
+    setField('region', parsedLocation.region);
+    setField('locationType', parsedLocation.locationType);
+  }
+
+  // Contact & profile
+  setField('email', csvData.email);
+  setField('phone', csvData.phone);
+  setField('twitter', csvData.twitter);
+  setField('summary', csvData.summary);
+  setField('profilePicture', csvData.profilePicture);
+  setField('personalWebsite', csvData.personalWebsite);
+  setField('companyWebsite', csvData.companyWebsite);
+  setField('connections', parseConnections(csvData.connections));
+  setField('degree', parseDegree(csvData.degree));
+
+  // Roles with seniority enrichment
+  if (csvData.positions.length > 0) {
+    person.snapshot.roles = positionsToRoles(csvData.positions).map(role => {
+      if (role.title) {
+        const parsed = parseTitle(role.title);
+        role.seniority = parsed.seniority;
+        role.seniorityRank = parsed.seniorityRank;
+      }
+      return role;
+    });
+  }
+
+  // Education
+  if (csvData.education.length > 0) {
+    person.snapshot.education = educationToSchema(csvData.education);
+  }
+
+  // Skills
+  if (csvData.skills.length > 0) {
+    person.snapshot.skills = csvData.skills;
+  }
+
+  // Enrichment metadata
+  person.snapshot._enrichment = {
+    csvImportDate: new Date(),
+    csvFileName: currentCsvFileName,
+    createdFromCsv: true,
+    csvVisitTime: csvData.visitTime,
+    csvRowId: csvData.csvRowId,
+  };
+
+  // Person-level metadata
+  person.meta = {
+    lastObservedAt: now,
+    lastObservation: null,
+    observationsCount: 0,
+  };
+
+  // Derived metrics
+  person.derived = computeDerivedMetrics(person.snapshot.roles || []);
+
+  // Save with E11000 duplicate key fallback
+  try {
+    await person.save();
+  } catch (err) {
+    if (err.code === 11000) {
+      // Race condition: another process created this person between our resolve and save
+      logger.info('E11000 on person create from CSV, falling back to enrich', {
+        person_id: person._id,
+      });
+      const existing = await Person.findById(person._id);
+      if (existing) {
+        const enrichResult = await enrichPerson(existing, csvData, false);
+        return { created: false, enriched: true, person_id: existing._id, fieldsEnriched: enrichResult.fieldsEnriched };
+      }
+      return { created: false, error: 'duplicate_key_and_not_found' };
+    }
+    throw err;
+  }
+
+  return { created: true, person_id: person._id };
 }
 
 /**
@@ -450,16 +679,30 @@ async function processRow(row, dryRun = true) {
         });
       }
     } else {
-      // No match - would create new record
-      stats.created++;
-      logger.info('Would create new person from CSV', {
-        salesNavId: csvData.salesNavId,
-        name: `${csvData.firstName} ${csvData.lastName}`,
-        dryRun,
-      });
+      // No match - create new person record
+      const result = await createPersonFromCsv(row, csvData, identifiers, dryRun);
 
-      // TODO(enrichment): Implement creation logic if needed
-      // For now, we're only enriching existing records
+      if (result.created) {
+        stats.created++;
+        logger.info('Created new person from CSV', {
+          person_id: result.person_id,
+          name: `${csvData.firstName} ${csvData.lastName}`,
+          dryRun,
+        });
+      } else if (result.enriched) {
+        stats.enriched++;
+        logger.info('Enriched existing person from CSV (race fallback)', {
+          person_id: result.person_id,
+          fieldsEnriched: result.fieldsEnriched,
+        });
+      } else if (result.error) {
+        stats.errors++;
+        logger.warn('Failed to create person from CSV', {
+          error: result.error,
+          salesNavId: csvData.salesNavId,
+          name: `${csvData.firstName} ${csvData.lastName}`,
+        });
+      }
     }
 
     stats.processed++;
@@ -522,6 +765,7 @@ async function importCsv(filePath, options = {}) {
   const { dryRun = true, limit = null } = options;
 
   stats.startTime = new Date();
+  currentCsvFileName = path.basename(filePath);
 
   console.log('\n========================================');
   console.log('CSV ENRICHMENT IMPORT');
@@ -603,4 +847,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { importCsv, transformCsvRow, enrichPerson };
+module.exports = { importCsv, transformCsvRow, enrichPerson, createPersonFromCsv, positionsToRoles, educationToSchema, parseConnections, parseDegree };
