@@ -12,11 +12,7 @@
 
 ### Medium Priority
 
-- [ ] **Fix stale parsedSeniority/parsedDepartment on title changes** — When a person's title changes from a parsable role to one that doesn't match any patterns, the old `parsedSeniority`/`parsedDepartment` values remain in the snapshot because `normalizeField` is only called when `parseTitle` returns non-null. Additionally, `normalizeField` itself refuses to overwrite with null (via `shouldOverwrite`), so the fix must directly clear these derived fields and their `_meta` entries when the parser returns no match.
-  - Category: `bug`
-  - Files: `src/controllers/personController.js:463-482`
-  - Context: These are derived (not observed) fields — the "never overwrite with empty" rule designed for observed data should not apply. Stale classifications will skew downstream filters/analytics that rely on `parsedSeniority` or `parsedDepartment`.
-  - Acceptance: When `parseTitle` returns null for seniority or department, the corresponding snapshot field is set to `null` and `_meta` is updated. Unit test confirms clearing behavior when title changes from parsable to unparsable.
+- [x] ~~**Fix stale parsedSeniority/parsedDepartment on title changes**~~ — Done, see Completed section.
 
 - [ ] **Fix undefined pagination fields in fuzzy search fallback** — When text search finds no results and `smartSearch` falls back to `fuzzySearchPeople`, the metadata lacks `limit`, `totalCount`, `hasMore`, and `nextSkip`. The search controller reads these fields unconditionally, producing a pagination envelope with `undefined` values.
   - Category: `bug`
@@ -94,6 +90,7 @@
 
 ## Completed
 
+- [x] **Fix stale parsedSeniority/parsedDepartment on title changes** — 2026-02-06, branch `claude/review-queue-items-AnAP2`. Added `clearDerivedField()` to bypass the "never overwrite with empty" rule for derived fields, clearing stale values when `parseTitle` returns null.
 - [x] **Fix case-sensitive CXO/GM/MD regex patterns in titleParser** — 2026-02-06, branch `claude/fix-cxo-pattern-HxciY`. Four patterns in `SENIORITY_TIERS` lacked the `i` flag, causing lowercase/mixed-case C-suite abbreviations (e.g., "ceo", "Cto") to misclassify as Individual Contributor.
 - [x] **Eliminate legacy identityResolver.js wrapper** — 2026-02-06, migrated 23 callers (8 production, 7 scripts, 8 tests) to `identityMatcher.js`, deleted 525-line wrapper
 - [x] **Clean up stale remote branches** — 2026-02-06, deleted 8 remote + 2 local stale branches, pruned 18 tracking refs

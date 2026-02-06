@@ -1,6 +1,7 @@
 const {
   shouldOverwrite,
   normalizeField,
+  clearDerivedField,
   computeDerivedMetrics,
   updateRolesTimeline,
   upsertFromObservation: _upsertFromObservation,
@@ -307,6 +308,173 @@ describe("PersonController", () => {
 
       expect(updated).toBe(false);
       expect(snapshot.email).toBe("john@example.com"); // Unchanged
+    });
+  });
+
+  describe("clearDerivedField()", () => {
+    it("should clear an existing derived field and update _meta", () => {
+      const snapshot = {
+        parsedDepartment: "engineering",
+        _meta: {
+          parsedDepartment: {
+            value: "engineering",
+            observedAt: new Date("2024-01-01"),
+            source: "visit",
+            observationId: "obs-old",
+          },
+        },
+      };
+
+      const observationMeta = {
+        observedAt: new Date("2024-02-01"),
+        source: "visit",
+        observationId: "obs-new",
+      };
+
+      const cleared = clearDerivedField(
+        snapshot,
+        "parsedDepartment",
+        observationMeta,
+      );
+
+      expect(cleared).toBe(true);
+      expect(snapshot.parsedDepartment).toBeNull();
+      expect(snapshot._meta.parsedDepartment).toEqual({
+        value: null,
+        observedAt: new Date("2024-02-01"),
+        source: "visit",
+        observationId: "obs-new",
+      });
+    });
+
+    it("should return false when field is already null", () => {
+      const snapshot = {
+        parsedDepartment: null,
+        _meta: {},
+      };
+
+      const observationMeta = {
+        observedAt: new Date("2024-02-01"),
+        source: "visit",
+        observationId: "obs-new",
+      };
+
+      const cleared = clearDerivedField(
+        snapshot,
+        "parsedDepartment",
+        observationMeta,
+      );
+
+      expect(cleared).toBe(false);
+    });
+
+    it("should return false when field is undefined", () => {
+      const snapshot = {
+        _meta: {},
+      };
+
+      const observationMeta = {
+        observedAt: new Date("2024-02-01"),
+        source: "visit",
+        observationId: "obs-new",
+      };
+
+      const cleared = clearDerivedField(
+        snapshot,
+        "parsedDepartment",
+        observationMeta,
+      );
+
+      expect(cleared).toBe(false);
+    });
+
+    it("should initialize _meta if missing", () => {
+      const snapshot = {
+        parsedSeniority: "VP",
+      };
+
+      const observationMeta = {
+        observedAt: new Date("2024-02-01"),
+        source: "visit",
+        observationId: "obs-new",
+      };
+
+      const cleared = clearDerivedField(
+        snapshot,
+        "parsedSeniority",
+        observationMeta,
+      );
+
+      expect(cleared).toBe(true);
+      expect(snapshot.parsedSeniority).toBeNull();
+      expect(snapshot._meta).toBeDefined();
+      expect(snapshot._meta.parsedSeniority.value).toBeNull();
+    });
+
+    it("should clear parsedDepartment when title changes from parsable to unparsable", () => {
+      // Simulates the scenario: person had "VP of Engineering" (parsedSeniority: "VP",
+      // parsedDepartment: "engineering"), title changes to "Retired"
+      // (no department match, seniority becomes "Individual Contributor")
+      const snapshot = {
+        currentTitle: "Retired",
+        parsedSeniority: "VP",
+        parsedDepartment: "engineering",
+        _meta: {
+          currentTitle: {
+            value: "VP of Engineering",
+            observedAt: new Date("2024-01-01"),
+            source: "visit",
+          },
+          parsedSeniority: {
+            value: "VP",
+            observedAt: new Date("2024-01-01"),
+            source: "visit",
+          },
+          parsedDepartment: {
+            value: "engineering",
+            observedAt: new Date("2024-01-01"),
+            source: "visit",
+          },
+        },
+      };
+
+      const observationMeta = {
+        observedAt: new Date("2024-02-01"),
+        source: "visit",
+        observationId: "obs-new",
+      };
+
+      // parseTitle("Freelance Consultant") returns:
+      //   seniority: "Individual Contributor", department: null
+      const { parseTitle } = require("../../src/utils/titleParser");
+      const parsed = parseTitle(snapshot.currentTitle);
+
+      // Seniority is truthy ("Individual Contributor"), so normalizeField handles it
+      normalizeField(
+        snapshot,
+        "parsedSeniority",
+        parsed.seniority,
+        observationMeta,
+      );
+
+      // Department is null, so clearDerivedField must handle it
+      if (parsed.department) {
+        normalizeField(
+          snapshot,
+          "parsedDepartment",
+          parsed.department,
+          observationMeta,
+        );
+      } else {
+        clearDerivedField(snapshot, "parsedDepartment", observationMeta);
+      }
+
+      expect(snapshot.parsedSeniority).toBe("Individual Contributor");
+      expect(snapshot.parsedDepartment).toBeNull();
+      expect(snapshot._meta.parsedDepartment.value).toBeNull();
+      expect(snapshot._meta.parsedDepartment.observedAt).toEqual(
+        new Date("2024-02-01"),
+      );
     });
   });
 
