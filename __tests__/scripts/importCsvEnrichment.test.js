@@ -1,5 +1,5 @@
 /**
- * Tests for CSV Enrichment Import — createPersonFromCsv()
+ * Tests for CSV Enrichment Import — createPersonFromCsv() & processWithConcurrency()
  */
 
 // Mock dependencies before requiring the module
@@ -16,6 +16,7 @@ const {
   transformCsvRow,
   parseConnections,
   parseDegree,
+  processWithConcurrency,
 } = require("../../scripts/importCsvEnrichment");
 
 // Helper to build a minimal CSV row with a SalesProfile
@@ -368,6 +369,75 @@ describe("importCsvEnrichment", () => {
     it("should return null for null/empty", () => {
       expect(parseDegree(null)).toBeNull();
       expect(parseDegree("")).toBeNull();
+    });
+  });
+
+  describe("processWithConcurrency()", () => {
+    it("should process all items", async () => {
+      const items = [1, 2, 3, 4, 5];
+      const results = [];
+      await processWithConcurrency(
+        items,
+        async (item) => {
+          results.push(item);
+        },
+        3,
+      );
+      expect(results).toHaveLength(5);
+      expect(results.sort()).toEqual([1, 2, 3, 4, 5]);
+    });
+
+    it("should respect concurrency limit", async () => {
+      let active = 0;
+      let maxActive = 0;
+      const concurrency = 3;
+
+      const items = Array.from({ length: 10 }, (_, i) => i);
+      await processWithConcurrency(
+        items,
+        async () => {
+          active++;
+          maxActive = Math.max(maxActive, active);
+          // Simulate async work to let other workers run
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          active--;
+        },
+        concurrency,
+      );
+
+      expect(maxActive).toBeLessThanOrEqual(concurrency);
+    });
+
+    it("should handle empty items array", async () => {
+      const fn = jest.fn();
+      await processWithConcurrency([], fn, 5);
+      expect(fn).not.toHaveBeenCalled();
+    });
+
+    it("should handle concurrency greater than items length", async () => {
+      const items = [1, 2];
+      const results = [];
+      await processWithConcurrency(
+        items,
+        async (item) => {
+          results.push(item);
+        },
+        100,
+      );
+      expect(results.sort()).toEqual([1, 2]);
+    });
+
+    it("should propagate errors from the processing function", async () => {
+      const items = [1, 2, 3];
+      await expect(
+        processWithConcurrency(
+          items,
+          async (item) => {
+            if (item === 2) throw new Error("fail on 2");
+          },
+          2,
+        ),
+      ).rejects.toThrow("fail on 2");
     });
   });
 });
