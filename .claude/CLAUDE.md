@@ -89,19 +89,47 @@ Webhook → Phase 1: Visit/Scan (must succeed) → Phase 2: Person/Company (best
 {
   _id: "sales-nav-id-or-numeric-id",
   canonical_id: "uuid-v5-deterministic",
-  aliases: [{ type: "salesNavId|numericId|profileUrl", value: "..." }],
-  // Snapshot fields
-  firstName, lastName, fullName,
-  currentTitle, currentCompany, currentCompanyId,
-  location: { city, state, country, ... },
-  email, phone, profilePicture,
-  roles: [{ title, companyName, companyId, startDate, endDate, isCurrent }],
-  education: [...],
-  skills: [...],
-  // Metadata
-  _meta: { fieldName: { value, observedAt, source, observationId } },
+  aliases: [{ type: "salesNavId|numericId|duxsoupId|linkedInUsername|vanityName|publicUrl|salesUrl|recruiterUrl", value: "..." }],
+
+  // Snapshot: canonical state (all profile fields nested here)
+  snapshot: {
+    firstName, middleName, lastName, fullName,
+    birthday, birthdayRaw,
+    currentTitle, currentCompany, currentCompanyId,
+    currentCompanyUrl, currentCompanyProfile,
+    parsedSeniority, parsedDepartment,                  // auto-derived from currentTitle
+    location,                                            // raw location string
+    city, state, stateCode, country, countryCode,        // structured location fields
+    province, region, locationType,
+    industry, connections, summary,
+    email, phone, twitter,
+    profilePicture, thumbnail,
+    roles: [{ title, companyName, companyId, location, description,
+              startDate, endDate, isCurrent, seniority, seniorityRank }],
+    education: [{ school, degree, field, startDate, endDate }],
+    skills: [String],
+    personalWebsite, companyWebsite,
+    degree,                                              // connection degree (1st/2nd/3rd)
+    _meta: { fieldName: { value, observedAt, source, observationId } },
+  },
+
   observations: { visits: [ObjectId], scans: [ObjectId] },
-  lastObservedAt, observationsCount
+
+  // Metadata
+  meta: {
+    lastObservedAt,
+    lastObservation: { type, id, observedAt },
+    observationsCount,
+  },
+
+  // Derived metrics (computed from roles)
+  derived: {
+    avgTenureMonths, yearsAtCurrentCompany,
+    highestSeniority, highestSeniorityRank,
+    highestSeniorityRoleTitle, highestSeniorityRoleCompany,
+  },
+
+  mergedInto, mergedAt,                                  // merge audit trail
 }
 ```
 
@@ -132,17 +160,43 @@ See `src/models/` for full schemas.
 - `GET /api/health/ingestion` - Ingestion statistics
 - `GET /api/health/parity` - Visit/Scan parity check
 - `GET /api/health/metrics` - Overall system metrics
+- `GET /api/health/coverage-breakdown` - Coverage breakdown by identifier type
+- `GET /api/health/canonical-coverage` - Canonical ID coverage stats
+- `GET /api/health/company-coverage` - Company collection coverage
+- `GET /api/health/location-coverage` - Location collection coverage
+- `GET /api/health/data-quality` - Data quality metrics
+- `GET /api/health/dashboard` - Consolidated health dashboard
 
 ### Read APIs
 - `GET /api/people/:id` - Get person by ID
 - `GET /api/people/by-alias/:value` - Get person by any alias
 - `GET /api/companies/:id` - Get company by ID
+- `GET /api/companies/by-alias/:value` - Get company by any alias
 - `GET /api/locations/:id` - Get location by ID
+- `GET /api/locations/by-alias/:value` - Get location by any alias
 
 ### Query/Search
-- `GET /api/query/people` - Filter people
-- `GET /api/search/people` - Full-text search
-- `GET /api/export/people` - CSV/JSON export
+- `POST /api/query/people` - Filter people (body: filter criteria)
+- `POST /api/query/companies` - Filter companies (body: filter criteria)
+- `GET /api/query/help` - Query API documentation
+- `GET /api/search/` - Full-text people search (query param: `q`)
+
+### Export
+- `POST /api/export/people/csv` - Create CSV export job
+- `POST /api/export/people/json` - Create JSON export job
+- `GET /api/export/status/:jobId` - Check export job status
+- `GET /api/export/download/:jobId` - Download completed export
+
+### Changes
+- `GET /api/changes/` - Recent job changes, promotions, title changes
+- `GET /api/changes/person/:id` - Changes for a specific person
+
+### Seniority
+- `GET /api/seniority/tiers` - List available seniority tiers
+- `GET /api/seniority/distribution` - Distribution by seniority tier
+- `GET /api/seniority/filter` - Filter people by seniority criteria
+- `GET /api/seniority/search` - Search people with seniority filtering
+- `GET /api/seniority/stats` - Comprehensive seniority statistics
 
 ## Code Style & Patterns
 
