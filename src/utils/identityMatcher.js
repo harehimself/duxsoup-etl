@@ -538,9 +538,9 @@ function resolvePersonIdentity(webhookData) {
 
   const aliases = [];
   const aliasKeys = new Set();
-  let person_id = null;
-  let source = null;
-  let primaryIdType = null;
+  let person_id;
+  let source;
+  let primaryIdType;
 
   const addAlias = (type, value) => {
     if (!value) return;
