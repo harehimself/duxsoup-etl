@@ -588,6 +588,7 @@ class IdentityResolverService {
   /**
    * Find duplicate people grouped by salesNavId across the collection.
    * Uses the same Sales Navigator extraction logic as identityMatcher/salesNavIdExtractor.
+   * After merges, a person can carry multiple salesNavIds and will appear in multiple groups.
    *
    * @returns {Promise<Array<{salesNavId: string, people: Array<Object>}>>}
    */
@@ -596,14 +597,17 @@ class IdentityResolverService {
     const grouped = new Map();
 
     for (const person of people) {
-      const salesNavId = extractSalesNavIdFromPersonRecord(person);
-      if (!salesNavId) {
+      const salesNavIds = extractSalesNavIdsFromPersonRecord(person);
+      if (salesNavIds.length === 0) {
         continue;
       }
 
-      const existing = grouped.get(salesNavId) || [];
-      existing.push(person);
-      grouped.set(salesNavId, existing);
+      // Add person to group for EACH salesNavId it carries
+      for (const salesNavId of salesNavIds) {
+        const existing = grouped.get(salesNavId) || [];
+        existing.push(person);
+        grouped.set(salesNavId, existing);
+      }
     }
 
     const duplicates = [];
@@ -619,32 +623,44 @@ class IdentityResolverService {
 
 const SALES_NAV_ID_PATTERN = /^AC[wo]AA[A-Za-z0-9_-]+$/i;
 
-function extractSalesNavIdFromPersonRecord(person) {
+/**
+ * Extract all Sales Navigator IDs from a person record.
+ * After merges, a person can carry multiple salesNavId aliases.
+ * This function returns ALL of them to support duplicate detection.
+ *
+ * @param {Object} person - Person record with _id and aliases
+ * @returns {Array<string>} Array of normalized salesNavIds (empty if none found)
+ */
+function extractSalesNavIdsFromPersonRecord(person) {
   if (!person) {
-    return null;
+    return [];
   }
 
+  const found = new Set();
+
+  // Check _id
   if (person._id && SALES_NAV_ID_PATTERN.test(person._id)) {
-    return normalizeToCanonicalCase(person._id);
+    found.add(normalizeToCanonicalCase(person._id));
   }
 
+  // Collect ALL explicit salesNavId aliases (not just the first)
   const aliases = person.aliases || [];
-  const explicitAlias = aliases.find(
-    (alias) => alias?.type === "salesNavId" && alias?.value,
-  );
+  aliases.forEach((alias) => {
+    if (alias?.type === "salesNavId" && alias?.value) {
+      found.add(normalizeToCanonicalCase(alias.value));
+    }
+  });
 
-  if (explicitAlias) {
-    return normalizeToCanonicalCase(explicitAlias.value);
+  // If no explicit salesNavIds found, try extracting from URLs
+  if (found.size === 0) {
+    const data = buildSalesNavExtractionData(aliases);
+    const extracted = extractSalesNavId(data);
+    if (extracted) {
+      found.add(normalizeToCanonicalCase(extracted));
+    }
   }
 
-  const data = buildSalesNavExtractionData(aliases);
-  const extracted = extractSalesNavId(data);
-
-  if (!extracted) {
-    return null;
-  }
-
-  return normalizeToCanonicalCase(extracted);
+  return Array.from(found);
 }
 
 function buildSalesNavExtractionData(aliases = []) {
