@@ -14,6 +14,7 @@
  *   node scripts/importCsvEnrichment.js --file "path/to/file.csv" --dry-run
  *   node scripts/importCsvEnrichment.js --file "path/to/file.csv" --limit 100
  *   node scripts/importCsvEnrichment.js --file "path/to/file.csv" --execute
+ *   node scripts/importCsvEnrichment.js --file "path/to/file.csv" --concurrency 20
  */
 
 const fs = require('fs');
@@ -728,6 +729,29 @@ async function processRow(row, dryRun = true) {
 }
 
 /**
+ * Process items with limited concurrency using a worker-pool pattern.
+ * Spawns up to `concurrency` workers that pull from a shared queue.
+ * Safe in Node.js single-threaded model — index increment is atomic.
+ *
+ * @param {Array} items - Items to process
+ * @param {Function} fn - Async function to call for each item
+ * @param {number} concurrency - Max concurrent operations
+ */
+async function processWithConcurrency(items, fn, concurrency) {
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      await fn(items[i]);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
+/**
  * Generate final report
  */
 function generateReport() {
@@ -762,7 +786,7 @@ function generateReport() {
  * Main import function
  */
 async function importCsv(filePath, options = {}) {
-  const { dryRun = true, limit = null } = options;
+  const { dryRun = true, limit = null, concurrency = 10 } = options;
 
   stats.startTime = new Date();
   currentCsvFileName = path.basename(filePath);
@@ -772,7 +796,8 @@ async function importCsv(filePath, options = {}) {
   console.log('========================================\n');
   console.log(`File: ${filePath}`);
   console.log(`Mode: ${dryRun ? 'DRY-RUN (no changes)' : 'EXECUTE (writing to DB)'}`);
-  console.log(`Limit: ${limit || 'none'}\n`);
+  console.log(`Limit: ${limit || 'none'}`);
+  console.log(`Concurrency: ${concurrency}\n`);
 
   // Connect to MongoDB using the existing database utility
   await database.connect();
@@ -794,10 +819,12 @@ async function importCsv(filePath, options = {}) {
           // Apply limit if specified
           const rowsToProcess = limit ? rows.slice(0, limit) : rows;
 
-          // Process rows sequentially (could parallelize later)
-          for (const row of rowsToProcess) {
-            await processRow(row, dryRun);
-          }
+          // Process rows with limited concurrency
+          await processWithConcurrency(
+            rowsToProcess,
+            (row) => processRow(row, dryRun),
+            concurrency
+          );
 
           stats.endTime = new Date();
           generateReport();
@@ -818,6 +845,7 @@ if (require.main === module) {
   const options = {
     dryRun: !args.includes('--execute'),
     limit: null,
+    concurrency: 10,
     filePath: null,
   };
 
@@ -828,6 +856,9 @@ if (require.main === module) {
     }
     if (args[i] === '--limit' && args[i + 1]) {
       options.limit = parseInt(args[i + 1], 10);
+    }
+    if (args[i] === '--concurrency' && args[i + 1]) {
+      options.concurrency = parseInt(args[i + 1], 10);
     }
   }
 
@@ -847,4 +878,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { importCsv, transformCsvRow, enrichPerson, createPersonFromCsv, positionsToRoles, educationToSchema, parseConnections, parseDegree };
+module.exports = { importCsv, transformCsvRow, enrichPerson, createPersonFromCsv, positionsToRoles, educationToSchema, parseConnections, parseDegree, processWithConcurrency };
