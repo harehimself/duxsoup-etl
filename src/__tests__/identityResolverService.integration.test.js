@@ -539,5 +539,67 @@ describe("IdentityResolverService", () => {
         ]),
       );
     });
+
+    it("groups merged person with multiple salesNavId aliases under each ID", async () => {
+      // Simulate a merged person carrying TWO salesNavIds (e.g., after merge)
+      await Person.create({
+        _id: "merged-person",
+        canonical_id: canonicalIdFor("salesNavId", "ACwAAA111"),
+        aliases: [
+          { type: "salesNavId", value: "ACwAAA111" },
+          { type: "salesNavId", value: "ACwAAA222" }, // Second ID from merge
+        ],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      // Create another person with ACwAAA111 to make it a duplicate
+      await Person.create({
+        _id: "person-111",
+        canonical_id: canonicalIdFor("salesNavId", "person-111"),
+        aliases: [{ type: "salesNavId", value: "ACwAAA111" }],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      // Create another person with ACwAAA222 to make it a duplicate
+      await Person.create({
+        _id: "person-222",
+        canonical_id: canonicalIdFor("salesNavId", "person-222"),
+        aliases: [{ type: "salesNavId", value: "ACwAAA222" }],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      const duplicates =
+        await identityResolverService.findSalesNavIdDuplicates();
+      const groupsById = Object.fromEntries(
+        duplicates.map((group) => [group.salesNavId, group.people]),
+      );
+
+      // The merged person should appear in BOTH duplicate groups
+      expect(Object.keys(groupsById).sort()).toEqual([
+        "ACwAAA111",
+        "ACwAAA222",
+      ]);
+
+      // ACwAAA111 group: merged person + person-111
+      expect(groupsById.ACwAAA111).toHaveLength(2);
+      const ids111 = groupsById.ACwAAA111.map((p) => p._id).sort();
+      expect(ids111).toEqual(["merged-person", "person-111"]);
+
+      // ACwAAA222 group: merged person + person-222
+      expect(groupsById.ACwAAA222).toHaveLength(2);
+      const ids222 = groupsById.ACwAAA222.map((p) => p._id).sort();
+      expect(ids222).toEqual(["merged-person", "person-222"]);
+
+      // Verify the merged person appears in both groups (this would fail before the fix)
+      expect(groupsById.ACwAAA111.some((p) => p._id === "merged-person")).toBe(
+        true,
+      );
+      expect(groupsById.ACwAAA222.some((p) => p._id === "merged-person")).toBe(
+        true,
+      );
+    });
   });
 });

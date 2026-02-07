@@ -92,12 +92,6 @@
 
 ### Low Priority / Tech Debt
 
-- [ ] **`findSalesNavIdDuplicates` misses persons with multiple salesNavId aliases** — `extractSalesNavIdFromPersonRecord()` uses `aliases.find()` which only returns the first `salesNavId` alias; merged persons with multiple salesNavIds are only grouped under one ID
-  - Category: `bug`
-  - Files: `src/services/identityResolverService.js:632`
-  - Context: After merges, a person can carry multiple `salesNavId` values (e.g., `ACwAAA111` and `ACwAAA222`). The function only returns the first match, so duplicates keyed on subsequent IDs are silently missed. This only affects the diagnostic `findSalesNavIdDuplicates()` — the core identity resolution path (`resolveOrCreate`, `findByAnyAlias`) handles multiple aliases correctly.
-  - Acceptance: `extractSalesNavIdFromPersonRecord()` returns all salesNavIds for a person. `findSalesNavIdDuplicates()` groups the person under every salesNavId it carries. Existing test updated to cover multi-alias case.
-
 - [ ] **Parallelize CSV enrichment row processing** — Add configurable concurrency for large imports
   - Category: `performance`
   - Files: `scripts/importCsvEnrichment.js:553`
@@ -213,6 +207,7 @@
 ## Completed
 
 - [x] **Fix CLAUDE.md schema + endpoint docs drift** — 2026-02-06. Updated Person model example to reflect `snapshot.*`, `snapshot._meta`, `meta.observationsCount` nesting, full alias type enum, `derived` section, role/education sub-fields. Fixed query (POST not GET), search (GET /api/search/ not /api/search/people), export (POST csv/json + status/download). Added missing endpoints: companies/locations by-alias, query/companies, changes, seniority, and 6 additional health endpoints.
+- [x] **`findSalesNavIdDuplicates` misses persons with multiple salesNavId aliases** — 2026-02-07, branch `claude/review-backlog-D0qNE`, commit `46b93ff`. Renamed `extractSalesNavIdFromPersonRecord()` to `extractSalesNavIdsFromPersonRecord()` to return array of ALL salesNavIds. Updated `findSalesNavIdDuplicates()` to add merged persons to multiple groups. Added test case for multi-alias scenario.
 - [x] **CSV enrichment: create new person records** — 2026-02-06. Implemented `createPersonFromCsv()` with full snapshot, aliases, `_meta` provenance, derived metrics, E11000 race-condition handling. 19 unit tests.
 - [x] **Birthday field: reject year-less date strings** — 2026-02-06, branch `claude/birthday-field-date-validation-7Kjts`. Added `containsYear()` and `parseBirthdayDate()` to date-parser.js; added `birthdayRaw` field to Person model.
 - [x] **Fix stale parsedSeniority/parsedDepartment on title changes** — 2026-02-06, branch `claude/review-queue-items-AnAP2`. Added `clearDerivedField()` to bypass the "never overwrite with empty" rule for derived fields, clearing stale values when `parseTitle` returns null.
