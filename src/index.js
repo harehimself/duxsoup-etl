@@ -6,11 +6,14 @@ const compression = require("compression");
 const { sanitize: mongoSanitize } = require("express-mongo-sanitize");
 const crypto = require("crypto");
 
+const swaggerUi = require("swagger-ui-express");
+
 const logger = require("./utils/logger");
 const database = require("./utils/database");
 const { validateEnvironment, getConfig } = require("./utils/env");
 const LeaderElectionService = require("./services/leaderElectionService");
 const apiRoutes = require("./routes/apiRoutes");
+const openapiSpec = require("./openapi");
 
 // Module-level reference for shutdown handlers
 let leaderElection = null;
@@ -117,6 +120,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// OpenAPI spec (JSON) and Swagger UI
+app.get("/api/docs/openapi.json", (req, res) => res.json(openapiSpec));
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
+
 // Add API routes
 app.use("/api", apiRoutes);
 
@@ -143,6 +150,8 @@ app.get("/", (req, res) => {
     endpoints: [
       "POST /api/webhook - Process DuxSoup data (payload includes 'type': 'visit' or 'scan')",
       "GET /health - Health check",
+      "GET /api/docs - Interactive API documentation (Swagger UI)",
+      "GET /api/docs/openapi.json - OpenAPI 3.0 specification",
     ],
   });
 });
