@@ -70,6 +70,9 @@ const scanSchema = new mongoose.Schema(
     SalesProfile: String,
     RecruiterProfile: String,
 
+    // Metadata fields from top-level webhook payload
+    userid: String, // DuxSoup user ID who performed the scan
+
     // rawData should capture the entire original webhook payload
     rawData: {
       type: mongoose.Schema.Types.Mixed,

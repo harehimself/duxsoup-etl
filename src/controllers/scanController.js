@@ -42,6 +42,7 @@ function mapScanData(profileData, payload, eventKey) {
     Summary: profileData.Summary || "",
     SalesProfile: profileData.SalesProfile || "",
     RecruiterProfile: profileData.RecruiterProfile || "",
+    userid: payload.userid || "",
     rawData: payload,
     event_key: eventKey,
   };
@@ -54,8 +55,8 @@ function mapScanData(profileData, payload, eventKey) {
 const handleScan = async (req, res) => {
   const config = {
     model: Scan,
-    type: 'scan',
-    timeField: 'ScanTime',
+    type: "scan",
+    timeField: "ScanTime",
     requiredFields: ["ScanTime", "First Name", "Last Name"],
     dataMapper: mapScanData,
   };

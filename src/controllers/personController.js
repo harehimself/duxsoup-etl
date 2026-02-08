@@ -87,7 +87,11 @@ function parseDegree(value) {
  */
 function shouldOverwrite(existingMeta, incomingMeta) {
   // Always accept if no existing value
-  if (!existingMeta || !existingMeta.value) {
+  if (
+    !existingMeta ||
+    existingMeta.value === null ||
+    existingMeta.value === undefined
+  ) {
     return true;
   }
 
@@ -444,7 +448,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
     // Capture old snapshot for change detection (deep clone)
     const oldSnapshot = person.snapshot
-      ? JSON.parse(JSON.stringify(person.snapshot))
+      ? structuredClone(person.snapshot.toObject())
       : null;
 
     // Normalize basic fields

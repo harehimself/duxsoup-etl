@@ -28,6 +28,7 @@ module.exports = [
         clearTimeout: "readonly",
         clearInterval: "readonly",
         URL: "readonly",
+        structuredClone: "readonly",
       },
     },
   },

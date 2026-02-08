@@ -208,6 +208,40 @@ describe("PersonController", () => {
       expect(result).toBe(true);
     });
 
+    it("should not treat existing 0 as empty (zero connections is a valid existing value)", () => {
+      const existingMeta = {
+        value: 0, // Existing zero — must be treated as a real value
+        observedAt: new Date("2024-01-01"),
+        source: "visit",
+      };
+      const incomingMeta = {
+        value: 500,
+        observedAt: new Date("2024-01-15"),
+        source: "scan", // Lower precedence — should NOT overwrite
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(false); // Scan cannot overwrite visit
+    });
+
+    it("should allow overwriting existing 0 with same-source newer value", () => {
+      const existingMeta = {
+        value: 0,
+        observedAt: new Date("2024-01-01"),
+        source: "visit",
+      };
+      const incomingMeta = {
+        value: 100,
+        observedAt: new Date("2024-01-15"),
+        source: "visit", // Same source, newer — should overwrite
+      };
+
+      const result = shouldOverwrite(existingMeta, incomingMeta);
+
+      expect(result).toBe(true);
+    });
+
     it("should handle whitespace-only string as empty", () => {
       const existingMeta = {
         value: "John Doe",
@@ -757,6 +791,56 @@ describe("PersonController", () => {
       expect(snapshot.birthday).toBeNull();
       expect(snapshot._meta.birthday).toBeUndefined();
       expect(snapshot.birthdayRaw).toBe("March 14");
+    });
+  });
+
+  describe("snapshot deep clone preserves Date objects", () => {
+    it("should preserve Date values when cloning with structuredClone", () => {
+      const snapshot = {
+        firstName: "Jane",
+        currentTitle: "VP Engineering",
+        _meta: {
+          firstName: {
+            value: "Jane",
+            observedAt: new Date("2024-01-15T10:30:00Z"),
+            source: "visit",
+            observationId: "obs1",
+          },
+          currentTitle: {
+            value: "VP Engineering",
+            observedAt: new Date("2024-03-20T14:00:00Z"),
+            source: "visit",
+            observationId: "obs2",
+          },
+        },
+      };
+
+      const cloned = structuredClone(snapshot);
+
+      // structuredClone preserves Date objects — getTime() works
+      expect(typeof cloned._meta.firstName.observedAt.getTime).toBe("function");
+      expect(cloned._meta.firstName.observedAt.getTime()).toBe(
+        new Date("2024-01-15T10:30:00Z").getTime(),
+      );
+      expect(cloned._meta.currentTitle.observedAt.getTime()).toBe(
+        new Date("2024-03-20T14:00:00Z").getTime(),
+      );
+    });
+
+    it("should NOT preserve Date values with JSON.parse(JSON.stringify())", () => {
+      const snapshot = {
+        _meta: {
+          firstName: {
+            observedAt: new Date("2024-01-15T10:30:00Z"),
+          },
+        },
+      };
+
+      const cloned = JSON.parse(JSON.stringify(snapshot));
+
+      // JSON clone converts Dates to strings — getTime() is not a function
+      expect(typeof cloned._meta.firstName.observedAt).toBe("string");
+      expect(cloned._meta.firstName.observedAt.getTime).toBeUndefined();
     });
   });
 

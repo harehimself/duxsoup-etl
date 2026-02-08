@@ -12,26 +12,11 @@
 
 ### High Priority
 
-- [ ] **Fix numeric zero values rejected as empty in person snapshot upsert** — `isIncomingEmpty()` in `personController.js` treats `0` as falsy, so valid numeric fields like `Connections: 0` are rejected during snapshot updates.
-  - Category: `bug`
-  - Files: `src/controllers/personController.js:103-105`
-  - Context: Any person with `0` connections or `0` degree will have those fields silently dropped during upsert. The `shouldOverwrite()` guard uses `!incomingValue` which is false for `0`, `""`, and `null` alike.
-  - Fix: Replace `!incomingValue` with an explicit null/undefined/empty-string check that allows `0` and `false`.
-  - Acceptance: `normalizeField()` accepts `0` as a valid value. Unit test confirms `Connections: 0` is written to snapshot.
+- [x] **Fix numeric zero values rejected as empty in person snapshot upsert** — `shouldOverwrite()` treated existing `0` as falsy via `!existingMeta.value`. Fixed with explicit null/undefined check. 2 new unit tests.
 
-- [ ] **Fix Scan model index on undefined `userid` field** — `scan.js` defines a compound index on `userid + ScanTime`, but `userid` is not in the Scan schema. The index silently fails to be useful.
-  - Category: `bug`
-  - Files: `src/models/scan.js`
-  - Context: Visit model has `userid` field defined and indexed. Scan model copies the index pattern but lacks the field. Queries filtering scans by userid will not use the index.
-  - Fix: Add `userid` field to Scan schema (String, indexed) to match Visit model, or remove the index if userid is not present in scan webhooks.
-  - Acceptance: Scan schema includes `userid` if DuxSoup sends it. Index matches defined fields. Integration test confirms filtering by userid works.
+- [x] **Fix Scan model index on undefined `userid` field** — Added `userid` field to Scan schema and `scanController.mapScanData()` to match Visit model pattern.
 
-- [ ] **Fix JSON deep clone losing Date objects in person snapshot comparison** — `personController.js` uses `JSON.parse(JSON.stringify(existingPerson))` to clone the old snapshot before comparison, which converts Date objects to strings and breaks `_meta.observedAt` comparisons.
-  - Category: `bug`
-  - Files: `src/controllers/personController.js:445-448`
-  - Context: Change detection compares old vs new snapshots. If the clone converts Dates to ISO strings, timestamp comparisons become string comparisons, which may produce incorrect precedence results.
-  - Fix: Use `structuredClone()` (available in Node 17+) or Mongoose's `toObject()` to preserve Date types.
-  - Acceptance: Old snapshot clone preserves Date instances. Unit test confirms date-based precedence comparison works correctly.
+- [x] **Fix JSON deep clone losing Date objects in person snapshot comparison** — Replaced `JSON.parse(JSON.stringify())` with `structuredClone(snapshot.toObject())`. 2 new unit tests.
 
 ### Medium Priority
 
