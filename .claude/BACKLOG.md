@@ -22,12 +22,7 @@ _(All high-priority items completed — see Completed section)_
   - Context: The person model example documents snapshot fields at the top level and lists GET-based query/search/export endpoints that no longer match the implementation. This can mislead users into querying/updating incorrect paths or hitting 404/method errors.
   - Acceptance: Update the Person example to reflect `snapshot`, `snapshot._meta`, and `meta.observationsCount` nesting; correct query/search/export endpoint paths and HTTP verbs.
 
-- [ ] **Tighten Sales Navigator ID detection across identity resolution** — The prefix-only regex `/^(ACwAA|ACoAA)/` in `determineWinner()` can misclassify username-based `_id` values (e.g., `ACoAAlex`) as Sales Nav IDs, causing incorrect merge winner selection.
-  - Category: `bug`
-  - Files: `src/services/identityResolverService.js:177` (`determineWinner` regex), `src/utils/salesNavIdExtractor.js` (canonical format)
-  - Context: Production impact — merge winner selection could favor a non-Sales-Nav person if their username happens to start with `ACwAA` or `ACoAA`.
-  - Fix: Replace prefix-only check with a full canonical format regex (e.g., `^AC[wo]AA[A-Za-z0-9_-]{10,}$` case-insensitive) that requires sufficient length to distinguish from usernames.
-  - Acceptance: `determineWinner()` does not match short username-based IDs. Unit tests for edge cases like `ACoAAlex`, `ACwAABob`.
+- [x] ~~**Tighten Sales Navigator ID detection across identity resolution**~~ — Completed, see Completed section.
 
 - [ ] **Add URL validation guard to `normalizeUrl()`** — `normalizeUrl()` in `identityMatcher.js` accepts any string without validating it's a URL. Non-URL identifiers (SalesNav IDs, numeric IDs, usernames) would be mangled if passed through it.
   - Category: `bug`
@@ -183,6 +178,7 @@ _(All high-priority items completed — see Completed section)_
 
 ## Completed
 
+- [x] **Tighten Sales Navigator ID detection across identity resolution** — 2026-02-08, commit `7dc2e34`. Strengthened `SALES_NAV_ID_PATTERN` to require 10+ chars after prefix (`{10,}` instead of `+`). Replaced inline regex in `determineWinner()` with shared constant. 4 new integration tests for edge cases (`ACoAAlex`, `ACwAABob`, bare prefix, real IDs).
 - [x] **Fix numeric zero values rejected as empty in person snapshot upsert** — 2026-02-08, commit `e791f97`. `shouldOverwrite()` treated existing `0` as falsy via `!existingMeta.value`. Replaced with explicit null/undefined check. 2 new unit tests.
 - [x] **Fix Scan model index on undefined `userid` field** — 2026-02-08, commit `e791f97`. Added `userid` field to Scan schema and `scanController.mapScanData()` to match Visit model pattern.
 - [x] **Fix JSON deep clone losing Date objects in person snapshot comparison** — 2026-02-08, commit `e791f97`. Replaced `JSON.parse(JSON.stringify())` with `structuredClone(snapshot.toObject())`. 2 new unit tests.
