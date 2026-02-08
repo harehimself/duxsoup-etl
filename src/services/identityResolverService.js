@@ -174,9 +174,8 @@ class IdentityResolverService {
 
     return people.reduce((winner, candidate) => {
       // Rule 1: Prefer Sales Nav ID format
-      const salesNavPattern = /^(ACwAA|ACoAA)/;
-      const winnerHasSalesNav = salesNavPattern.test(winner._id);
-      const candidateHasSalesNav = salesNavPattern.test(candidate._id);
+      const winnerHasSalesNav = SALES_NAV_ID_PATTERN.test(winner._id);
+      const candidateHasSalesNav = SALES_NAV_ID_PATTERN.test(candidate._id);
 
       if (candidateHasSalesNav && !winnerHasSalesNav) {
         return candidate;
@@ -621,7 +620,7 @@ class IdentityResolverService {
   }
 }
 
-const SALES_NAV_ID_PATTERN = /^AC[wo]AA[A-Za-z0-9_-]+$/i;
+const SALES_NAV_ID_PATTERN = /^AC[wo]AA[A-Za-z0-9_-]{10,}$/i;
 
 /**
  * Extract all Sales Navigator IDs from a person record.

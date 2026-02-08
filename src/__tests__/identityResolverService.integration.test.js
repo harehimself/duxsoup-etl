@@ -203,9 +203,9 @@ describe("IdentityResolverService", () => {
 
   describe("determineWinner()", () => {
     it("should prefer person with Sales Navigator ID format", () => {
-      // Arrange
+      // Arrange — use a realistic-length Sales Nav ID (10+ chars after prefix)
       const personWithSalesNav = {
-        _id: "ACwAAABCDEF",
+        _id: "ACwAABjK8PoBZx4nYtR2jLmQw5vX",
         observations: { visits: [], scans: [] },
         updatedAt: new Date("2024-01-01"),
       };
@@ -223,7 +223,7 @@ describe("IdentityResolverService", () => {
       ]);
 
       // Assert
-      expect(winner._id).toBe("ACwAAABCDEF");
+      expect(winner._id).toBe("ACwAABjK8PoBZx4nYtR2jLmQw5vX");
     });
 
     it("should prefer person with most observations", () => {
@@ -296,6 +296,99 @@ describe("IdentityResolverService", () => {
 
       // Assert
       expect(winner._id).toBe("linkedin.com/in/a-person");
+    });
+
+    it("should not treat short username-prefixed IDs as Sales Nav IDs", () => {
+      // ACoAAlex is a username, not a real Sales Nav ID
+      const usernameWithPrefix = {
+        _id: "ACoAAlex",
+        observations: { visits: [], scans: [] },
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const numericIdPerson = {
+        _id: "12345678",
+        observations: { visits: ["v1", "v2"], scans: [] },
+        updatedAt: new Date("2024-01-02"),
+      };
+
+      // Act — numeric ID person has more observations, should win
+      const winner = identityResolverService.determineWinner([
+        usernameWithPrefix,
+        numericIdPerson,
+      ]);
+
+      // Assert — ACoAAlex should NOT be treated as Sales Nav ID
+      expect(winner._id).toBe("12345678");
+    });
+
+    it("should not treat ACwAABob as a Sales Nav ID", () => {
+      const usernameWithPrefix = {
+        _id: "ACwAABob",
+        observations: { visits: [], scans: [] },
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const numericIdPerson = {
+        _id: "87654321",
+        observations: { visits: ["v1"], scans: [] },
+        updatedAt: new Date("2024-01-02"),
+      };
+
+      // Act
+      const winner = identityResolverService.determineWinner([
+        usernameWithPrefix,
+        numericIdPerson,
+      ]);
+
+      // Assert — ACwAABob is too short, numeric ID with more obs wins
+      expect(winner._id).toBe("87654321");
+    });
+
+    it("should recognize real Sales Nav IDs with 10+ chars after prefix", () => {
+      const realSalesNavId = {
+        _id: "ACoAAA0CM4MBva7a",
+        observations: { visits: [], scans: [] },
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const numericIdPerson = {
+        _id: "99999999",
+        observations: { visits: [], scans: [] },
+        updatedAt: new Date("2024-01-02"), // More recent
+      };
+
+      // Act
+      const winner = identityResolverService.determineWinner([
+        numericIdPerson,
+        realSalesNavId,
+      ]);
+
+      // Assert — real Sales Nav ID should win despite older updatedAt
+      expect(winner._id).toBe("ACoAAA0CM4MBva7a");
+    });
+
+    it("should not match bare prefix with no suffix as Sales Nav ID", () => {
+      const barePrefix = {
+        _id: "ACoAA",
+        observations: { visits: [], scans: [] },
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const numericIdPerson = {
+        _id: "11111111",
+        observations: { visits: ["v1"], scans: [] },
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      // Act
+      const winner = identityResolverService.determineWinner([
+        barePrefix,
+        numericIdPerson,
+      ]);
+
+      // Assert — bare prefix is not a Sales Nav ID
+      expect(winner._id).toBe("11111111");
     });
   });
 
