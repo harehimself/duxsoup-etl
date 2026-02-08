@@ -366,9 +366,7 @@ describe("Identity Matcher Utility", () => {
     });
 
     it("should handle multiple double slashes", () => {
-      const result = normalizeUrl(
-        "https://www.linkedin.com//in///mike-hare",
-      );
+      const result = normalizeUrl("https://www.linkedin.com//in///mike-hare");
       expect(result).toBe("linkedin.com/in/mike-hare");
     });
 
@@ -397,6 +395,47 @@ describe("Identity Matcher Utility", () => {
         "https://www.linkedin.com/sales/lead/ACwAAAEiQMIB,NAME_SEARCH,Z1JY",
       );
       expect(result).toBe("linkedin.com/sales/lead/acwaaaeiqmib");
+    });
+  });
+
+  describe("normalizeUrl — URL validation guard", () => {
+    it("should return null for Sales Navigator ID (not a URL)", () => {
+      expect(normalizeUrl("ACwAAA_TEST123")).toBeNull();
+    });
+
+    it("should return null for numeric ID", () => {
+      expect(normalizeUrl("123456789")).toBeNull();
+    });
+
+    it("should return null for bare username", () => {
+      expect(normalizeUrl("john-doe-12345")).toBeNull();
+    });
+
+    it("should return null for non-string input", () => {
+      expect(normalizeUrl(12345)).toBeNull();
+      expect(normalizeUrl({})).toBeNull();
+      expect(normalizeUrl(true)).toBeNull();
+    });
+
+    it("should accept URL with http scheme", () => {
+      expect(normalizeUrl("http://linkedin.com/in/test")).toBe(
+        "linkedin.com/in/test",
+      );
+    });
+
+    it("should accept URL with https scheme", () => {
+      expect(normalizeUrl("https://linkedin.com/in/test")).toBe(
+        "linkedin.com/in/test",
+      );
+    });
+
+    it("should accept URL containing linkedin.com without scheme", () => {
+      expect(normalizeUrl("linkedin.com/in/test")).toBe("linkedin.com/in/test");
+    });
+
+    it("should return null for DuxSoup ID format", () => {
+      expect(normalizeUrl("pid.mike-hare")).toBeNull();
+      expect(normalizeUrl("id.218248067")).toBeNull();
     });
   });
 

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 /**
  * Change Model
@@ -17,14 +17,14 @@ const changeSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ['company_change', 'promotion', 'title_change'],
+      enum: ["company_change", "promotion", "title_change"],
     },
 
     // Person who changed
     person_id: {
       type: String,
       required: true,
-      ref: 'Person',
+      ref: "Person",
       index: true,
     },
 
@@ -97,6 +97,7 @@ changeSchema.index({ person_id: 1, type: 1 });
 changeSchema.index({ notified: 1, timestamp: -1 }); // For pending notifications
 changeSchema.index({ createdAt: -1 });
 changeSchema.index({ recentJobChange: 1, timestamp: -1 });
+changeSchema.index({ recentJobChangeExpiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Compound index for deduplication (prevent duplicate change records)
 changeSchema.index(
@@ -104,4 +105,4 @@ changeSchema.index(
   { unique: true },
 );
 
-module.exports = mongoose.model('Change', changeSchema);
+module.exports = mongoose.model("Change", changeSchema);

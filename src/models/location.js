@@ -106,5 +106,12 @@ locationSchema.index({ "aliases.value": 1 });
 locationSchema.index({ "snapshot.normalized": 1 });
 locationSchema.index({ "meta.lastObservedAt": -1 });
 locationSchema.index({ createdAt: -1 });
+locationSchema.index({ "snapshot.country": 1 });
+locationSchema.index({ "snapshot.city": 1 });
+locationSchema.index({
+  "snapshot.city": 1,
+  "snapshot.state": 1,
+  "snapshot.country": 1,
+});
 
 module.exports = mongoose.model("Location", locationSchema);

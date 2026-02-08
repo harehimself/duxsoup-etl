@@ -139,8 +139,15 @@ function extractSalesNavId(data) {
  */
 function normalizeUrl(url) {
   if (!url) return null;
+  // Guard: only process strings that look like URLs
+  // Reject non-URL identifiers (Sales Nav IDs, numeric IDs, usernames)
+  if (typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed) && !/linkedin\.com/i.test(trimmed)) {
+    return null;
+  }
   try {
-    let normalized = url.trim().toLowerCase();
+    let normalized = trimmed.toLowerCase();
     // Remove trailing slash
     normalized = normalized.replace(/\/$/, "");
     // Remove query parameters

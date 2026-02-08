@@ -24,21 +24,21 @@ _(All high-priority items completed — see Completed section)_
 
 - [x] ~~**Tighten Sales Navigator ID detection across identity resolution**~~ — Completed, see Completed section.
 
-- [ ] **Add URL validation guard to `normalizeUrl()`** — `normalizeUrl()` in `identityMatcher.js` accepts any string without validating it's a URL. Non-URL identifiers (SalesNav IDs, numeric IDs, usernames) would be mangled if passed through it.
+- [x] ~~**Add URL validation guard to `normalizeUrl()`**~~ — `normalizeUrl()` in `identityMatcher.js` accepts any string without validating it's a URL. Non-URL identifiers (SalesNav IDs, numeric IDs, usernames) would be mangled if passed through it.
   - Category: `bug`
   - Files: `src/utils/identityMatcher.js:140-160`
   - Context: Current production code only calls `normalizeUrl` on known URL fields, so the risk is contained. But the function has no guard, making it a trap for future callers (backfill scripts, enrichment paths).
   - Fix: Add URL validation (check for `linkedin.com` or URL scheme) inside `normalizeUrl()`, or rename to clarify URL-only purpose and add an assertion.
   - Acceptance: `normalizeUrl('ACwAAA_TEST123')` returns `null` (or the input unchanged). Unit test confirms non-URL inputs are rejected.
 
-- [ ] **Add missing indexes to Location model** — Location model lacks indexes on `snapshot.country`, `snapshot.city`, and the compound `city+state+country` that Person model already has.
+- [x] ~~**Add missing indexes to Location model**~~ — Location model lacks indexes on `snapshot.country`, `snapshot.city`, and the compound `city+state+country` that Person model already has.
   - Category: `performance`
   - Files: `src/models/location.js`
   - Context: Person model has a 3-field compound index on `snapshot.city + snapshot.state + snapshot.country`. Location model — the actual geo entity — has none of these. Country-level queries against locations will require collection scans.
   - Fix: Add `snapshot.country` index, `snapshot.city` index, and `snapshot.city + snapshot.state + snapshot.country` compound index.
   - Acceptance: `db.locations.getIndexes()` shows the new indexes. Explain plan for country-based queries uses index scan.
 
-- [ ] **Add TTL index for `recentJobChangeExpiresAt` on Change model** — The `recentJobChangeExpiresAt` field exists for auto-expiring the 90-day rolling flag, but no TTL index is defined, so expired records persist indefinitely.
+- [x] ~~**Add TTL index for `recentJobChangeExpiresAt` on Change model**~~ — The `recentJobChangeExpiresAt` field exists for auto-expiring the 90-day rolling flag, but no TTL index is defined, so expired records persist indefinitely.
   - Category: `bug`
   - Files: `src/models/change.js`
   - Context: The `recentJobChange` boolean and `recentJobChangeExpiresAt` date were added for a rolling 90-day window, but without a TTL index MongoDB won't auto-delete or flag expired records. The scheduler job `flagExpiry` handles this manually, but the TTL index would be a safety net.
@@ -52,7 +52,7 @@ _(All high-priority items completed — see Completed section)_
   - Fix: Use AND-joined conditions (all terms must appear in the same document), or weight results by number of matching terms. Consider adding a relevance score.
   - Acceptance: Searching "John Doe" ranks exact matches higher than partial matches. Unit test confirms multi-word queries filter correctly.
 
-- [ ] **Add `mergedInto` index to Person model for merge tracking** — Person records have a `mergedInto` field set when merged into another person, but no index exists for finding merged/orphaned records.
+- [x] ~~**Add `mergedInto` index to Person model for merge tracking**~~ — Person records have a `mergedInto` field set when merged into another person, but no index exists for finding merged/orphaned records.
   - Category: `performance`
   - Files: `src/models/person.js`
   - Context: Admin operations and health checks need to find all merged persons (`{ mergedInto: { $exists: true } }`). Without an index, this requires a full collection scan.
@@ -178,6 +178,10 @@ _(All high-priority items completed — see Completed section)_
 
 ## Completed
 
+- [x] **Add URL validation guard to `normalizeUrl()`** — 2026-02-08. Added guard clause rejecting non-URL strings (Sales Nav IDs, numeric IDs, usernames) that lack `https?://` scheme or `linkedin.com`. 8 new unit tests.
+- [x] **Add missing indexes to Location model** — 2026-02-08. Added `snapshot.country`, `snapshot.city`, and compound `snapshot.city + snapshot.state + snapshot.country` indexes to match Person model.
+- [x] **Add TTL index for `recentJobChangeExpiresAt` on Change model** — 2026-02-08. Added TTL index with `expireAfterSeconds: 0` so MongoDB auto-deletes expired change records.
+- [x] **Add `mergedInto` index to Person model for merge tracking** — 2026-02-08. Added sparse index on `mergedInto` for efficient queries of merged/orphaned records.
 - [x] **Tighten Sales Navigator ID detection across identity resolution** — 2026-02-08, commit `7dc2e34`. Strengthened `SALES_NAV_ID_PATTERN` to require 10+ chars after prefix (`{10,}` instead of `+`). Replaced inline regex in `determineWinner()` with shared constant. 4 new integration tests for edge cases (`ACoAAlex`, `ACwAABob`, bare prefix, real IDs).
 - [x] **Fix numeric zero values rejected as empty in person snapshot upsert** — 2026-02-08, commit `e791f97`. `shouldOverwrite()` treated existing `0` as falsy via `!existingMeta.value`. Replaced with explicit null/undefined check. 2 new unit tests.
 - [x] **Fix Scan model index on undefined `userid` field** — 2026-02-08, commit `e791f97`. Added `userid` field to Scan schema and `scanController.mapScanData()` to match Visit model pattern.

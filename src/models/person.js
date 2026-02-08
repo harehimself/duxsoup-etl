@@ -338,6 +338,8 @@ personSchema.index(
   },
 );
 
+personSchema.index({ mergedInto: 1 }, { sparse: true });
+
 // Note: DO NOT add uniqueness constraint on aliases.value
 // Multiple people can temporarily share aliases during merges
 
