@@ -13,6 +13,7 @@ jest.mock("mongoose", () => {
 jest.mock("../../src/models/person", () => ({
   find: jest.fn(),
   countDocuments: jest.fn(),
+  aggregate: jest.fn(),
 }));
 
 jest.mock("../../src/utils/logger", () => ({
@@ -36,6 +37,12 @@ function buildQueryMock(resolvedValue = []) {
     skip: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
     lean: jest.fn().mockReturnThis(),
+    exec: jest.fn().mockResolvedValue(resolvedValue),
+  };
+}
+
+function buildAggregateMock(resolvedValue = []) {
+  return {
     exec: jest.fn().mockResolvedValue(resolvedValue),
   };
 }
@@ -156,23 +163,79 @@ describe("SearchService", () => {
       );
     });
 
-    it("should build OR regex across snapshot fields", async () => {
-      const queryMock = buildQueryMock([]);
-      Person.find.mockReturnValue(queryMock);
+    it("should use simple $or for single-word query", async () => {
+      const aggMock = buildAggregateMock([]);
+      Person.aggregate.mockReturnValue(aggMock);
+      Person.countDocuments.mockResolvedValue(0);
+
+      await fuzzySearchPeople({ query: "john" });
+
+      const pipeline = Person.aggregate.mock.calls[0][0];
+      const matchStage = pipeline[0].$match;
+      // Single word: no $and wrapper, just $or across 3 fields
+      expect(matchStage.$and).toBeUndefined();
+      expect(matchStage.$or).toHaveLength(3);
+      expect(Object.keys(matchStage.$or[0])[0]).toBe("snapshot.fullName");
+      expect(Object.keys(matchStage.$or[1])[0]).toBe("snapshot.currentTitle");
+      expect(Object.keys(matchStage.$or[2])[0]).toBe("snapshot.currentCompany");
+    });
+
+    it("should AND-join multiple terms so all must match", async () => {
+      const aggMock = buildAggregateMock([]);
+      Person.aggregate.mockReturnValue(aggMock);
       Person.countDocuments.mockResolvedValue(0);
 
       await fuzzySearchPeople({ query: "john doe" });
 
-      const callArgs = Person.find.mock.calls[0][0];
-      expect(callArgs.$or).toHaveLength(3);
-      expect(Object.keys(callArgs.$or[0])[0]).toBe("snapshot.fullName");
-      expect(Object.keys(callArgs.$or[1])[0]).toBe("snapshot.currentTitle");
-      expect(Object.keys(callArgs.$or[2])[0]).toBe("snapshot.currentCompany");
+      const pipeline = Person.aggregate.mock.calls[0][0];
+      const matchStage = pipeline[0].$match;
+      // Multi-word: $and with one entry per term
+      expect(matchStage.$and).toHaveLength(2);
+      // Each term has $or across 3 fields
+      expect(matchStage.$and[0].$or).toHaveLength(3);
+      expect(matchStage.$and[1].$or).toHaveLength(3);
+      // First term matches "john"
+      const firstTermRegex = matchStage.$and[0].$or[0]["snapshot.fullName"];
+      expect(firstTermRegex).toBeInstanceOf(RegExp);
+      expect("John Smith").toMatch(firstTermRegex);
+      // Second term matches "doe"
+      const secondTermRegex = matchStage.$and[1].$or[0]["snapshot.fullName"];
+      expect(secondTermRegex).toBeInstanceOf(RegExp);
+      expect("Jane Doe").toMatch(secondTermRegex);
+    });
+
+    it("should NOT match documents missing any term", async () => {
+      const aggMock = buildAggregateMock([]);
+      Person.aggregate.mockReturnValue(aggMock);
+      Person.countDocuments.mockResolvedValue(0);
+
+      await fuzzySearchPeople({ query: "john doe" });
+
+      const pipeline = Person.aggregate.mock.calls[0][0];
+      const matchStage = pipeline[0].$match;
+      // "John Smith" matches first term but not second
+      const secondTermRegex = matchStage.$and[1].$or[0]["snapshot.fullName"];
+      expect("John Smith").not.toMatch(secondTermRegex);
+    });
+
+    it("should include relevance scoring in aggregation pipeline", async () => {
+      const aggMock = buildAggregateMock([]);
+      Person.aggregate.mockReturnValue(aggMock);
+      Person.countDocuments.mockResolvedValue(0);
+
+      await fuzzySearchPeople({ query: "john" });
+
+      const pipeline = Person.aggregate.mock.calls[0][0];
+      // Pipeline: $match, $addFields (relevance), $sort, $skip, $limit, $project
+      expect(pipeline).toHaveLength(6);
+      expect(pipeline[1].$addFields._relevance).toBeDefined();
+      expect(pipeline[2].$sort).toEqual({ _relevance: -1 });
+      expect(pipeline[5].$project).toEqual({ _relevance: 0 });
     });
 
     it("should return metadata with fuzzy=true", async () => {
-      const queryMock = buildQueryMock([{ _id: "p1" }]);
-      Person.find.mockReturnValue(queryMock);
+      const aggMock = buildAggregateMock([{ _id: "p1" }]);
+      Person.aggregate.mockReturnValue(aggMock);
       Person.countDocuments.mockResolvedValue(1);
 
       const result = await fuzzySearchPeople({ query: "test", limit: 5 });
@@ -183,8 +246,8 @@ describe("SearchService", () => {
 
     it("should return complete pagination metadata", async () => {
       const mockDocs = [{ _id: "p1" }, { _id: "p2" }];
-      const queryMock = buildQueryMock(mockDocs);
-      Person.find.mockReturnValue(queryMock);
+      const aggMock = buildAggregateMock(mockDocs);
+      Person.aggregate.mockReturnValue(aggMock);
       Person.countDocuments.mockResolvedValue(5);
 
       const result = await fuzzySearchPeople({
@@ -208,8 +271,8 @@ describe("SearchService", () => {
 
     it("should set hasMore=false when all results returned", async () => {
       const mockDocs = [{ _id: "p1" }];
-      const queryMock = buildQueryMock(mockDocs);
-      Person.find.mockReturnValue(queryMock);
+      const aggMock = buildAggregateMock(mockDocs);
+      Person.aggregate.mockReturnValue(aggMock);
       Person.countDocuments.mockResolvedValue(1);
 
       const result = await fuzzySearchPeople({ query: "test", limit: 20 });
@@ -221,8 +284,8 @@ describe("SearchService", () => {
     });
 
     it("should apply skip for pagination", async () => {
-      const queryMock = buildQueryMock([{ _id: "p3" }]);
-      Person.find.mockReturnValue(queryMock);
+      const aggMock = buildAggregateMock([{ _id: "p3" }]);
+      Person.aggregate.mockReturnValue(aggMock);
       Person.countDocuments.mockResolvedValue(5);
 
       const result = await fuzzySearchPeople({
@@ -231,7 +294,10 @@ describe("SearchService", () => {
         skip: 2,
       });
 
-      expect(queryMock.skip).toHaveBeenCalledWith(2);
+      // Verify skip is in the pipeline
+      const pipeline = Person.aggregate.mock.calls[0][0];
+      const skipStage = pipeline.find((s) => s.$skip !== undefined);
+      expect(skipStage.$skip).toBe(2);
       expect(result.metadata.skip).toBe(2);
       expect(result.metadata.hasMore).toBe(true);
       expect(result.metadata.nextSkip).toBe(4);
@@ -253,13 +319,12 @@ describe("SearchService", () => {
 
     it("should fall back to fuzzy search when text search returns 0", async () => {
       const textQueryMock = buildQueryMock([]);
-      const fuzzyQueryMock = buildQueryMock([
+      Person.find.mockReturnValue(textQueryMock);
+
+      const fuzzyAggMock = buildAggregateMock([
         { _id: "p1", snapshot: { fullName: "Jane" } },
       ]);
-
-      Person.find
-        .mockReturnValueOnce(textQueryMock)
-        .mockReturnValueOnce(fuzzyQueryMock);
+      Person.aggregate.mockReturnValue(fuzzyAggMock);
       // First countDocuments call is for text search (0 results), second is for fuzzy search (1 result)
       Person.countDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
 
@@ -271,12 +336,11 @@ describe("SearchService", () => {
 
     it("should return complete pagination envelope from fuzzy fallback", async () => {
       const textQueryMock = buildQueryMock([]);
-      const fuzzyDocs = [{ _id: "p1" }, { _id: "p2" }];
-      const fuzzyQueryMock = buildQueryMock(fuzzyDocs);
+      Person.find.mockReturnValue(textQueryMock);
 
-      Person.find
-        .mockReturnValueOnce(textQueryMock)
-        .mockReturnValueOnce(fuzzyQueryMock);
+      const fuzzyDocs = [{ _id: "p1" }, { _id: "p2" }];
+      const fuzzyAggMock = buildAggregateMock(fuzzyDocs);
+      Person.aggregate.mockReturnValue(fuzzyAggMock);
       Person.countDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(5);
 
       const result = await smartSearch({ query: "test", limit: 2, skip: 0 });

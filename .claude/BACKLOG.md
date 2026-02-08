@@ -45,7 +45,7 @@ _(All high-priority items completed — see Completed section)_
   - Fix: Add TTL index on `recentJobChangeExpiresAt` with `expireAfterSeconds: 0`, or add a partial index + scheduled cleanup if full deletion isn't desired.
   - Acceptance: Expired change records are automatically cleaned up by MongoDB TTL. Unit test verifies TTL index exists.
 
-- [ ] **Fix fuzzy search over-matching across unrelated names** — `searchService.js` fuzzy fallback converts "John Doe" into regex `John|Doe`, matching anyone named John regardless of last name, or anyone at a company containing "Doe".
+- [x] ~~**Fix fuzzy search over-matching across unrelated names**~~ — `searchService.js` fuzzy fallback converts "John Doe" into regex `John|Doe`, matching anyone named John regardless of last name, or anyone at a company containing "Doe".
   - Category: `bug`
   - Files: `src/services/searchService.js:131-140`
   - Context: Multi-word queries produce OR-joined regex patterns. "John Doe" matches "John Smith" (via "John") and "Jane Doe" (via "Doe") equally. No result ranking by match quality.
@@ -178,6 +178,7 @@ _(All high-priority items completed — see Completed section)_
 
 ## Completed
 
+- [x] **Fix fuzzy search over-matching across unrelated names** — 2026-02-08. Replaced OR-joined regex (`John|Doe`) with AND-joined conditions requiring all terms to match. Added aggregation pipeline with relevance scoring (fullName 3x weight). 4 new unit tests.
 - [x] **Add URL validation guard to `normalizeUrl()`** — 2026-02-08. Added guard clause rejecting non-URL strings (Sales Nav IDs, numeric IDs, usernames) that lack `https?://` scheme or `linkedin.com`. 8 new unit tests.
 - [x] **Add missing indexes to Location model** — 2026-02-08. Added `snapshot.country`, `snapshot.city`, and compound `snapshot.city + snapshot.state + snapshot.country` indexes to match Person model.
 - [x] **Add TTL index for `recentJobChangeExpiresAt` on Change model** — 2026-02-08. Added TTL index with `expireAfterSeconds: 0` so MongoDB auto-deletes expired change records.

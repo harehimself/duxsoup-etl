@@ -126,22 +126,58 @@ async function fuzzySearchPeople(params) {
     query,
   });
 
-  // Escape special regex characters to prevent regex injection, then split on whitespace for OR matching
-  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = escaped.replace(/\s+/g, "|");
-  const regex = new RegExp(pattern, "i");
+  // Split query into terms and escape regex special characters
+  const terms = query
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
-  const filter = {
-    $or: [
-      { "snapshot.fullName": regex },
-      { "snapshot.currentTitle": regex },
-      { "snapshot.currentCompany": regex },
-    ],
-  };
+  const searchFields = [
+    "snapshot.fullName",
+    "snapshot.currentTitle",
+    "snapshot.currentCompany",
+  ];
 
-  // Search across multiple fields
+  // AND-join: every term must match at least one field in the document
+  // "John Doe" requires both "John" AND "Doe" to appear (in any field)
+  const termConditions = terms.map((term) => {
+    const regex = new RegExp(term, "i");
+    return {
+      $or: searchFields.map((field) => ({ [field]: regex })),
+    };
+  });
+
+  const filter =
+    termConditions.length === 1 ? termConditions[0] : { $and: termConditions };
+
+  // Relevance scoring: fullName matches weighted 3x, other fields 1x
+  const relevanceFields = terms.flatMap((term) =>
+    searchFields.map((field) => ({
+      $cond: [
+        {
+          $regexMatch: {
+            input: { $ifNull: [`$${field}`, ""] },
+            regex: term,
+            options: "i",
+          },
+        },
+        field === "snapshot.fullName" ? 3 : 1,
+        0,
+      ],
+    })),
+  );
+
+  const pipeline = [
+    { $match: filter },
+    { $addFields: { _relevance: { $sum: relevanceFields } } },
+    { $sort: { _relevance: -1 } },
+    { $skip: parsedSkip },
+    { $limit: parsedLimit },
+    { $project: { _relevance: 0 } },
+  ];
+
   const [results, totalCount] = await Promise.all([
-    Person.find(filter).skip(parsedSkip).limit(parsedLimit).lean().exec(),
+    Person.aggregate(pipeline).exec(),
     Person.countDocuments(filter),
   ]);
 
