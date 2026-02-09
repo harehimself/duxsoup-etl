@@ -81,21 +81,9 @@
   - Fix: Create `FIELD_MAPPINGS` array and iterate with a loop.
   - Acceptance: Same snapshot output for identical inputs. Existing tests pass. File reduced by 200+ lines.
 
-- [ ] **Reuse SMTP transporter in notification service** — `notificationService.js` creates a new `nodemailer.createTransport()` for every send, which opens a new TCP connection each time.
-  - Priority: `low`
-  - Category: `performance`
-  - Files: `src/services/notificationService.js:65`
-  - Context: SMTP connection setup has non-trivial latency. For batch notifications (change digests), this multiplies.
-  - Fix: Create transporter once at module initialization, reuse for all sends. Add connection error handling with lazy reconnect.
-  - Acceptance: Single transporter instance. Unit test confirms reuse across multiple sends.
+- [x] ~~**Reuse SMTP transporter in notification service**~~ — Completed, see Completed section.
 
-- [ ] **Add request timeout middleware** — No global request timeout exists. Long-running queries or exports can hold connections open indefinitely.
-  - Priority: `low`
-  - Category: `reliability`
-  - Files: `src/index.js`
-  - Context: Express 5 doesn't enforce request timeouts by default. A slow MongoDB query or large export could tie up a connection indefinitely on Render.
-  - Fix: Add `connect-timeout` middleware or custom timeout (e.g., 30s for API, 120s for export, 5s for health).
-  - Acceptance: Requests exceeding timeout return 503. Unit test confirms timeout behavior.
+- [x] ~~**Add request timeout middleware**~~ — Completed, see Completed section.
 
 - [ ] **Add exponential backoff for stuck dead letter replays** — Dead letter replay processes up to 100 pending records hourly but doesn't increase delay for records that repeatedly fail.
   - Priority: `low`
@@ -179,6 +167,8 @@
 
 ## Completed
 
+- [x] **Add request timeout middleware** — 2026-02-09. Created `src/middleware/requestTimeout.js` factory returning Express middleware that sends 503 after configurable deadline. Applied: 5s for `/health`, 30s default for `/api`, 120s for `/api/export`. Timer cleared on `res.close`. 5 new unit tests.
+- [x] **Reuse SMTP transporter in notification service** — 2026-02-09. Replaced per-send `nodemailer.createTransport()` with lazy-initialized module-level singleton via `getTransporter()`. Exposed `_resetTransporter()` for testing. 2 new unit tests confirm single instance across multiple sends.
 - [x] **Clean up export temp files on failure** — 2026-02-09. Added `finally` block in `processExportJob()` that calls `fs.unlink()` on the temp file when job status is `failed`. Silently ignores ENOENT if the file was never created. 4 new unit tests.
 - [x] **Suppress verbose dead letter replay output when queue is empty** — 2026-02-09. Added `DeadLetter.countDocuments()` early-exit in scheduler: when 0 pending, logs a single line (`Dead letter replay: 0 pending, skipped`) and skips the full replay call. Full banner preserved for CLI usage. 4 new unit tests.
 - [x] **Adopt semantic versioning with tagged releases** — 2026-02-09, tag `v1.0.0`. Created annotated tag on master and published GitHub Release with full capability summary. Establishes baseline for future version tracking.

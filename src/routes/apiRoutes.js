@@ -1,6 +1,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const logger = require("../utils/logger");
+const requestTimeout = require("../middleware/requestTimeout");
 const { handleVisit } = require("../controllers/visitController");
 const { handleScan } = require("../controllers/scanController");
 const webhookAuth = require("../middleware/webhookAuth");
@@ -174,8 +175,8 @@ router.use("/query", readRateLimiter, queryRoutes);
 // Search endpoints (full-text search)
 router.use("/search", readRateLimiter, searchRoutes);
 
-// Export endpoints (CSV/JSON export)
-router.use("/export", readRateLimiter, exportRoutes);
+// Export endpoints (CSV/JSON export) — longer timeout for large exports
+router.use("/export", requestTimeout(120000), readRateLimiter, exportRoutes);
 
 // Change endpoints (job changes, promotions, title changes)
 router.use("/changes", readRateLimiter, changeRoutes);

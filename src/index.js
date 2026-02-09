@@ -12,6 +12,7 @@ const logger = require("./utils/logger");
 const database = require("./utils/database");
 const { validateEnvironment, getConfig } = require("./utils/env");
 const LeaderElectionService = require("./services/leaderElectionService");
+const requestTimeout = require("./middleware/requestTimeout");
 const apiRoutes = require("./routes/apiRoutes");
 const openapiSpec = require("./openapi");
 
@@ -124,12 +125,12 @@ app.use((req, res, next) => {
 app.get("/api/docs/openapi.json", (req, res) => res.json(openapiSpec));
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
 
-// Add API routes
-app.use("/api", apiRoutes);
+// Add API routes with default 30s timeout
+app.use("/api", requestTimeout(30000), apiRoutes);
 
 // Health check endpoint - ALWAYS returns 200 for Render health checks
 // This endpoint must be simple and always succeed, even during startup
-app.get("/health", async (req, res) => {
+app.get("/health", requestTimeout(5000), async (req, res) => {
   const dbStatus = database.getConnectionStatus();
   const isHealthy = database.isReady();
 

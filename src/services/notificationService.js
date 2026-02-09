@@ -27,6 +27,16 @@ const SMTP_CONFIG = {
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || process.env.SMTP_USER;
 const ALERT_EMAIL_TO = process.env.ALERT_EMAIL_TO;
 
+// Reusable SMTP transporter (lazy-initialized on first send)
+let smtpTransporter = null;
+
+function getTransporter() {
+  if (!smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport(SMTP_CONFIG);
+  }
+  return smtpTransporter;
+}
+
 // SMS configuration
 const SMS_ENABLED =
   !!process.env.TWILIO_ACCOUNT_SID &&
@@ -61,8 +71,7 @@ async function sendHealthEmail(report) {
   } = report;
 
   try {
-    // Create email transporter
-    const transporter = nodemailer.createTransport(SMTP_CONFIG);
+    const transporter = getTransporter();
 
     // Build email content
     const subject = `[${status.toUpperCase()}] DuxSoup ETL Health Alert`;
@@ -415,9 +424,15 @@ async function testNotifications() {
   return results;
 }
 
+// Exposed for testing only
+function _resetTransporter() {
+  smtpTransporter = null;
+}
+
 module.exports = {
   sendHealthAlerts,
   sendHealthEmail,
   sendHealthSMS,
   testNotifications,
+  _resetTransporter,
 };
