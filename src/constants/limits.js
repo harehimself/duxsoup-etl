@@ -14,9 +14,20 @@ const DEBOUNCE_WINDOW_MS = parseInt(
   10,
 );
 
+const MAX_RETRY_ATTEMPTS = parseInt(
+  process.env.MAX_DEAD_LETTER_RETRIES || "10",
+  10,
+);
+const BACKOFF_CAP_MINUTES = parseInt(
+  process.env.DEAD_LETTER_BACKOFF_CAP_MINUTES || "720",
+  10,
+);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
   MAX_SKILLS,
   DEBOUNCE_WINDOW_MS,
+  MAX_RETRY_ATTEMPTS,
+  BACKOFF_CAP_MINUTES,
 };

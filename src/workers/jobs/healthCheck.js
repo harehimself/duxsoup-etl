@@ -1,6 +1,6 @@
-const Person = require('../../models/person');
-const DeadLetter = require('../../models/deadLetter');
-const logger = require('../../utils/logger');
+const Person = require("../../models/person");
+const DeadLetter = require("../../models/deadLetter");
+const logger = require("../../utils/logger");
 
 /**
  * Health Check Job
@@ -18,11 +18,11 @@ const logger = require('../../utils/logger');
  * @returns {Promise<Object>} Health report
  */
 async function runHealthCheck() {
-  logger.info('Starting health check');
+  logger.info("Starting health check");
 
   const report = {
     timestamp: new Date(),
-    status: 'good', // good, warning, critical
+    status: "good", // good, warning, critical
     criticalIssues: [],
     warnings: [],
     metrics: {},
@@ -38,14 +38,17 @@ async function runHealthCheck() {
     // Check 3: Failed dead letters
     await checkFailedDeadLetters(report);
 
+    // Check 4: Permanently failed dead letters
+    await checkPermanentlyFailedDeadLetters(report);
+
     // Determine overall status
     if (report.criticalIssues.length > 0) {
-      report.status = 'critical';
+      report.status = "critical";
     } else if (report.warnings.length > 0) {
-      report.status = 'warning';
+      report.status = "warning";
     }
 
-    logger.info('Health check complete', {
+    logger.info("Health check complete", {
       status: report.status,
       criticalIssues: report.criticalIssues.length,
       warnings: report.warnings.length,
@@ -53,12 +56,12 @@ async function runHealthCheck() {
 
     return report;
   } catch (err) {
-    logger.error('Health check failed', {
+    logger.error("Health check failed", {
       error: err.message,
       stack: err.stack,
     });
 
-    report.status = 'error';
+    report.status = "error";
     report.error = {
       message: err.message,
       stack: err.stack,
@@ -89,14 +92,14 @@ async function checkCanonicalIdCoverage(report) {
   // CRITICAL: >10% missing
   if (percentageMissing > 10) {
     report.criticalIssues.push({
-      type: 'missing_canonical_id',
-      severity: 'critical',
+      type: "missing_canonical_id",
+      severity: "critical",
       message: `${percentageMissing.toFixed(1)}% of people missing canonical_id (${missingCanonicalId}/${totalPeople})`,
-      recommendation: 'Run canonical ID backfill script',
+      recommendation: "Run canonical ID backfill script",
     });
   }
 
-  logger.debug('Canonical ID coverage check', {
+  logger.debug("Canonical ID coverage check", {
     totalPeople,
     missingCanonicalId,
     percentageMissing: percentageMissing.toFixed(1),
@@ -110,12 +113,12 @@ async function checkCanonicalIdCoverage(report) {
  */
 async function checkDeadLetterBacklog(report) {
   if (!DeadLetter) {
-    logger.debug('DeadLetter model not available, skipping check');
+    logger.debug("DeadLetter model not available, skipping check");
     return;
   }
 
   const pendingCount = await DeadLetter.countDocuments({
-    status: 'pending',
+    status: "pending",
   });
 
   report.metrics.pendingDeadLetters = pendingCount;
@@ -123,14 +126,14 @@ async function checkDeadLetterBacklog(report) {
   // CRITICAL: >100 pending
   if (pendingCount > 100) {
     report.criticalIssues.push({
-      type: 'dead_letter_backlog',
-      severity: 'critical',
+      type: "dead_letter_backlog",
+      severity: "critical",
       message: `${pendingCount} pending dead letters (threshold: 100)`,
-      recommendation: 'Investigate dead letter causes and replay',
+      recommendation: "Investigate dead letter causes and replay",
     });
   }
 
-  logger.debug('Dead letter backlog check', { pendingCount });
+  logger.debug("Dead letter backlog check", { pendingCount });
 }
 
 /**
@@ -140,12 +143,12 @@ async function checkDeadLetterBacklog(report) {
  */
 async function checkFailedDeadLetters(report) {
   if (!DeadLetter) {
-    logger.debug('DeadLetter model not available, skipping check');
+    logger.debug("DeadLetter model not available, skipping check");
     return;
   }
 
   const failedAgainCount = await DeadLetter.countDocuments({
-    status: 'failed_again',
+    status: "failed_again",
   });
 
   report.metrics.failedAgainDeadLetters = failedAgainCount;
@@ -153,14 +156,46 @@ async function checkFailedDeadLetters(report) {
   // WARNING: >50 failed_again
   if (failedAgainCount > 50) {
     report.warnings.push({
-      type: 'failed_dead_letters',
-      severity: 'warning',
+      type: "failed_dead_letters",
+      severity: "warning",
       message: `${failedAgainCount} failed_again dead letters (threshold: 50)`,
-      recommendation: 'Review and fix persistent dead letter failures',
+      recommendation: "Review and fix persistent dead letter failures",
     });
   }
 
-  logger.debug('Failed dead letters check', { failedAgainCount });
+  logger.debug("Failed dead letters check", { failedAgainCount });
+}
+
+/**
+ * Check permanently failed dead letters
+ *
+ * @param {Object} report - Health report to update
+ */
+async function checkPermanentlyFailedDeadLetters(report) {
+  if (!DeadLetter) {
+    logger.debug("DeadLetter model not available, skipping check");
+    return;
+  }
+
+  const permanentlyFailedCount = await DeadLetter.countDocuments({
+    status: "permanently_failed",
+  });
+
+  report.metrics.permanentlyFailedDeadLetters = permanentlyFailedCount;
+
+  if (permanentlyFailedCount > 0) {
+    report.warnings.push({
+      type: "permanently_failed_dead_letters",
+      severity: "warning",
+      message: `${permanentlyFailedCount} permanently failed dead letter(s) exceeded max retry attempts`,
+      recommendation:
+        "Investigate root causes and consider manual intervention or cleanup",
+    });
+  }
+
+  logger.debug("Permanently failed dead letters check", {
+    permanentlyFailedCount,
+  });
 }
 
 module.exports = {

@@ -36,16 +36,14 @@ function startScheduler(isLeader = true) {
   cron.schedule("0 * * * *", async () => {
     try {
       // Quick count to avoid verbose replay output when queue is empty
-      const pendingCount = await DeadLetter.countDocuments({
-        status: "pending",
-      });
+      const eligibleCount = await DeadLetter.countEligibleForReplay();
 
-      if (pendingCount === 0) {
-        logger.info("Dead letter replay: 0 pending, skipped");
+      if (eligibleCount === 0) {
+        logger.info("Dead letter replay: 0 eligible, skipped");
         return;
       }
 
-      logger.info("Running scheduled dead letter replay", { pendingCount });
+      logger.info("Running scheduled dead letter replay", { eligibleCount });
 
       const { replayDeadLetters } = require("../../scripts/replayDeadLetters");
       // Use managedConnection: true to prevent disconnecting the shared database connection

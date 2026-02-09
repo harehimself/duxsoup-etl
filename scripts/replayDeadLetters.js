@@ -57,11 +57,8 @@ async function replayDeadLetter(deadLetter, dryRun = true) {
       const person = await upsertFromObservation(observation, deadLetter.sourceType);
 
       if (person) {
-        // Success - mark dead letter as replayed
-        deadLetter.status = 'replayed';
-        deadLetter.last_replay_at = new Date();
-        deadLetter.retry_count = (deadLetter.retry_count || 0) + 1;
-        await deadLetter.save();
+        // Success - mark dead letter as replayed using static method
+        await DeadLetter.markReplayed(deadLetter.observation_id);
 
         stats.succeeded++;
         logger.info('Successfully replayed dead letter', {
@@ -88,16 +85,8 @@ async function replayDeadLetter(deadLetter, dryRun = true) {
     stats.errors[errorKey] = (stats.errors[errorKey] || 0) + 1;
 
     if (!dryRun) {
-      // Update dead letter with new error
-      deadLetter.status = 'failed_again';
-      deadLetter.last_replay_at = new Date();
-      deadLetter.retry_count = (deadLetter.retry_count || 0) + 1;
-      deadLetter.last_error = {
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-      };
-      await deadLetter.save();
+      // Update dead letter with new error using static method (handles backoff + permanent failure)
+      await DeadLetter.markReplayFailed(deadLetter.observation_id, error);
     }
 
     logger.error('Failed to replay dead letter', {
@@ -148,7 +137,7 @@ function generateReport() {
  * Main replay function
  */
 async function replayDeadLetters(options = {}) {
-  const { dryRun = true, limit = null, status = 'pending', managedConnection = false } = options;
+  const { dryRun = true, limit = null, status = null, managedConnection = false } = options;
 
   stats.startTime = new Date();
 
@@ -156,7 +145,7 @@ async function replayDeadLetters(options = {}) {
   console.log('DEAD LETTER REPLAY');
   console.log('========================================\n');
   console.log(`Mode: ${dryRun ? 'DRY-RUN (no changes)' : 'EXECUTE (writing to DB)'}`);
-  console.log(`Status filter: ${status}`);
+  console.log(`Status filter: ${status || 'eligible (backoff-aware)'}`);
   console.log(`Limit: ${limit || 'none'}\n`);
 
   // Connect to database only if not using managed connection (i.e., CLI mode)
@@ -165,10 +154,17 @@ async function replayDeadLetters(options = {}) {
   }
 
   // Get dead letters
-  const query = { status };
-  const deadLetters = limit
-    ? await DeadLetter.find(query).limit(limit)
-    : await DeadLetter.find(query);
+  let deadLetters;
+  if (status) {
+    // Explicit status filter (CLI --status path)
+    const query = { status };
+    deadLetters = limit
+      ? await DeadLetter.find(query).limit(limit)
+      : await DeadLetter.find(query);
+  } else {
+    // Scheduler path: backoff-aware eligibility query
+    deadLetters = await DeadLetter.findEligibleForReplay(limit || 100);
+  }
 
   stats.total = deadLetters.length;
 
@@ -216,7 +212,7 @@ if (require.main === module) {
   const options = {
     dryRun: !args.includes('--execute'),
     limit: null,
-    status: 'pending',
+    status: null,
   };
 
   // Parse arguments
