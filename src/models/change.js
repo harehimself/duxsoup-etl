@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
  *
  * Tracks significant changes in person profiles:
  * - Job changes (company switches)
+ * - Lateral moves (company switch at same seniority level)
  * - Promotions (title upgrades at same company)
  * - Title changes (title modifications)
  *
@@ -17,7 +18,7 @@ const changeSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ["company_change", "promotion", "title_change"],
+      enum: ["company_change", "promotion", "title_change", "lateral_move"],
     },
 
     // Person who changed
@@ -55,6 +56,10 @@ const changeSchema = new mongoose.Schema(
     // Enriched change context
     fromCompanyId: String,
     toCompanyId: String,
+    fromTitle: String,
+    toTitle: String,
+    seniority: String,
+    seniorityRank: Number,
     tenureDaysAtPreviousRole: Number,
 
     // Rolling 90-day flag for "recent job change" queries

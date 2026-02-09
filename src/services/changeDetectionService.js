@@ -1,11 +1,13 @@
-const Change = require('../models/change');
-const logger = require('../utils/logger');
+const Change = require("../models/change");
+const logger = require("../utils/logger");
+const { parseTitle } = require("../utils/titleParser");
 
 /**
  * Change Detection Service
  *
  * Detects significant changes in person profiles:
  * - Company changes (job switches)
+ * - Lateral moves (company switch at same seniority level)
  * - Promotions (title upgrades at same company)
  * - Title changes
  */
@@ -32,7 +34,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
   if (companyChange) {
     try {
       const change = await recordChange({
-        type: 'company_change',
+        type: "company_change",
         person_id: person._id,
         personSnapshot: buildPersonSnapshot(person, newSnapshot),
         from: companyChange.from,
@@ -46,7 +48,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
 
       if (change) {
         changes.push(change);
-        logger.info('Company change detected', {
+        logger.info("Company change detected", {
           person_id: person._id,
           fullName: newSnapshot.fullName,
           from: companyChange.from,
@@ -56,10 +58,53 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
     } catch (err) {
       // Ignore duplicate errors (change already recorded)
       if (err.code !== 11000) {
-        logger.error('Failed to record company change', {
+        logger.error("Failed to record company change", {
           person_id: person._id,
           error: err.message,
         });
+      }
+    }
+  }
+
+  // Detect lateral move (company change at same seniority level)
+  if (companyChange) {
+    const lateralMove = detectLateralMove(oldSnapshot, newSnapshot);
+    if (lateralMove) {
+      try {
+        const change = await recordChange({
+          type: "lateral_move",
+          person_id: person._id,
+          personSnapshot: buildPersonSnapshot(person, newSnapshot),
+          from: companyChange.from,
+          to: companyChange.to,
+          fromCompanyId: companyChange.fromCompanyId,
+          toCompanyId: companyChange.toCompanyId,
+          fromTitle: lateralMove.fromTitle,
+          toTitle: lateralMove.toTitle,
+          seniority: lateralMove.seniority,
+          seniorityRank: lateralMove.seniorityRank,
+          roles: oldSnapshot.roles,
+          oldCompanyName: companyChange.from,
+          observationId,
+        });
+
+        if (change) {
+          changes.push(change);
+          logger.info("Lateral move detected", {
+            person_id: person._id,
+            fullName: newSnapshot.fullName,
+            from: companyChange.from,
+            to: companyChange.to,
+            seniority: lateralMove.seniority,
+          });
+        }
+      } catch (err) {
+        if (err.code !== 11000) {
+          logger.error("Failed to record lateral move", {
+            person_id: person._id,
+            error: err.message,
+          });
+        }
       }
     }
   }
@@ -69,7 +114,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
   if (promotion) {
     try {
       const change = await recordChange({
-        type: 'promotion',
+        type: "promotion",
         person_id: person._id,
         personSnapshot: buildPersonSnapshot(person, newSnapshot),
         from: promotion.from,
@@ -80,7 +125,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
 
       if (change) {
         changes.push(change);
-        logger.info('Promotion detected', {
+        logger.info("Promotion detected", {
           person_id: person._id,
           fullName: newSnapshot.fullName,
           company: promotion.company,
@@ -90,7 +135,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
       }
     } catch (err) {
       if (err.code !== 11000) {
-        logger.error('Failed to record promotion', {
+        logger.error("Failed to record promotion", {
           person_id: person._id,
           error: err.message,
         });
@@ -104,7 +149,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
     // Only record if not already a promotion
     try {
       const change = await recordChange({
-        type: 'title_change',
+        type: "title_change",
         person_id: person._id,
         personSnapshot: buildPersonSnapshot(person, newSnapshot),
         from: titleChange.from,
@@ -114,7 +159,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
 
       if (change) {
         changes.push(change);
-        logger.info('Title change detected', {
+        logger.info("Title change detected", {
           person_id: person._id,
           fullName: newSnapshot.fullName,
           from: titleChange.from,
@@ -123,7 +168,7 @@ async function detectChanges(person, oldSnapshot, newSnapshot, observationId) {
       }
     } catch (err) {
       if (err.code !== 11000) {
-        logger.error('Failed to record title change', {
+        logger.error("Failed to record title change", {
           person_id: person._id,
           error: err.message,
         });
@@ -216,6 +261,46 @@ function detectPromotion(oldSnapshot, newSnapshot) {
 }
 
 /**
+ * Detect lateral move (company change at same seniority level)
+ *
+ * A lateral move is when someone changes companies but remains at the
+ * same seniority tier. E.g., VP of Sales at Google → VP of Marketing at Meta.
+ *
+ * @param {Object} oldSnapshot - Old snapshot
+ * @param {Object} newSnapshot - New snapshot
+ * @returns {Object|null} Lateral move details or null
+ */
+function detectLateralMove(oldSnapshot, newSnapshot) {
+  const oldTitle = oldSnapshot.currentTitle;
+  const newTitle = newSnapshot.currentTitle;
+
+  // Both titles required to compare seniority
+  if (!oldTitle || !newTitle) {
+    return null;
+  }
+
+  const oldParsed = parseTitle(oldTitle);
+  const newParsed = parseTitle(newTitle);
+
+  // Both must have a resolved seniority rank
+  if (!oldParsed.seniorityRank || !newParsed.seniorityRank) {
+    return null;
+  }
+
+  // Same seniority rank = lateral move
+  if (oldParsed.seniorityRank === newParsed.seniorityRank) {
+    return {
+      fromTitle: oldTitle,
+      toTitle: newTitle,
+      seniority: newParsed.seniority,
+      seniorityRank: newParsed.seniorityRank,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Detect title change (different title, not necessarily a promotion)
  *
  * @param {Object} oldSnapshot - Old snapshot
@@ -270,8 +355,12 @@ function detectSeniorityUpgrade(oldTitle, newTitle) {
   ];
 
   // Find seniority level for each title
-  const oldLevel = seniorityLevels.findIndex((pattern) => pattern.test(oldTitle));
-  const newLevel = seniorityLevels.findIndex((pattern) => pattern.test(newTitle));
+  const oldLevel = seniorityLevels.findIndex((pattern) =>
+    pattern.test(oldTitle),
+  );
+  const newLevel = seniorityLevels.findIndex((pattern) =>
+    pattern.test(newTitle),
+  );
 
   // If both found and new level is higher, it's a promotion
   if (oldLevel !== -1 && newLevel !== -1 && newLevel > oldLevel) {
@@ -305,12 +394,32 @@ async function recordChange(changeData) {
     notified: false,
   };
 
+  // Enrich lateral_move records with seniority context and company change fields
+  if (changeData.type === "lateral_move") {
+    doc.fromCompanyId = changeData.fromCompanyId || null;
+    doc.toCompanyId = changeData.toCompanyId || null;
+    doc.fromTitle = changeData.fromTitle || null;
+    doc.toTitle = changeData.toTitle || null;
+    doc.seniority = changeData.seniority || null;
+    doc.seniorityRank = changeData.seniorityRank || null;
+    doc.recentJobChange = true;
+    doc.recentJobChangeExpiresAt = new Date(
+      Date.now() + 90 * 24 * 60 * 60 * 1000,
+    );
+    doc.tenureDaysAtPreviousRole = computeTenureAtPreviousRole(
+      changeData.roles,
+      changeData.oldCompanyName,
+    );
+  }
+
   // Enrich company_change records with additional context
-  if (changeData.type === 'company_change') {
+  if (changeData.type === "company_change") {
     doc.fromCompanyId = changeData.fromCompanyId || null;
     doc.toCompanyId = changeData.toCompanyId || null;
     doc.recentJobChange = true;
-    doc.recentJobChangeExpiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    doc.recentJobChangeExpiresAt = new Date(
+      Date.now() + 90 * 24 * 60 * 60 * 1000,
+    );
 
     // Compute tenure at previous role
     doc.tenureDaysAtPreviousRole = computeTenureAtPreviousRole(
@@ -388,7 +497,7 @@ function buildPersonSnapshot(person, snapshot) {
  * @returns {String} Normalized string
  */
 function normalizeString(str) {
-  if (!str) return '';
+  if (!str) return "";
   return str.trim().toLowerCase();
 }
 
@@ -407,7 +516,7 @@ async function getRecentChanges(options = {}) {
   const query = {};
 
   // Filter by type (sanitize to prevent NoSQL injection)
-  if (type && typeof type === 'string') {
+  if (type && typeof type === "string") {
     query.type = type;
   }
 
