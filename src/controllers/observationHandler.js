@@ -6,6 +6,7 @@ const {
   createSuccessResponse,
   handleDatabaseError,
 } = require("../utils/validation");
+const { validateAndLogSchema } = require("../utils/webhookSchemaValidator");
 const { getConfig } = require("../utils/env");
 const { computeEventKey } = require("../utils/eventKey");
 const { upsertFromObservation } = require("./personController");
@@ -29,6 +30,9 @@ const { shouldSkip } = require("../utils/upsertDebounce");
 async function handleObservation(config, req, res) {
   const payload = req.body;
   const envConfig = getConfig();
+
+  // Schema drift detection (warn-only, never blocks processing)
+  validateAndLogSchema(payload);
 
   try {
     // Validate webhook payload structure

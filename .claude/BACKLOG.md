@@ -95,10 +95,7 @@
   - Fix: Skip records where `replay_attempts > MAX_RETRIES` (e.g., 10). Add exponential backoff based on attempt count. Mark records as `permanently_failed` after max retries.
   - Acceptance: Records with 10+ failures are skipped. `permanently_failed` status added to DeadLetter enum. Unit test confirms backoff logic.
 
-- [ ] **Webhook payload schema validation** — The education object-casting bug reveals that DuxSoup's payload format can change without warning. Add JSON Schema validation (e.g., `ajv`) on incoming webhooks to detect and log schema drift before it causes downstream failures.
-  - Priority: `low` _(promoted from `backlog` — the education object bug already demonstrated the need; no schema validation exists anywhere in the codebase)_
-  - Category: `reliability`
-  - Impact: Early warning system for DuxSoup API changes. Schema violations logged as warnings without rejecting the webhook, allowing graceful degradation.
+- [x] ~~**Webhook payload schema validation**~~ — Completed, see Completed section.
 
 - [x] ~~**Role deduplication during person upsert**~~ — Completed, see Completed section.
 
@@ -165,6 +162,7 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 
 ## Completed
 
+- [x] **Webhook payload schema validation** — 2026-02-09. Added JSON Schema validation (ajv) for incoming DuxSoup webhooks in warn-only mode. Validates envelope structure, visit data fields, scan data fields, and extended data (positions, schools, skills) against known schemas. Detects two categories of drift: type violations (known field has unexpected type, logged as warning) and unknown fields (new fields DuxSoup added, logged as info). Integrated into `observationHandler.js` before existing validation — never blocks webhook processing. Schemas defined in `webhookSchemas.js`, validator in `webhookSchemaValidator.js`. 41 new unit tests.
 - [x] **Lateral move detection in change service** — 2026-02-09. Added `lateral_move` change type to detect company switches at the same seniority level (e.g., VP at Google → VP at Meta). Uses `titleParser.parseTitle()` to compare seniority ranks. Lateral move records include full enrichment (fromCompanyId, toCompanyId, fromTitle, toTitle, seniority tier, tenure, recentJobChange flag). Recorded alongside `company_change` for backward compatibility. Added `fromTitle`, `toTitle`, `seniority`, `seniorityRank` fields to Change schema. 8 new unit tests.
 - [x] **Role deduplication during person upsert** — 2026-02-09. Replaced naive `title|company|startDate` dedup key with `findMatchingRole()` using case/whitespace-normalized comparison and multi-dimensional matching. When startDate is null, uses isCurrent + location + description as secondary discriminators to avoid collapsing genuinely distinct undated roles. Added `mergeRoleFields()` to backfill empty fields on existing matched roles (companyId, location, description, dates). Removed unused `_roleKey` variable. 25 new unit tests covering null startDate collision, text normalization, field merging, and current-role matching.
 - [x] **Add request timeout middleware** — 2026-02-09. Created `src/middleware/requestTimeout.js` factory returning Express middleware that sends 503 after configurable deadline. Applied: 5s for `/health`, 30s default for `/api`, 120s for `/api/export`. Timer cleared on `res.close`. 5 new unit tests.
