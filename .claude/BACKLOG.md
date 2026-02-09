@@ -63,13 +63,7 @@
 
 - [x] ~~**Cache expensive health metrics aggregations**~~ — Completed, see Completed section.
 
-- [ ] **Clean up export temp files on failure** — `exportService.js` writes CSV/JSON to temp directory but doesn't clean up files when export jobs fail mid-write.
-  - Priority: `low`
-  - Category: `reliability`
-  - Files: `src/services/exportService.js`
-  - Context: Failed exports leave orphaned files in the temp directory. Over time, this can consume disk space on the Render instance.
-  - Fix: Add try/finally cleanup in the export pipeline. Delete temp file if job status is `failed`.
-  - Acceptance: Failed export jobs don't leave temp files. Unit test confirms cleanup on error.
+- [x] ~~**Clean up export temp files on failure**~~ — Completed, see Completed section.
 
 - [ ] **Split adminRoutes.js into focused route modules** — At 826 lines, `adminRoutes.js` handles merge, rebuild, link, and migrate operations in a single file.
   - Priority: `low`
@@ -185,6 +179,7 @@
 
 ## Completed
 
+- [x] **Clean up export temp files on failure** — 2026-02-09. Added `finally` block in `processExportJob()` that calls `fs.unlink()` on the temp file when job status is `failed`. Silently ignores ENOENT if the file was never created. 4 new unit tests.
 - [x] **Suppress verbose dead letter replay output when queue is empty** — 2026-02-09. Added `DeadLetter.countDocuments()` early-exit in scheduler: when 0 pending, logs a single line (`Dead letter replay: 0 pending, skipped`) and skips the full replay call. Full banner preserved for CLI usage. 4 new unit tests.
 - [x] **Adopt semantic versioning with tagged releases** — 2026-02-09, tag `v1.0.0`. Created annotated tag on master and published GitHub Release with full capability summary. Establishes baseline for future version tracking.
 - [x] **Merge Dependabot PR #80** (nodemailer 8.0.0 -> 8.0.1) — 2026-02-09, commit `44d7139`. Squash-merged routine patch bump via GitHub API.

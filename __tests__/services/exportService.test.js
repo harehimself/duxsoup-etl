@@ -34,6 +34,7 @@ jest.mock("fs", () => ({
     writeFile: jest.fn().mockResolvedValue(undefined),
     stat: jest.fn().mockResolvedValue({ size: 1024 }),
     access: jest.fn().mockResolvedValue(undefined),
+    unlink: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -221,6 +222,112 @@ describe("ExportService", () => {
       await expect(processExportJob("job-fail")).rejects.toThrow("DB error");
       expect(jobDoc.status).toBe("failed");
       expect(jobDoc.error.message).toBe("DB error");
+    });
+
+    it("should clean up temp file when export fails", async () => {
+      const fs = require("fs");
+      fs.promises.mkdir.mockResolvedValue(undefined);
+      fs.promises.unlink.mockResolvedValue(undefined);
+
+      Person.find.mockImplementation(() => {
+        throw new Error("Query failed");
+      });
+
+      const jobDoc = {
+        _id: "job-cleanup",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["firstName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await expect(processExportJob("job-cleanup")).rejects.toThrow(
+        "Query failed",
+      );
+      expect(fs.promises.unlink).toHaveBeenCalledWith(
+        expect.stringContaining("job-cleanup.csv"),
+      );
+    });
+
+    it("should clean up JSON temp file when export fails", async () => {
+      const fs = require("fs");
+      fs.promises.mkdir.mockResolvedValue(undefined);
+      fs.promises.writeFile.mockRejectedValue(new Error("Disk full"));
+      fs.promises.unlink.mockResolvedValue(undefined);
+
+      const queryMock = buildQueryMock([{ _id: "p1" }]);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-json-fail",
+        format: "json",
+        status: "pending",
+        filters: {},
+        fields: ["firstName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await expect(processExportJob("job-json-fail")).rejects.toThrow(
+        "Disk full",
+      );
+      expect(fs.promises.unlink).toHaveBeenCalledWith(
+        expect.stringContaining("job-json-fail.json"),
+      );
+    });
+
+    it("should not throw if temp file cleanup fails (file never created)", async () => {
+      const fs = require("fs");
+      fs.promises.mkdir.mockResolvedValue(undefined);
+      fs.promises.unlink.mockRejectedValue(new Error("ENOENT"));
+
+      Person.find.mockImplementation(() => {
+        throw new Error("DB error");
+      });
+
+      const jobDoc = {
+        _id: "job-no-file",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["firstName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      // Should throw the original error, not the unlink error
+      await expect(processExportJob("job-no-file")).rejects.toThrow("DB error");
+      expect(fs.promises.unlink).toHaveBeenCalled();
+    });
+
+    it("should not clean up temp file on success", async () => {
+      const fs = require("fs");
+      fs.promises.mkdir.mockResolvedValue(undefined);
+      fs.promises.stat.mockResolvedValue({ size: 256 });
+      fs.promises.unlink.mockClear();
+      const csvWriter = require("csv-writer");
+      csvWriter.createObjectCsvWriter.mockReturnValue({
+        writeRecords: jest.fn().mockResolvedValue(undefined),
+      });
+
+      const queryMock = buildQueryMock([{ _id: "p1" }]);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-ok",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["firstName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-ok");
+
+      expect(fs.promises.unlink).not.toHaveBeenCalled();
     });
 
     it("should throw EXPORT_TOO_LARGE when data exceeds max rows", async () => {

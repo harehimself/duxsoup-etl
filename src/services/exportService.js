@@ -200,6 +200,21 @@ async function processExportJob(jobId) {
     await job.save();
 
     throw err;
+  } finally {
+    // Clean up temp file on failure
+    if (job.status === "failed") {
+      const ext = job.format === "csv" ? "csv" : "json";
+      const tempPath = path.join(EXPORT_TEMP_DIR, `${jobId}.${ext}`);
+      try {
+        await fs.unlink(tempPath);
+        logger.info("Cleaned up temp file for failed export", {
+          jobId,
+          tempPath,
+        });
+      } catch (_unlinkErr) {
+        // File may not exist if failure occurred before writing — ignore
+      }
+    }
   }
 }
 
