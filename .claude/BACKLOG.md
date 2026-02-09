@@ -55,6 +55,8 @@
   - Fix: Check DuxSoup configuration to determine if scan webhooks are enabled. If not expected, document that scan handling is retained for future use.
   - Acceptance: Confirmed whether scans are expected. If not, document that scan handling is retained for future use.
 
+- [x] ~~**Add request timeout middleware**~~ — Completed, see Completed section.
+
 - [x] ~~**Normalize invalid role dates before save instead of failing**~~ — Completed, see Completed section.
 
 ### Low Priority / Tech Debt
@@ -92,6 +94,22 @@
   - Context: A record that fails 50 times will be retried every hour indefinitely. The `replay_attempts` counter is tracked but not used for backoff or max-retry decisions.
   - Fix: Skip records where `replay_attempts > MAX_RETRIES` (e.g., 10). Add exponential backoff based on attempt count. Mark records as `permanently_failed` after max retries.
   - Acceptance: Records with 10+ failures are skipped. `permanently_failed` status added to DeadLetter enum. Unit test confirms backoff logic.
+
+- [ ] **Webhook payload schema validation** — The education object-casting bug reveals that DuxSoup's payload format can change without warning. Add JSON Schema validation (e.g., `ajv`) on incoming webhooks to detect and log schema drift before it causes downstream failures.
+  - Priority: `low` _(promoted from `backlog` — the education object bug already demonstrated the need; no schema validation exists anywhere in the codebase)_
+  - Category: `reliability`
+  - Impact: Early warning system for DuxSoup API changes. Schema violations logged as warnings without rejecting the webhook, allowing graceful degradation.
+
+- [ ] **Role deduplication during person upsert** — Role deduplication keys on `title|companyId|startDate`, but null `startDate` causes all undated roles at the same title+company to collide. Roles can also accumulate if title or company varies slightly.
+  - Priority: `low` _(promoted from `backlog` — active data quality issue; null startDate in role key at personController.js:317 silently drops undated roles)_
+  - Category: `data-quality`
+  - Files: `src/controllers/personController.js:317-330`
+  - Impact: Prevents role array bloat and improves person snapshot accuracy.
+
+- [ ] **Add merge safety validation** — `identityResolverService.js` merge does not validate that the winner is the better record before deleting the loser. If a loser has 9000 observations and the winner has 10, the merge proceeds anyway.
+  - Priority: `low` _(promoted from `backlog` — irreversible data loss risk; `mergedInto` index already added, but no guardrails on the merge operation itself)_
+  - Category: `reliability`
+  - Impact: Prevents accidental data loss from incorrect merge winner selection.
 
 - [x] ~~**Suppress verbose dead letter replay output when queue is empty**~~ — Completed, see Completed section.
 
@@ -137,20 +155,7 @@
   - Category: `feature`
   - Impact: More complete job change intelligence. Useful for sales intelligence ("VP moved to competitor").
 
-- [ ] **Role deduplication during person upsert** — Role deduplication keys on `title|companyId|startDate`, but null `startDate` causes all undated roles at the same title+company to collide. Roles can also accumulate if title or company varies slightly.
-  - Priority: `backlog`
-  - Category: `data-quality`
-  - Impact: Prevents role array bloat and improves person snapshot accuracy.
-
-- [ ] **Add `mergedInto` index and merge safety validation** — `identityResolverService.js` merge does not validate that the winner is the better record before deleting the loser. If a loser has 9000 observations and the winner has 10, the merge proceeds anyway.
-  - Priority: `backlog`
-  - Category: `reliability`
-  - Impact: Prevents accidental data loss from incorrect merge winner selection.
-
-- [ ] **Webhook payload schema validation** — The education object-casting bug reveals that DuxSoup's payload format can change without warning. Add JSON Schema validation (e.g., `ajv`) on incoming webhooks to detect and log schema drift before it causes downstream failures.
-  - Priority: `backlog`
-  - Category: `reliability`
-  - Impact: Early warning system for DuxSoup API changes. Schema violations logged as warnings without rejecting the webhook, allowing graceful degradation.
+_(Role deduplication, merge safety validation, and webhook payload schema validation promoted to Active Sprint — see Low Priority section above.)_
 
 - [ ] **Structured log forwarding to external aggregation** — Logs are well-structured JSON but there's no external aggregation beyond Render's 30-day window. Consider forwarding to a log aggregation service (Datadog, Logtail, Betterstack) for alerts, dashboards, and historical analysis.
   - Priority: `backlog`
