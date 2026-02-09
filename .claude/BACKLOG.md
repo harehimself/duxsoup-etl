@@ -150,10 +150,7 @@
   - Category: `reliability`
   - Impact: Prevents alert fatigue. Track last alert hash + timestamp, suppress duplicates within a window.
 
-- [ ] **Lateral move detection in change service** — `changeDetectionService.js` detects promotions (seniority upgrade) and company changes but not lateral moves (same seniority, different company or role).
-  - Priority: `backlog`
-  - Category: `feature`
-  - Impact: More complete job change intelligence. Useful for sales intelligence ("VP moved to competitor").
+- [x] ~~**Lateral move detection in change service**~~ — Completed, see Completed section.
 
 _(Role deduplication, merge safety validation, and webhook payload schema validation promoted to Active Sprint — see Low Priority section above.)_
 
@@ -172,6 +169,7 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 
 ## Completed
 
+- [x] **Lateral move detection in change service** — 2026-02-09. Added `lateral_move` change type to detect company switches at the same seniority level (e.g., VP at Google → VP at Meta). Uses `titleParser.parseTitle()` to compare seniority ranks. Lateral move records include full enrichment (fromCompanyId, toCompanyId, fromTitle, toTitle, seniority tier, tenure, recentJobChange flag). Recorded alongside `company_change` for backward compatibility. Added `fromTitle`, `toTitle`, `seniority`, `seniorityRank` fields to Change schema. 8 new unit tests.
 - [x] **Add request timeout middleware** — 2026-02-09. Created `src/middleware/requestTimeout.js` factory returning Express middleware that sends 503 after configurable deadline. Applied: 5s for `/health`, 30s default for `/api`, 120s for `/api/export`. Timer cleared on `res.close`. 5 new unit tests.
 - [x] **Reuse SMTP transporter in notification service** — 2026-02-09. Replaced per-send `nodemailer.createTransport()` with lazy-initialized module-level singleton via `getTransporter()`. Exposed `_resetTransporter()` for testing. 2 new unit tests confirm single instance across multiple sends.
 - [x] **Clean up export temp files on failure** — 2026-02-09. Added `finally` block in `processExportJob()` that calls `fs.unlink()` on the temp file when job status is `failed`. Silently ignores ENOENT if the file was never created. 4 new unit tests.

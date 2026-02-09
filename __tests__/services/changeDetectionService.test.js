@@ -265,115 +265,121 @@ describe("ChangeDetectionService", () => {
 
     // ─── Enrichment tests (Plan Item 15) ───
 
-    it('should include fromCompanyId and toCompanyId in company_change records', async () => {
+    it("should include fromCompanyId and toCompanyId in company_change records", async () => {
       const oldSnapshot = {
-        currentCompany: 'Google',
-        currentCompanyId: '1441',
-        currentTitle: 'Engineer',
+        currentCompany: "Google",
+        currentCompanyId: "1441",
+        currentTitle: "Engineer",
         roles: [],
       };
       const newSnapshot = {
-        currentCompany: 'Meta',
-        currentCompanyId: '10667',
-        currentTitle: 'Engineer',
+        currentCompany: "Meta",
+        currentCompanyId: "10667",
+        currentTitle: "Engineer",
       };
 
       Change.create.mockClear();
-      await detectChanges(basePerson, oldSnapshot, newSnapshot, 'obs-1');
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
 
       const companyChangeCall = Change.create.mock.calls.find(
-        (call) => call[0].type === 'company_change',
+        (call) => call[0].type === "company_change",
       );
       expect(companyChangeCall).toBeDefined();
-      expect(companyChangeCall[0].fromCompanyId).toBe('1441');
-      expect(companyChangeCall[0].toCompanyId).toBe('10667');
+      expect(companyChangeCall[0].fromCompanyId).toBe("1441");
+      expect(companyChangeCall[0].toCompanyId).toBe("10667");
     });
 
-    it('should include tenureDaysAtPreviousRole when matching role found', async () => {
+    it("should include tenureDaysAtPreviousRole when matching role found", async () => {
       const roleStartDate = new Date();
       roleStartDate.setDate(roleStartDate.getDate() - 365); // 365 days ago
 
       const oldSnapshot = {
-        currentCompany: 'Google',
-        currentCompanyId: '1441',
-        currentTitle: 'Engineer',
+        currentCompany: "Google",
+        currentCompanyId: "1441",
+        currentTitle: "Engineer",
         roles: [
           {
-            companyName: 'Google',
-            title: 'Engineer',
+            companyName: "Google",
+            title: "Engineer",
             startDate: roleStartDate,
             isCurrent: true,
           },
         ],
       };
       const newSnapshot = {
-        currentCompany: 'Meta',
-        currentCompanyId: '10667',
-        currentTitle: 'Engineer',
+        currentCompany: "Meta",
+        currentCompanyId: "10667",
+        currentTitle: "Engineer",
       };
 
       Change.create.mockClear();
-      await detectChanges(basePerson, oldSnapshot, newSnapshot, 'obs-1');
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
 
       const companyChangeCall = Change.create.mock.calls.find(
-        (call) => call[0].type === 'company_change',
+        (call) => call[0].type === "company_change",
       );
       expect(companyChangeCall).toBeDefined();
-      expect(companyChangeCall[0].tenureDaysAtPreviousRole).toBeGreaterThanOrEqual(364);
-      expect(companyChangeCall[0].tenureDaysAtPreviousRole).toBeLessThanOrEqual(366);
+      expect(
+        companyChangeCall[0].tenureDaysAtPreviousRole,
+      ).toBeGreaterThanOrEqual(364);
+      expect(companyChangeCall[0].tenureDaysAtPreviousRole).toBeLessThanOrEqual(
+        366,
+      );
     });
 
-    it('should set tenureDaysAtPreviousRole to null when no matching role found', async () => {
+    it("should set tenureDaysAtPreviousRole to null when no matching role found", async () => {
       const oldSnapshot = {
-        currentCompany: 'Google',
-        currentCompanyId: '1441',
-        currentTitle: 'Engineer',
+        currentCompany: "Google",
+        currentCompanyId: "1441",
+        currentTitle: "Engineer",
         roles: [
           {
-            companyName: 'Apple',
-            title: 'Designer',
-            startDate: new Date('2020-01-01'),
+            companyName: "Apple",
+            title: "Designer",
+            startDate: new Date("2020-01-01"),
             isCurrent: false,
           },
         ],
       };
       const newSnapshot = {
-        currentCompany: 'Meta',
-        currentCompanyId: '10667',
-        currentTitle: 'Engineer',
+        currentCompany: "Meta",
+        currentCompanyId: "10667",
+        currentTitle: "Engineer",
       };
 
       Change.create.mockClear();
-      await detectChanges(basePerson, oldSnapshot, newSnapshot, 'obs-1');
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
 
       const companyChangeCall = Change.create.mock.calls.find(
-        (call) => call[0].type === 'company_change',
+        (call) => call[0].type === "company_change",
       );
       expect(companyChangeCall).toBeDefined();
       expect(companyChangeCall[0].tenureDaysAtPreviousRole).toBeNull();
     });
 
-    it('should set recentJobChange true and valid expiresAt for company_change', async () => {
+    it("should set recentJobChange true and valid expiresAt for company_change", async () => {
       const oldSnapshot = {
-        currentCompany: 'Google',
-        currentTitle: 'Engineer',
+        currentCompany: "Google",
+        currentTitle: "Engineer",
         roles: [],
       };
       const newSnapshot = {
-        currentCompany: 'Meta',
-        currentTitle: 'Engineer',
+        currentCompany: "Meta",
+        currentTitle: "Engineer",
       };
 
       Change.create.mockClear();
       const now = Date.now();
-      await detectChanges(basePerson, oldSnapshot, newSnapshot, 'obs-1');
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
 
       const companyChangeCall = Change.create.mock.calls.find(
-        (call) => call[0].type === 'company_change',
+        (call) => call[0].type === "company_change",
       );
       expect(companyChangeCall).toBeDefined();
       expect(companyChangeCall[0].recentJobChange).toBe(true);
-      expect(companyChangeCall[0].recentJobChangeExpiresAt).toBeInstanceOf(Date);
+      expect(companyChangeCall[0].recentJobChangeExpiresAt).toBeInstanceOf(
+        Date,
+      );
 
       // Should be approximately 90 days from now
       const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
@@ -382,34 +388,257 @@ describe("ChangeDetectionService", () => {
       expect(expiresAt).toBeLessThanOrEqual(now + ninetyDaysMs + 5000);
     });
 
-    it('should NOT set recentJobChange for promotion records', async () => {
-      const oldSnapshot = { currentCompany: 'Google', currentTitle: 'Engineer' };
-      const newSnapshot = { currentCompany: 'Google', currentTitle: 'Senior Engineer' };
+    it("should NOT set recentJobChange for promotion records", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Engineer",
+      };
+      const newSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Senior Engineer",
+      };
 
       Change.create.mockClear();
-      await detectChanges(basePerson, oldSnapshot, newSnapshot, 'obs-1');
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
 
       const promotionCall = Change.create.mock.calls.find(
-        (call) => call[0].type === 'promotion',
+        (call) => call[0].type === "promotion",
       );
       expect(promotionCall).toBeDefined();
       expect(promotionCall[0].recentJobChange).toBeUndefined();
       expect(promotionCall[0].recentJobChangeExpiresAt).toBeUndefined();
     });
 
-    it('should NOT set recentJobChange for title_change records', async () => {
-      const oldSnapshot = { currentCompany: 'Google', currentTitle: 'Product Manager' };
-      const newSnapshot = { currentCompany: 'Google', currentTitle: 'Program Manager' };
+    it("should NOT set recentJobChange for title_change records", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Product Manager",
+      };
+      const newSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Program Manager",
+      };
 
       Change.create.mockClear();
-      await detectChanges(basePerson, oldSnapshot, newSnapshot, 'obs-1');
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
 
       const titleChangeCall = Change.create.mock.calls.find(
-        (call) => call[0].type === 'title_change',
+        (call) => call[0].type === "title_change",
       );
       expect(titleChangeCall).toBeDefined();
       expect(titleChangeCall[0].recentJobChange).toBeUndefined();
       expect(titleChangeCall[0].recentJobChangeExpiresAt).toBeUndefined();
+    });
+
+    // ─── Lateral move tests ───
+
+    it("should detect lateral_move when company changes but seniority stays the same", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "VP of Sales",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "VP of Marketing",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeDefined();
+      expect(lateralMoveCall[0].from).toBe("Google");
+      expect(lateralMoveCall[0].to).toBe("Meta");
+      expect(lateralMoveCall[0].fromTitle).toBe("VP of Sales");
+      expect(lateralMoveCall[0].toTitle).toBe("VP of Marketing");
+      expect(lateralMoveCall[0].seniority).toBe("VP");
+      expect(lateralMoveCall[0].seniorityRank).toBe(5);
+    });
+
+    it("should record both company_change AND lateral_move for a lateral company switch", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Senior Engineer",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "Senior Developer",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const companyChangeCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "company_change",
+      );
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+
+      expect(companyChangeCall).toBeDefined();
+      expect(lateralMoveCall).toBeDefined();
+    });
+
+    it("should NOT detect lateral_move when seniority changes (promotion across companies)", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Senior Engineer",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "VP of Engineering",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeUndefined();
+    });
+
+    it("should NOT detect lateral_move when company stays the same", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Senior Engineer",
+      };
+      const newSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Senior Developer",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeUndefined();
+    });
+
+    it("should NOT detect lateral_move when titles are missing", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: null,
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "VP of Sales",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeUndefined();
+    });
+
+    it("should include recentJobChange and enrichment fields on lateral_move records", async () => {
+      const roleStartDate = new Date();
+      roleStartDate.setDate(roleStartDate.getDate() - 180);
+
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentCompanyId: "1441",
+        currentTitle: "Director of Engineering",
+        roles: [
+          {
+            companyName: "Google",
+            title: "Director of Engineering",
+            startDate: roleStartDate,
+            isCurrent: true,
+          },
+        ],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentCompanyId: "10667",
+        currentTitle: "Director of Product",
+      };
+
+      Change.create.mockClear();
+      const now = Date.now();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeDefined();
+      expect(lateralMoveCall[0].fromCompanyId).toBe("1441");
+      expect(lateralMoveCall[0].toCompanyId).toBe("10667");
+      expect(lateralMoveCall[0].recentJobChange).toBe(true);
+      expect(lateralMoveCall[0].recentJobChangeExpiresAt).toBeInstanceOf(Date);
+      expect(
+        lateralMoveCall[0].tenureDaysAtPreviousRole,
+      ).toBeGreaterThanOrEqual(179);
+      expect(lateralMoveCall[0].tenureDaysAtPreviousRole).toBeLessThanOrEqual(
+        181,
+      );
+
+      const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+      const expiresAt = lateralMoveCall[0].recentJobChangeExpiresAt.getTime();
+      expect(expiresAt).toBeGreaterThanOrEqual(now + ninetyDaysMs - 5000);
+      expect(expiresAt).toBeLessThanOrEqual(now + ninetyDaysMs + 5000);
+    });
+
+    it("should detect lateral_move for C-suite to C-suite company switch", async () => {
+      const oldSnapshot = {
+        currentCompany: "Startup A",
+        currentTitle: "CTO",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Startup B",
+        currentTitle: "CEO",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeDefined();
+      expect(lateralMoveCall[0].seniority).toBe("CXO");
+    });
+
+    it("should handle lateral_move duplicate key error (11000) gracefully", async () => {
+      const dupError = new Error("Duplicate key");
+      dupError.code = 11000;
+      // First call succeeds (company_change), second fails (lateral_move)
+      Change.create
+        .mockResolvedValueOnce({ _id: "change-1", type: "company_change" })
+        .mockRejectedValueOnce(dupError);
+
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "Manager",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "Manager",
+      };
+
+      // Should not throw
+      const result = await detectChanges(
+        basePerson,
+        oldSnapshot,
+        newSnapshot,
+        "obs-1",
+      );
+      // company_change succeeds, lateral_move silently skipped
+      expect(result.length).toBe(1);
+      expect(result[0].type).toBe("company_change");
     });
   });
 
@@ -501,27 +730,36 @@ describe("ChangeDetectionService", () => {
   // ───────────────────────────────────────────
   // recentJobChange expiry job
   // ───────────────────────────────────────────
-  describe('recentJobChange expiry logic', () => {
-    it('should expire recentJobChange flags for records past their expiry date', async () => {
+  describe("recentJobChange expiry logic", () => {
+    it("should expire recentJobChange flags for records past their expiry date", async () => {
       Change.updateMany.mockResolvedValue({ modifiedCount: 3 });
 
       const result = await Change.updateMany(
-        { recentJobChange: true, recentJobChangeExpiresAt: { $lte: new Date() } },
+        {
+          recentJobChange: true,
+          recentJobChangeExpiresAt: { $lte: new Date() },
+        },
         { $set: { recentJobChange: false } },
       );
 
       expect(Change.updateMany).toHaveBeenCalledWith(
-        { recentJobChange: true, recentJobChangeExpiresAt: { $lte: expect.any(Date) } },
+        {
+          recentJobChange: true,
+          recentJobChangeExpiresAt: { $lte: expect.any(Date) },
+        },
         { $set: { recentJobChange: false } },
       );
       expect(result.modifiedCount).toBe(3);
     });
 
-    it('should not modify records that have not expired', async () => {
+    it("should not modify records that have not expired", async () => {
       Change.updateMany.mockResolvedValue({ modifiedCount: 0 });
 
       const result = await Change.updateMany(
-        { recentJobChange: true, recentJobChangeExpiresAt: { $lte: new Date() } },
+        {
+          recentJobChange: true,
+          recentJobChangeExpiresAt: { $lte: new Date() },
+        },
         { $set: { recentJobChange: false } },
       );
 
