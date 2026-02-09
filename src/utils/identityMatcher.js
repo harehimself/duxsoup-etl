@@ -24,6 +24,22 @@ const logger = require("./logger");
 const { parseLocation } = require("./location-parser");
 
 /**
+ * Safely decode percent-encoded URL components.
+ * Returns the original string on malformed encoding (%ZZ, truncated %A).
+ *
+ * @param {string} url - Possibly percent-encoded string
+ * @returns {string|null} Decoded string, or original on failure
+ */
+function safeDecode(url) {
+  if (!url || typeof url !== "string") return url;
+  try {
+    return decodeURIComponent(url);
+  } catch (_e) {
+    return url;
+  }
+}
+
+/**
  * Extract LinkedIn username from various sources
  *
  * IMPORTANT: Excludes Sales Navigator IDs (ACwAAA/ACoAAA patterns)
@@ -33,8 +49,9 @@ const { parseLocation } = require("./location-parser");
  * @returns {string|null} - LinkedIn username or null
  */
 function extractLinkedInUsername(data) {
-  // Pattern to match LinkedIn usernames (alphanumeric, hyphens, underscores)
-  const usernamePattern = /\/in\/([a-zA-Z0-9_-]+)\/?/;
+  // Pattern to match LinkedIn usernames — broad character class to support
+  // decoded international characters (é, ö, etc.) from percent-encoded URLs
+  const usernamePattern = /\/in\/([^/?#]+?)\/?(?:[?#]|$)/;
   const pidPattern = /^pid\.([a-zA-Z0-9_-]+)$/;
   // Pattern to detect Sales Nav IDs (should NOT be treated as usernames)
   const salesNavIdPattern = /^A(Cw|Co)AA/;
@@ -69,8 +86,8 @@ function extractLinkedInUsername(data) {
     if (username) return username;
   }
 
-  // 3. Check Profile URL
-  const profile = data.Profile || data.data?.Profile;
+  // 3. Check Profile URL (decode percent-encoding before regex)
+  const profile = safeDecode(data.Profile || data.data?.Profile);
   if (profile) {
     const match = profile.match(usernamePattern);
     if (match) {
@@ -80,7 +97,9 @@ function extractLinkedInUsername(data) {
   }
 
   // 4. Check PublicProfile
-  const publicProfile = data.PublicProfile || data.data?.PublicProfile;
+  const publicProfile = safeDecode(
+    data.PublicProfile || data.data?.PublicProfile,
+  );
   if (publicProfile) {
     const match = publicProfile.match(usernamePattern);
     if (match) {
@@ -90,7 +109,7 @@ function extractLinkedInUsername(data) {
   }
 
   // 5. Check SalesProfile (rare, but possible)
-  const salesProfile = data.SalesProfile || data.data?.SalesProfile;
+  const salesProfile = safeDecode(data.SalesProfile || data.data?.SalesProfile);
   if (salesProfile) {
     const match = salesProfile.match(usernamePattern);
     if (match) {
@@ -100,7 +119,9 @@ function extractLinkedInUsername(data) {
   }
 
   // 6. Check RecruiterProfile
-  const recruiterProfile = data.RecruiterProfile || data.data?.RecruiterProfile;
+  const recruiterProfile = safeDecode(
+    data.RecruiterProfile || data.data?.RecruiterProfile,
+  );
   if (recruiterProfile) {
     const match = recruiterProfile.match(usernamePattern);
     if (match) {
@@ -147,7 +168,7 @@ function normalizeUrl(url) {
     return null;
   }
   try {
-    let normalized = trimmed.toLowerCase();
+    let normalized = safeDecode(trimmed).toLowerCase();
     // Remove trailing slash
     normalized = normalized.replace(/\/$/, "");
     // Remove query parameters
@@ -215,12 +236,13 @@ function normalizeDuxsoupId(duxsoupId) {
  * @returns {string|null} - Vanity name or null
  */
 function extractVanityName(data) {
-  const vanityPattern = /\/in\/([a-zA-Z0-9_-]+)\/?/;
+  const vanityPattern = /\/in\/([^/?#]+?)\/?(?:[?#]|$)/;
   const salesNavIdPattern = /^A(Cw|Co)AA/;
 
   function extractFromUrl(url) {
     if (!url || typeof url !== "string") return null;
-    const match = url.match(vanityPattern);
+    const decoded = safeDecode(url);
+    const match = decoded.match(vanityPattern);
     if (!match) return null;
     const slug = match[1];
     // Reject Sales Navigator IDs masquerading in /in/ URLs
@@ -443,7 +465,8 @@ function extractPublicProfileUrl(url) {
   if (!url || typeof url !== "string") return null;
 
   try {
-    const normalized = url
+    const decoded = safeDecode(url);
+    const normalized = decoded
       .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, "")
       .replace(/\/$/, "")
       .trim();
@@ -510,7 +533,8 @@ function extractCompanyProfileUrl(url) {
   if (!url || typeof url !== "string") return null;
 
   try {
-    const normalized = url
+    const decoded = safeDecode(url);
+    const normalized = decoded
       .replace(/^(https?:\/\/)?(www\.)?linkedin\.com/i, "")
       .replace(/\/$/, "")
       .trim();
@@ -815,6 +839,8 @@ function resolveLocationIdentity(locationValue) {
 // ---------------------------------------------------------------------------
 
 module.exports = {
+  // Helpers
+  safeDecode,
   // Identifier extraction
   extractLinkedInUsername,
   extractVanityName,

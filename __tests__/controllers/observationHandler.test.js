@@ -37,6 +37,13 @@ jest.mock("../../src/utils/identityMatcher", () => ({
   resolvePersonIdentity: mockResolvePersonIdentity,
 }));
 
+const mockShouldSkip = jest.fn().mockReturnValue(false);
+jest.mock("../../src/utils/upsertDebounce", () => ({
+  shouldSkip: mockShouldSkip,
+  clear: jest.fn(),
+  getStats: jest.fn(),
+}));
+
 const {
   handleObservation,
 } = require("../../src/controllers/observationHandler");
@@ -101,6 +108,7 @@ describe("ObservationHandler", () => {
       aliases: [],
       source: "salesNavId",
     });
+    mockShouldSkip.mockReturnValue(false);
   });
 
   describe("handleObservation()", () => {
@@ -571,6 +579,167 @@ describe("ObservationHandler", () => {
       expect(res.json).toHaveBeenCalledWith({
         error: "Duplicate detection failed",
       });
+    });
+
+    // ───────────────────────────────────────────
+    // Debounce: rapid-fire duplicate visits
+    // ───────────────────────────────────────────
+    it("should skip Phase 2 and set debounced:true when shouldSkip returns true", async () => {
+      const payload = {
+        userid: "user1",
+        type: "visit",
+        data: {
+          id: "pid.mike-hare",
+          Profile: "https://www.linkedin.com/in/mike-hare",
+        },
+      };
+
+      const { req, res } = buildReqRes(payload);
+      const config = buildConfig();
+
+      validateWebhookPayload.mockReturnValue({
+        isValid: true,
+        error: null,
+        profileData: payload.data,
+      });
+      validateRequiredFields.mockReturnValue({
+        isValid: true,
+        error: null,
+        missingFields: [],
+      });
+      computeEventKey.mockReturnValue("event-key-debounce");
+
+      const fakeObservation = {
+        _id: "obs-debounce",
+        event_key: "event-key-debounce",
+      };
+      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+
+      // Debounce returns true — skip Phase 2
+      mockShouldSkip.mockReturnValue(true);
+
+      createSuccessResponse.mockReturnValue({ success: true });
+
+      await handleObservation(config, req, res);
+
+      // Phase 1 still runs
+      expect(config.model.findOneAndUpdate).toHaveBeenCalled();
+
+      // Phase 2 entity upserts should NOT run
+      expect(upsertFromObservation).not.toHaveBeenCalled();
+      expect(upsertCompanyFromObservation).not.toHaveBeenCalled();
+      expect(upsertLocationFromObservation).not.toHaveBeenCalled();
+
+      // Response: 200 with debounced:true, people_upsert:true
+      expect(res.status).toHaveBeenCalledWith(200);
+      const responseBody = res.json.mock.calls[0][0];
+      expect(responseBody.debounced).toBe(true);
+      expect(responseBody.people_upsert).toBe(true);
+      expect(responseBody.duplicate).toBe(false);
+    });
+
+    it("should run Phase 2 normally when shouldSkip returns false", async () => {
+      const payload = {
+        userid: "user1",
+        type: "visit",
+        data: {
+          id: "pid.mike-hare",
+          Profile: "https://www.linkedin.com/in/mike-hare",
+        },
+      };
+
+      const { req, res } = buildReqRes(payload);
+      const config = buildConfig();
+
+      validateWebhookPayload.mockReturnValue({
+        isValid: true,
+        error: null,
+        profileData: payload.data,
+      });
+      validateRequiredFields.mockReturnValue({
+        isValid: true,
+        error: null,
+        missingFields: [],
+      });
+      computeEventKey.mockReturnValue("event-key-no-debounce");
+
+      const fakeObservation = {
+        _id: "obs-no-debounce",
+        event_key: "event-key-no-debounce",
+      };
+      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+
+      mockShouldSkip.mockReturnValue(false);
+
+      upsertFromObservation.mockResolvedValue({ _id: "person-1" });
+      upsertCompanyFromObservation.mockResolvedValue({ _id: "company-1" });
+      upsertLocationFromObservation.mockResolvedValue({ _id: "location-1" });
+
+      createSuccessResponse.mockReturnValue({ success: true });
+
+      await handleObservation(config, req, res);
+
+      // Phase 2 runs normally
+      expect(upsertFromObservation).toHaveBeenCalledWith(
+        fakeObservation,
+        "visit",
+      );
+      expect(upsertCompanyFromObservation).toHaveBeenCalled();
+      expect(upsertLocationFromObservation).toHaveBeenCalled();
+
+      // Response: debounced:false
+      const responseBody = res.json.mock.calls[0][0];
+      expect(responseBody.debounced).toBe(false);
+    });
+
+    it("should bypass debounce when duxsoupId is missing (null)", async () => {
+      const payload = {
+        userid: "user1",
+        type: "visit",
+        data: {
+          id: null, // No duxsoupId
+          Profile: "https://www.linkedin.com/in/mike-hare",
+        },
+      };
+
+      const { req, res } = buildReqRes(payload);
+      const config = buildConfig();
+
+      validateWebhookPayload.mockReturnValue({
+        isValid: true,
+        error: null,
+        profileData: payload.data,
+      });
+      validateRequiredFields.mockReturnValue({
+        isValid: true,
+        error: null,
+        missingFields: [],
+      });
+      computeEventKey.mockReturnValue("event-key-null-id");
+
+      const fakeObservation = {
+        _id: "obs-null-id",
+        event_key: "event-key-null-id",
+      };
+      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+
+      upsertFromObservation.mockResolvedValue({ _id: "person-1" });
+      upsertCompanyFromObservation.mockResolvedValue({ _id: "company-1" });
+      upsertLocationFromObservation.mockResolvedValue({ _id: "location-1" });
+
+      createSuccessResponse.mockReturnValue({ success: true });
+
+      await handleObservation(config, req, res);
+
+      // shouldSkip should NOT have been called (null key bypasses debounce)
+      expect(mockShouldSkip).not.toHaveBeenCalled();
+
+      // Phase 2 runs normally
+      expect(upsertFromObservation).toHaveBeenCalled();
+
+      // Response: debounced:false
+      const responseBody = res.json.mock.calls[0][0];
+      expect(responseBody.debounced).toBe(false);
     });
   });
 });

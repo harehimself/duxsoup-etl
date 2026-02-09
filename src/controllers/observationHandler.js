@@ -13,6 +13,7 @@ const { upsertCompanyFromObservation } = require("./companyController");
 const { upsertLocationFromObservation } = require("./locationController");
 const DeadLetter = require("../models/deadLetter");
 const { resolvePersonIdentity } = require("../utils/identityMatcher");
+const { shouldSkip } = require("../utils/upsertDebounce");
 
 /**
  * Generic observation handler for Visit and Scan webhooks
@@ -136,6 +137,7 @@ async function handleObservation(config, req, res) {
     let peopleUpsertSuccess = false;
     let companyUpsertSuccess = false;
     let locationUpsertSuccess = false;
+    let debounced = false;
 
     if (isDuplicate) {
       logger.info("Skipping entity upserts for duplicate event", {
@@ -145,71 +147,85 @@ async function handleObservation(config, req, res) {
       });
       peopleUpsertSuccess = true; // Already processed before
     } else {
-      try {
-        await upsertFromObservation(observation, config.type);
+      // Debounce: skip Phase 2 if the same duxsoupId was processed recently
+      const debounceKey = profileData.id;
+      debounced = debounceKey ? shouldSkip(debounceKey) : false;
+
+      if (debounced) {
+        logger.info("Skipping entity upserts (debounced)", {
+          duxsoupId: debounceKey,
+          observation_id: observation._id,
+          event_key: eventKey,
+          type: config.type,
+        });
         peopleUpsertSuccess = true;
-
-        logger.info(`Person upserted from ${config.type}`, {
-          observation_id: observation._id,
-          event_key: eventKey,
-        });
-
-        // Upsert company
+      } else {
         try {
-          await upsertCompanyFromObservation(observation, config.type);
-          companyUpsertSuccess = true;
-        } catch (companyError) {
-          logger.error(`Failed to upsert company from ${config.type}`, {
+          await upsertFromObservation(observation, config.type);
+          peopleUpsertSuccess = true;
+
+          logger.info(`Person upserted from ${config.type}`, {
             observation_id: observation._id,
             event_key: eventKey,
-            error: companyError.message,
           });
-        }
 
-        // Upsert location
-        try {
-          await upsertLocationFromObservation(observation, config.type);
-          locationUpsertSuccess = true;
-        } catch (locationError) {
-          logger.error(`Failed to upsert location from ${config.type}`, {
+          // Upsert company
+          try {
+            await upsertCompanyFromObservation(observation, config.type);
+            companyUpsertSuccess = true;
+          } catch (companyError) {
+            logger.error(`Failed to upsert company from ${config.type}`, {
+              observation_id: observation._id,
+              event_key: eventKey,
+              error: companyError.message,
+            });
+          }
+
+          // Upsert location
+          try {
+            await upsertLocationFromObservation(observation, config.type);
+            locationUpsertSuccess = true;
+          } catch (locationError) {
+            logger.error(`Failed to upsert location from ${config.type}`, {
+              observation_id: observation._id,
+              event_key: eventKey,
+              error: locationError.message,
+            });
+          }
+        } catch (peopleError) {
+          // Log failure but DON'T fail the webhook
+          logger.error(`Failed to upsert person from ${config.type}`, {
             observation_id: observation._id,
             event_key: eventKey,
-            error: locationError.message,
+            error: peopleError.message,
+            stack: peopleError.stack,
           });
-        }
-      } catch (peopleError) {
-        // Log failure but DON'T fail the webhook
-        logger.error(`Failed to upsert person from ${config.type}`, {
-          observation_id: observation._id,
-          event_key: eventKey,
-          error: peopleError.message,
-          stack: peopleError.stack,
-        });
 
-        // Write to dead_letters for replay
-        try {
-          const identityHints = resolvePersonIdentity(payload);
-          await DeadLetter.createFromFailure(
-            observation._id,
-            config.type,
-            peopleError,
-            identityHints,
-            payload,
-          );
+          // Write to dead_letters for replay
+          try {
+            const identityHints = resolvePersonIdentity(payload);
+            await DeadLetter.createFromFailure(
+              observation._id,
+              config.type,
+              peopleError,
+              identityHints,
+              payload,
+            );
 
-          logger.info("Logged failed person upsert to dead_letters", {
-            observation_id: observation._id,
-            event_key: eventKey,
-            type: config.type,
-          });
-        } catch (deadLetterError) {
-          // If dead_letter fails, just log - don't block webhook
-          logger.error("Failed to log to dead_letters", {
-            observation_id: observation._id,
-            error: deadLetterError.message,
-          });
+            logger.info("Logged failed person upsert to dead_letters", {
+              observation_id: observation._id,
+              event_key: eventKey,
+              type: config.type,
+            });
+          } catch (deadLetterError) {
+            // If dead_letter fails, just log - don't block webhook
+            logger.error("Failed to log to dead_letters", {
+              observation_id: observation._id,
+              error: deadLetterError.message,
+            });
+          }
         }
-      }
+      } // end !debounced
     }
 
     // Always return success if legacy write succeeded
@@ -222,6 +238,7 @@ async function handleObservation(config, req, res) {
     response.company_upsert = companyUpsertSuccess;
     response.location_upsert = locationUpsertSuccess;
     response.duplicate = isDuplicate;
+    response.debounced = debounced;
 
     res.status(200).json(response);
   } catch (error) {

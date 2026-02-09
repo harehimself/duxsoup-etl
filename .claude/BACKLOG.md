@@ -78,12 +78,7 @@
   - Fix: GitHub Settings > Branches > Branch protection rule: require status checks to pass, optionally require PR review.
   - Acceptance: Direct pushes to master that fail CI are blocked. PRs require green CI before merge.
 
-- [ ] **Debounce rapid-fire duplicate visits for same profile** — Render logs show DuxSoup sending 3-5 separate webhooks for the same `duxsoupId` within 30-60 seconds, each with a unique `event_key`. These are not idempotency duplicates — they create separate observations and re-run the full person upsert pipeline each time.
-  - Category: `data-quality`
-  - Files: `src/controllers/observationHandler.js`, `src/controllers/personController.js`
-  - Context: Example: `id.67070797` (ingmarpeters) generated 5 visits in 90 seconds on Feb 9. Each triggers a full person upsert, company upsert, and location upsert. The observation still writes (audit trail), but the snapshot re-computation is wasteful.
-  - Fix: Add a short debounce window (e.g., skip person/company/location upsert if same `duxsoupId` was processed within last 30 seconds). Use an in-memory Map with TTL, similar to `metricsCache.js`.
-  - Acceptance: Rapid-fire visits for the same profile only trigger one person upsert within the debounce window. All observations still write. Unit test confirms debounce behavior.
+- [x] ~~**Debounce rapid-fire duplicate visits for same profile**~~ — Completed, see Completed section.
 
 - [ ] **Investigate absence of scan webhook activity** — Recent Render logs show 100% visit type with zero scans. If scan webhooks are expected from DuxSoup, the scan pipeline may be misconfigured or disabled on the DuxSoup side.
   - Category: `investigation`
@@ -213,6 +208,7 @@
 
 ## Completed
 
+- [x] **Debounce rapid-fire duplicate visits for same profile** — 2026-02-09. Added in-memory debounce utility (`src/utils/upsertDebounce.js`) with configurable TTL window (default 30s, env `DEBOUNCE_WINDOW_MS`). Phase 1 observations still write for audit trail; Phase 2 entity upserts (person/company/location) are skipped within the debounce window. Response includes `debounced: true` flag for observability. 10 new unit tests.
 - [x] **Normalize invalid role dates before save** — 2026-02-09, commit `4036883`. Added date inversion guard in `updateRolesTimeline()`: when `endDate < startDate`, nullifies `endDate` and logs a warning instead of letting the Mongoose validator reject the entire `person.save()`. 3 new unit tests.
 - [x] **Decode percent-encoded LinkedIn URLs before identity extraction** — 2026-02-09. Added `safeDecode()` helper wrapping `decodeURIComponent` with try/catch. Widened username regex from `[a-zA-Z0-9_-]+` to `[^/?#]+?` to support decoded international characters (é, ö). Applied decode to all 5 URL-consuming functions: `extractLinkedInUsername`, `extractVanityName`, `normalizeUrl`, `extractPublicProfileUrl`, `extractCompanyProfileUrl`. 15 new unit tests.
 - [x] **Fix education object-to-string cast failure in person upsert** — 2026-02-09, commit `389d315`. Added `coerceToString()` helper to extract `.text` from DuxSoup rich objects (`{ text, textDirection, attributesV2 }`) and applied it to `school.Name`, `school.Degree`, and `school.Field` in `updateEducation()`. 11 new unit tests.

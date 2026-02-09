@@ -8,6 +8,7 @@ const {
   getPrimaryIdentifier,
   generateIdentityKey,
   isSamePerson,
+  safeDecode,
 } = require("../../src/utils/identityMatcher");
 
 describe("Identity Matcher Utility", () => {
@@ -467,6 +468,90 @@ describe("Identity Matcher Utility", () => {
         id: "pid.Mike-Hare",
       };
       expect(extractLinkedInUsername(data)).toBe("mike-hare");
+    });
+  });
+
+  describe("extractLinkedInUsername — percent-encoded URLs", () => {
+    it("should decode percent-encoded international username", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/fl%C3%A9mke/",
+      };
+      expect(extractLinkedInUsername(data)).toBe("flémke");
+    });
+
+    it("should decode percent-encoded hyphen (%2D)", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/john%2Ddoe/",
+      };
+      expect(extractLinkedInUsername(data)).toBe("john-doe");
+    });
+
+    it("should not crash on malformed percent-encoding", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/john%ZZdoe/",
+      };
+      // Should not throw; returns whatever it can extract
+      expect(() => extractLinkedInUsername(data)).not.toThrow();
+      expect(extractLinkedInUsername(data)).toBeTruthy();
+    });
+
+    it("should single-decode double-encoded URL", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/john%252Ddoe/",
+      };
+      // Single decode: %252D → %2D (not fully decoded to -)
+      expect(extractLinkedInUsername(data)).toBe("john%2ddoe");
+    });
+  });
+
+  describe("extractVanityName — percent-encoded URLs", () => {
+    it("should decode percent-encoded vanity name", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/fl%C3%A9mke/",
+      };
+      expect(extractVanityName(data)).toBe("flémke");
+    });
+
+    it("should not crash on malformed encoding", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/john%ZZdoe/",
+      };
+      expect(() => extractVanityName(data)).not.toThrow();
+      expect(extractVanityName(data)).toBeTruthy();
+    });
+  });
+
+  describe("normalizeUrl — percent-encoded characters", () => {
+    it("should decode percent-encoded characters in URL", () => {
+      const result = normalizeUrl("https://linkedin.com/in/fl%C3%A9mke");
+      expect(result).toBe("linkedin.com/in/flémke");
+    });
+
+    it("should handle already-decoded URL unchanged", () => {
+      const result = normalizeUrl("https://linkedin.com/in/john-doe");
+      expect(result).toBe("linkedin.com/in/john-doe");
+    });
+  });
+
+  describe("safeDecode", () => {
+    it("should return null for null input", () => {
+      expect(safeDecode(null)).toBeNull();
+    });
+
+    it("should return undefined for undefined input", () => {
+      expect(safeDecode(undefined)).toBeUndefined();
+    });
+
+    it("should decode standard percent-encoding", () => {
+      expect(safeDecode("fl%C3%A9mke")).toBe("flémke");
+    });
+
+    it("should return original on malformed encoding", () => {
+      expect(safeDecode("john%ZZdoe")).toBe("john%ZZdoe");
+    });
+
+    it("should handle empty string", () => {
+      expect(safeDecode("")).toBe("");
     });
   });
 });
