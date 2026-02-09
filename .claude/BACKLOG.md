@@ -100,11 +100,7 @@
   - Category: `reliability`
   - Impact: Early warning system for DuxSoup API changes. Schema violations logged as warnings without rejecting the webhook, allowing graceful degradation.
 
-- [ ] **Role deduplication during person upsert** — Role deduplication keys on `title|companyId|startDate`, but null `startDate` causes all undated roles at the same title+company to collide. Roles can also accumulate if title or company varies slightly.
-  - Priority: `low` _(promoted from `backlog` — active data quality issue; null startDate in role key at personController.js:317 silently drops undated roles)_
-  - Category: `data-quality`
-  - Files: `src/controllers/personController.js:317-330`
-  - Impact: Prevents role array bloat and improves person snapshot accuracy.
+- [x] ~~**Role deduplication during person upsert**~~ — Completed, see Completed section.
 
 - [ ] **Add merge safety validation** — `identityResolverService.js` merge does not validate that the winner is the better record before deleting the loser. If a loser has 9000 observations and the winner has 10, the merge proceeds anyway.
   - Priority: `low` _(promoted from `backlog` — irreversible data loss risk; `mergedInto` index already added, but no guardrails on the merge operation itself)_
@@ -170,6 +166,7 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 ## Completed
 
 - [x] **Lateral move detection in change service** — 2026-02-09. Added `lateral_move` change type to detect company switches at the same seniority level (e.g., VP at Google → VP at Meta). Uses `titleParser.parseTitle()` to compare seniority ranks. Lateral move records include full enrichment (fromCompanyId, toCompanyId, fromTitle, toTitle, seniority tier, tenure, recentJobChange flag). Recorded alongside `company_change` for backward compatibility. Added `fromTitle`, `toTitle`, `seniority`, `seniorityRank` fields to Change schema. 8 new unit tests.
+- [x] **Role deduplication during person upsert** — 2026-02-09. Replaced naive `title|company|startDate` dedup key with `findMatchingRole()` using case/whitespace-normalized comparison and multi-dimensional matching. When startDate is null, uses isCurrent + location + description as secondary discriminators to avoid collapsing genuinely distinct undated roles. Added `mergeRoleFields()` to backfill empty fields on existing matched roles (companyId, location, description, dates). Removed unused `_roleKey` variable. 25 new unit tests covering null startDate collision, text normalization, field merging, and current-role matching.
 - [x] **Add request timeout middleware** — 2026-02-09. Created `src/middleware/requestTimeout.js` factory returning Express middleware that sends 503 after configurable deadline. Applied: 5s for `/health`, 30s default for `/api`, 120s for `/api/export`. Timer cleared on `res.close`. 5 new unit tests.
 - [x] **Reuse SMTP transporter in notification service** — 2026-02-09. Replaced per-send `nodemailer.createTransport()` with lazy-initialized module-level singleton via `getTransporter()`. Exposed `_resetTransporter()` for testing. 2 new unit tests confirm single instance across multiple sends.
 - [x] **Clean up export temp files on failure** — 2026-02-09. Added `finally` block in `processExportJob()` that calls `fs.unlink()` on the temp file when job status is `failed`. Silently ignores ENOENT if the file was never created. 4 new unit tests.

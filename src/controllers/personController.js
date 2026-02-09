@@ -294,6 +294,108 @@ function enrichRoleWithSeniority(role) {
 }
 
 /**
+ * Normalize a role text field for fuzzy comparison.
+ * Trims whitespace, collapses internal whitespace, and lowercases.
+ *
+ * @param {string|null|undefined} text
+ * @returns {string} Normalized string, or empty string for null/undefined
+ */
+function normalizeRoleText(text) {
+  if (text == null) return "";
+  return String(text).trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * Find an existing role that matches the incoming role data.
+ *
+ * When startDate is present: match on title + company + startDate (exact dates).
+ * When startDate is null: match on title + company + isCurrent status,
+ * with location and description as secondary discriminators to avoid
+ * collapsing genuinely different undated roles.
+ *
+ * Title and company comparisons are case-insensitive and whitespace-normalized.
+ *
+ * @param {Array} existingRoles - Current roles array on the person snapshot
+ * @param {Object} incoming - { title, companyName, startDate, endDate, isCurrent, location, description }
+ * @returns {Object|undefined} Matching existing role, or undefined
+ */
+function findMatchingRole(existingRoles, incoming) {
+  const normTitle = normalizeRoleText(incoming.title);
+  const normCompany = normalizeRoleText(incoming.companyName);
+
+  return existingRoles.find((r) => {
+    if (normalizeRoleText(r.title) !== normTitle) return false;
+    if (normalizeRoleText(r.companyName) !== normCompany) return false;
+
+    if (incoming.startDate != null) {
+      // Dated role: match on startDate
+      return r.startDate?.toString() === incoming.startDate.toString();
+    }
+
+    // Undated incoming role.
+
+    // For non-current undated roles, require the existing role to also be undated.
+    // A historical role with a date is a different observation from one without.
+    if (!incoming.isCurrent && r.startDate != null) return false;
+
+    // isCurrent must match
+    if (!!r.isCurrent !== !!incoming.isCurrent) return false;
+
+    // Use location and description as secondary discriminators to prevent
+    // collapsing genuinely distinct roles at the same title+company.
+    const normExistLoc = normalizeRoleText(r.location);
+    const normIncomingLoc = normalizeRoleText(incoming.location);
+    if (normExistLoc && normIncomingLoc && normExistLoc !== normIncomingLoc) {
+      return false;
+    }
+
+    const normExistDesc = normalizeRoleText(r.description);
+    const normIncomingDesc = normalizeRoleText(incoming.description);
+    if (
+      normExistDesc &&
+      normIncomingDesc &&
+      normExistDesc !== normIncomingDesc
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Merge new information into an existing matched role.
+ * Backfills empty/null fields on the existing role without overwriting populated fields.
+ *
+ * @param {Object} existingRole - The matched role to update in place
+ * @param {Object} incoming - Incoming role data
+ * @returns {boolean} True if any field was updated
+ */
+function mergeRoleFields(existingRole, incoming) {
+  let merged = false;
+  const backfillFields = [
+    "companyId",
+    "location",
+    "description",
+    "startDate",
+    "endDate",
+  ];
+
+  for (const field of backfillFields) {
+    if (
+      incoming[field] != null &&
+      incoming[field] !== "" &&
+      (existingRole[field] == null || existingRole[field] === "")
+    ) {
+      existingRole[field] = incoming[field];
+      merged = true;
+    }
+  }
+
+  return merged;
+}
+
+/**
  * Update roles timeline from observation
  *
  * @param {Object} person - Person document
@@ -314,18 +416,42 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
   // If we have extended positions, process them
   if (positions.length > 0) {
     positions.forEach((pos) => {
-      const _roleKey = `${pos.Title}|${pos.Company}|${pos.From}`;
+      let startDate = parseSafeDate(pos.From);
+      let endDate =
+        pos.To && pos.To !== "Present" ? parseSafeDate(pos.To) : null;
 
-      // Check if role already exists
-      const parsedFromDate = parseSafeDate(pos.From);
-      const existingRole = person.snapshot.roles.find(
-        (r) =>
-          r.title === pos.Title &&
-          r.companyName === pos.Company &&
-          r.startDate?.toString() === parsedFromDate?.toString(),
-      );
+      // Normalize inverted dates — keep role with startDate only
+      if (endDate && startDate && endDate < startDate) {
+        logger.warn("Role has endDate before startDate, nullifying endDate", {
+          person_id: person._id,
+          title: pos.Title,
+          company: pos.Company,
+          startDate,
+          endDate,
+        });
+        endDate = null;
+      }
 
-      if (!existingRole) {
+      const isCurrent = pos.To === "Present" || !pos.To;
+
+      const incoming = {
+        title: pos.Title,
+        companyName: pos.Company,
+        startDate,
+        endDate,
+        isCurrent,
+        location: pos.Location,
+        description: pos.Description,
+      };
+
+      const existingRole = findMatchingRole(person.snapshot.roles, incoming);
+
+      if (existingRole) {
+        // Backfill any missing fields on the existing role
+        if (mergeRoleFields(existingRole, incoming)) {
+          updated = true;
+        }
+      } else {
         if (person.snapshot.roles.length >= MAX_ROLES) {
           logger.warn("Roles array at capacity, dropping new role", {
             person_id: person._id,
@@ -340,22 +466,6 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
           return;
         }
         // Add new role with seniority classification
-        let startDate = parseSafeDate(pos.From);
-        let endDate =
-          pos.To && pos.To !== "Present" ? parseSafeDate(pos.To) : null;
-
-        // Normalize inverted dates — keep role with startDate only
-        if (endDate && startDate && endDate < startDate) {
-          logger.warn("Role has endDate before startDate, nullifying endDate", {
-            person_id: person._id,
-            title: pos.Title,
-            company: pos.Company,
-            startDate,
-            endDate,
-          });
-          endDate = null;
-        }
-
         const newRole = enrichRoleWithSeniority({
           title: pos.Title,
           companyId: null, // Will be resolved separately
@@ -364,19 +474,27 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
           description: pos.Description,
           startDate,
           endDate,
-          isCurrent: pos.To === "Present" || !pos.To,
+          isCurrent,
         });
         person.snapshot.roles.push(newRole);
         updated = true;
       }
     });
   } else if (currentRole && currentCompany) {
-    // Single current role from scan/visit
-    const existingCurrentRole = person.snapshot.roles.find(
-      (r) =>
-        r.title === currentRole &&
-        r.companyName === currentCompany &&
-        r.isCurrent,
+    // Single current role from scan/visit — use normalized matching
+    const incoming = {
+      title: currentRole,
+      companyName: currentCompany,
+      startDate: null,
+      endDate: null,
+      isCurrent: true,
+      location: observationData.Location,
+      description: null,
+    };
+
+    const existingCurrentRole = findMatchingRole(
+      person.snapshot.roles,
+      incoming,
     );
 
     if (!existingCurrentRole) {
@@ -402,10 +520,12 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
         person.snapshot.roles.push(newRole);
         updated = true;
       }
-    } else if (currentCompanyId && !existingCurrentRole.companyId) {
-      // Update company ID if we now have it
-      existingCurrentRole.companyId = currentCompanyId;
-      updated = true;
+    } else {
+      // Backfill companyId or other fields on the matched role
+      const mergeData = { companyId: currentCompanyId || null };
+      if (mergeRoleFields(existingCurrentRole, mergeData)) {
+        updated = true;
+      }
     }
   }
 
@@ -931,4 +1051,7 @@ module.exports = {
   updateEducation, // Export for testing
   updateSkills, // Export for testing
   coerceToString, // Export for testing
+  normalizeRoleText, // Export for testing
+  findMatchingRole, // Export for testing
+  mergeRoleFields, // Export for testing
 };
