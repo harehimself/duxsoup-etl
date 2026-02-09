@@ -14,6 +14,7 @@ const {
   updateRolesTimeline,
   updateEducation,
   updateSkills,
+  coerceToString,
   upsertFromObservation: _upsertFromObservation,
 } = require("../controllers/personController");
 const _Person = require("../models/person");
@@ -1081,6 +1082,118 @@ describe("PersonController", () => {
 
         expect(updateEducation(person, null)).toBe(false);
         expect(updateEducation(person, [])).toBe(false);
+      });
+    });
+
+    describe("updateEducation() with object-typed fields", () => {
+      it("should extract .text from object-typed school Name", () => {
+        const person = { _id: "test", snapshot: { education: [] } };
+        const schools = [
+          {
+            Name: { text: "MIT", textDirection: "ltr", attributesV2: [] },
+            Degree: "BS",
+            Field: "CS",
+          },
+        ];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(true);
+        expect(person.snapshot.education[0].school).toBe("MIT");
+        expect(person.snapshot.education[0].degree).toBe("BS");
+        expect(person.snapshot.education[0].field).toBe("CS");
+      });
+
+      it("should extract .text from object-typed Degree and Field", () => {
+        const person = { _id: "test", snapshot: { education: [] } };
+        const schools = [
+          {
+            Name: "Stanford",
+            Degree: { text: "Master of Science", textDirection: "ltr" },
+            Field: { text: "Computer Science", textDirection: "ltr" },
+          },
+        ];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(true);
+        expect(person.snapshot.education[0].school).toBe("Stanford");
+        expect(person.snapshot.education[0].degree).toBe("Master of Science");
+        expect(person.snapshot.education[0].field).toBe("Computer Science");
+      });
+
+      it("should String() coerce non-string non-object values", () => {
+        const person = { _id: "test", snapshot: { education: [] } };
+        const schools = [{ Name: 123, Degree: null, Field: undefined }];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(true);
+        expect(person.snapshot.education[0].school).toBe("123");
+        expect(person.snapshot.education[0].degree).toBeNull();
+        expect(person.snapshot.education[0].field).toBeNull();
+      });
+
+      it("should handle null Name gracefully", () => {
+        const person = { _id: "test", snapshot: { education: [] } };
+        const schools = [{ Name: null, Degree: "BS", Field: "CS" }];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(true);
+        expect(person.snapshot.education[0].school).toBeNull();
+      });
+
+      it("should deduplicate correctly after coercion", () => {
+        const person = {
+          _id: "test",
+          snapshot: {
+            education: [{ school: "MIT", degree: "BS", field: "CS" }],
+          },
+        };
+        const schools = [
+          {
+            Name: { text: "MIT", textDirection: "ltr" },
+            Degree: "BS",
+            Field: "CS",
+          },
+        ];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(false);
+        expect(person.snapshot.education).toHaveLength(1);
+      });
+    });
+
+    describe("coerceToString()", () => {
+      it("should return null for null", () => {
+        expect(coerceToString(null)).toBeNull();
+      });
+
+      it("should return null for undefined", () => {
+        expect(coerceToString(undefined)).toBeNull();
+      });
+
+      it("should return string as-is", () => {
+        expect(coerceToString("MIT")).toBe("MIT");
+      });
+
+      it("should extract .text from object", () => {
+        expect(coerceToString({ text: "MIT", textDirection: "ltr" })).toBe(
+          "MIT",
+        );
+      });
+
+      it("should String() coerce numbers", () => {
+        expect(coerceToString(123)).toBe("123");
+      });
+
+      it("should fall through to String() when .text is null", () => {
+        // Object with null .text is not a DuxSoup rich object; String() coercion applies
+        expect(typeof coerceToString({ text: null, other: "x" })).toBe(
+          "string",
+        );
       });
     });
 

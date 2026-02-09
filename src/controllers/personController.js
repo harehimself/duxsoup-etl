@@ -80,6 +80,22 @@ function parseDegree(value) {
 }
 
 /**
+ * Coerce a value to a string, handling DuxSoup rich objects like
+ * { textDirection, text, attributesV2 } that occasionally appear
+ * in place of plain strings for school names, degrees, etc.
+ *
+ * @param {*} value - Raw value from webhook
+ * @returns {string|null} Plain string or null
+ */
+function coerceToString(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value.text != null)
+    return String(value.text);
+  return String(value);
+}
+
+/**
  * Determine if incoming value should overwrite existing snapshot value
  *
  * @param {Object} existingMeta - { value, observedAt, source, observationId }
@@ -398,11 +414,12 @@ function updateEducation(person, schools) {
   let updated = false;
 
   schools.forEach((school) => {
+    const name = coerceToString(school.Name);
+    const degree = coerceToString(school.Degree);
+    const field = coerceToString(school.Field);
+
     const exists = person.snapshot.education.find(
-      (e) =>
-        e.school === school.Name &&
-        e.degree === school.Degree &&
-        e.field === school.Field,
+      (e) => e.school === name && e.degree === degree && e.field === field,
     );
 
     if (!exists) {
@@ -411,18 +428,14 @@ function updateEducation(person, schools) {
           person_id: person._id,
           currentCount: person.snapshot.education.length,
           maxEducation: MAX_EDUCATION,
-          droppedEntry: {
-            school: school.Name,
-            degree: school.Degree,
-            field: school.Field,
-          },
+          droppedEntry: { school: name, degree, field },
         });
         return;
       }
       person.snapshot.education.push({
-        school: school.Name,
-        degree: school.Degree,
-        field: school.Field,
+        school: name,
+        degree,
+        field,
         startDate: parseSafeDate(school.From),
         endDate: parseSafeDate(school.To),
       });
@@ -902,4 +915,5 @@ module.exports = {
   updateRolesTimeline, // Export for testing
   updateEducation, // Export for testing
   updateSkills, // Export for testing
+  coerceToString, // Export for testing
 };
