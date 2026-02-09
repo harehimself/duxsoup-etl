@@ -340,15 +340,30 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
           return;
         }
         // Add new role with seniority classification
+        let startDate = parseSafeDate(pos.From);
+        let endDate =
+          pos.To && pos.To !== "Present" ? parseSafeDate(pos.To) : null;
+
+        // Normalize inverted dates — keep role with startDate only
+        if (endDate && startDate && endDate < startDate) {
+          logger.warn("Role has endDate before startDate, nullifying endDate", {
+            person_id: person._id,
+            title: pos.Title,
+            company: pos.Company,
+            startDate,
+            endDate,
+          });
+          endDate = null;
+        }
+
         const newRole = enrichRoleWithSeniority({
           title: pos.Title,
           companyId: null, // Will be resolved separately
           companyName: pos.Company,
           location: pos.Location,
           description: pos.Description,
-          startDate: parseSafeDate(pos.From),
-          endDate:
-            pos.To && pos.To !== "Present" ? parseSafeDate(pos.To) : null,
+          startDate,
+          endDate,
           isCurrent: pos.To === "Present" || !pos.To,
         });
         person.snapshot.roles.push(newRole);
