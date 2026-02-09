@@ -59,28 +59,9 @@
 
 DuxSoup ETL follows an **Observation-Snapshot** pattern with a dual-write pipeline:
 
-```
-                           ┌──────────────────────────────────────────────────┐
-                           │              DUAL-WRITE PIPELINE                 │
-                           │                                                  │
-  ┌──────────┐   Validate  │  ┌──────────────┐         ┌──────────────────┐  │
-  │ DuxSoup  │────────────▶│  │   PHASE 1    │         │     PHASE 2      │  │
-  │ Webhook  │             │  │              │         │                  │  │
-  └──────────┘             │  │  Observation  │────────▶│    Snapshots     │  │
-                           │  │  (Immutable)  │         │    (Mutable)     │  │
-                           │  │              │         │                  │  │
-        200 OK  ◀──────────│  │  Visit/Scan   │         │ Person/Company/  │  │
-       on Phase 1          │  │  append-only  │         │ Location upsert  │  │
-        success            │  └──────────────┘         └────────┬─────────┘  │
-                           │                                    │            │
-                           │                  on failure ────────┘            │
-                           │                         ▼                       │
-                           │                  ┌──────────────┐               │
-                           │                  │  Dead Letter  │──▶ Hourly    │
-                           │                  │    Queue      │   Replay     │
-                           │                  └──────────────┘               │
-                           └──────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/images/dual-write-pipeline.png" alt="Dual-Write Pipeline Architecture" width="800" />
+</p>
 
 **Key principles:**
 
