@@ -235,15 +235,9 @@ duxsoup-etl/
 
 Identity resolution uses a **waterfall** strategy to match incoming observations to canonical person records, prioritizing the most stable identifiers:
 
-```
-   MOST STABLE                                         LEAST STABLE
-       │                                                     │
-       ▼                                                     ▼
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│ Sales Nav ID │──▶│  Numeric ID  │──▶│   Username   │──▶│ Profile URL  │
-│  ACwAAA...   │   │  8+ digits   │   │   /in/slug   │   │  (fallback)  │
-└──────────────┘   └──────────────┘   └──────────────┘   └──────────────┘
-```
+<p align="center">
+  <img src="docs/images/identity-resolution.png" alt="Identity Resolution Waterfall" width="800" />
+</p>
 
 Each person maintains an **aliases** array tracking every known identifier (salesNavId, numericId, profileUrl, linkedInUsername, vanityName, duxsoupId, and more). This enables deduplication even when LinkedIn URLs change over time.
 
