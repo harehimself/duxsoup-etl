@@ -12,23 +12,13 @@
 
 ### High Priority
 
-- [ ] **Fix education object-to-string cast failure in person upsert** — DuxSoup occasionally sends rich objects (`{ textDirection, text, attributesV2 }`) instead of plain strings for school names in the `extended.schools` array. `updateEducation()` passes `school.Name` directly without type checking, causing Mongoose validation failure (`Cast to string failed`). This is an active production bug generating dead letters that will never self-heal via replay.
-  - Category: `bug`
-  - Files: `src/controllers/personController.js:391-434`
-  - Context: Observed in Render logs Feb 3-4 (30+ errors). Dead letter replay retries the same bad data every hour, failing each time. The affected person records never get their snapshot updated.
-  - Fix: Type-check `school.Name` — if it's an object with a `.text` property, extract that; otherwise `String()` coerce. Apply the same guard to `school.Degree` and `school.Field`.
-  - Acceptance: Person upsert succeeds when DuxSoup sends object-typed school fields. Dead letters for this error stop accumulating. Unit test covers object-shaped input.
+- [x] ~~**Fix education object-to-string cast failure in person upsert**~~ — Completed, see Completed section.
 
 - [ ] **Merge open Dependabot PR #80** (nodemailer 8.0.0 -> 8.0.1) — Routine patch bump. CI passing. Should be merged promptly to stay current.
   - Category: `maintenance`
   - Acceptance: PR merged, dependency updated on master.
 
-- [ ] **Decode percent-encoded LinkedIn URLs before identity extraction** — Username extraction regex (`/\/in\/([a-zA-Z0-9_-]+)/`) truncates at `%` characters in percent-encoded URLs, producing invalid 1-2 character IDs (e.g., `j`, `fl`). There is zero `decodeURIComponent` usage anywhere in the identity pipeline.
-  - Category: `bug`
-  - Files: `src/utils/identityMatcher.js:35-113`
-  - Context: Root cause of the Feb 5 production errors (`Invalid person ID format: j`, `Invalid person ID format: fl`). DuxSoup occasionally sends URLs with encoded characters. The regex captures everything before the first `%`, which may be only 1-2 characters. The Person `_id` validator (min 3 chars) catches it, but by then the person upsert fails and creates a dead letter.
-  - Fix: Add `decodeURIComponent()` to URL inputs before regex extraction in `extractIdentifiers()`. Guard with try/catch for malformed encodings. Add test cases for encoded URLs.
-  - Acceptance: URLs like `/in/john%20doe` correctly extract `john doe` or are safely handled. No more single-character ID validation failures. Unit tests cover percent-encoded inputs.
+- [x] ~~**Decode percent-encoded LinkedIn URLs before identity extraction**~~ — Completed, see Completed section.
 
 ### Medium Priority
 
@@ -100,12 +90,7 @@
   - Context: The codebase has full scan handling (`scanController.js`, `Scan` model) but no scan traffic has been observed in the recent log window. This could be normal (scans not configured) or could indicate a silent failure.
   - Acceptance: Confirmed whether scans are expected. If not, document that scan handling is retained for future use.
 
-- [ ] **Normalize invalid role dates before save instead of failing** — Person model has a Mongoose validator (`endDate >= startDate`) on roles, but validation only fires at save time. When DuxSoup sends a role where `endDate < startDate`, the entire person upsert fails and creates a dead letter.
-  - Category: `bug`
-  - Files: `src/controllers/personController.js:288-382`, `src/models/person.js:55-67`
-  - Context: `updateRolesTimeline()` calls `parseSafeDate()` on `pos.From` and `pos.To` but does not check date ordering. The Mongoose validator catches it at `person.save()`, but by then it's too late — the entire snapshot update is lost. No test coverage for this case.
-  - Fix: In `updateRolesTimeline()`, after parsing dates, if `endDate < startDate`, either swap them or null out `endDate` (keep the role with `startDate` only). Log a warning with the original values.
-  - Acceptance: Roles with inverted dates are normalized instead of causing upsert failure. Unit test confirms date swap/nullification behavior.
+- [x] ~~**Normalize invalid role dates before save instead of failing**~~ — Completed, see Completed section.
 
 ### Low Priority / Tech Debt
 
@@ -228,6 +213,9 @@
 
 ## Completed
 
+- [x] **Normalize invalid role dates before save** — 2026-02-09, commit `4036883`. Added date inversion guard in `updateRolesTimeline()`: when `endDate < startDate`, nullifies `endDate` and logs a warning instead of letting the Mongoose validator reject the entire `person.save()`. 3 new unit tests.
+- [x] **Decode percent-encoded LinkedIn URLs before identity extraction** — 2026-02-09. Added `safeDecode()` helper wrapping `decodeURIComponent` with try/catch. Widened username regex from `[a-zA-Z0-9_-]+` to `[^/?#]+?` to support decoded international characters (é, ö). Applied decode to all 5 URL-consuming functions: `extractLinkedInUsername`, `extractVanityName`, `normalizeUrl`, `extractPublicProfileUrl`, `extractCompanyProfileUrl`. 15 new unit tests.
+- [x] **Fix education object-to-string cast failure in person upsert** — 2026-02-09, commit `389d315`. Added `coerceToString()` helper to extract `.text` from DuxSoup rich objects (`{ text, textDirection, attributesV2 }`) and applied it to `school.Name`, `school.Degree`, and `school.Field` in `updateEducation()`. 11 new unit tests.
 - [x] **Cache expensive health metrics aggregations** — 2026-02-09, commit `8b256c8`. Added in-memory TTL cache (`src/utils/metricsCache.js`) with 5-minute expiry for health metrics. Cached results returned for repeated requests within the window.
 - [x] **Cap unbounded array growth on Person snapshot** — 2026-02-09. Added configurable caps (MAX_ROLES=50, MAX_EDUCATION=20, MAX_SKILLS=100) with env-var overrides in `src/constants/limits.js`. Extracted `updateEducation()` and `updateSkills()` helpers. Warnings logged with dropped-entry details when caps are hit. 14 new unit tests.
 - [x] **Fix fuzzy search over-matching across unrelated names** — 2026-02-08. Replaced OR-joined regex (`John|Doe`) with AND-joined conditions requiring all terms to match. Added aggregation pipeline with relevance scoring (fullName 3x weight). 4 new unit tests.
