@@ -59,12 +59,7 @@ _(All high-priority items completed — see Completed section)_
   - Fix: Add sparse index on `mergedInto`.
   - Acceptance: Query for merged persons uses index scan. Health metrics endpoint performance improves.
 
-- [ ] **Cap unbounded array growth on Person snapshot** — Roles, education, and skills arrays can grow without limit. A person observed 1000+ times could accumulate thousands of role entries if deduplication misses edge cases.
-  - Category: `reliability`
-  - Files: `src/controllers/personController.js:295-323` (roles), `src/controllers/personController.js:727-746` (education)
-  - Context: Role deduplication keys on `title|companyId|startDate`, but null startDates cause all untitled roles to collide. Education deduplication is similar. Over time, arrays can grow large enough to impact query performance and document size.
-  - Fix: Add configurable max array sizes (e.g., roles: 50, education: 20, skills: 100). Log a warning when limits are reached. Ensure deduplication handles null fields correctly.
-  - Acceptance: Arrays are capped. Warning logged when cap is hit. Unit test with >50 roles confirms truncation.
+- [x] ~~**Cap unbounded array growth on Person snapshot**~~ — Completed, see Completed section.
 
 ### Low Priority / Tech Debt
 
@@ -178,6 +173,7 @@ _(All high-priority items completed — see Completed section)_
 
 ## Completed
 
+- [x] **Cap unbounded array growth on Person snapshot** — 2026-02-09. Added configurable caps (MAX_ROLES=50, MAX_EDUCATION=20, MAX_SKILLS=100) with env-var overrides in `src/constants/limits.js`. Extracted `updateEducation()` and `updateSkills()` helpers. Warnings logged with dropped-entry details when caps are hit. 14 new unit tests.
 - [x] **Fix fuzzy search over-matching across unrelated names** — 2026-02-08. Replaced OR-joined regex (`John|Doe`) with AND-joined conditions requiring all terms to match. Added aggregation pipeline with relevance scoring (fullName 3x weight). 4 new unit tests.
 - [x] **Add URL validation guard to `normalizeUrl()`** — 2026-02-08. Added guard clause rejecting non-URL strings (Sales Nav IDs, numeric IDs, usernames) that lack `https?://` scheme or `linkedin.com`. 8 new unit tests.
 - [x] **Add missing indexes to Location model** — 2026-02-08. Added `snapshot.country`, `snapshot.city`, and compound `snapshot.city + snapshot.state + snapshot.country` indexes to match Person model.

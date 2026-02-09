@@ -6,6 +6,7 @@ const { parseSafeDate, parseBirthdayDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
+const { MAX_ROLES, MAX_EDUCATION, MAX_SKILLS } = require("../constants/limits");
 
 /**
  * Person Controller
@@ -309,6 +310,19 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
       );
 
       if (!existingRole) {
+        if (person.snapshot.roles.length >= MAX_ROLES) {
+          logger.warn("Roles array at capacity, dropping new role", {
+            person_id: person._id,
+            currentCount: person.snapshot.roles.length,
+            maxRoles: MAX_ROLES,
+            droppedRole: {
+              title: pos.Title,
+              company: pos.Company,
+              from: pos.From,
+            },
+          });
+          return;
+        }
         // Add new role with seniority classification
         const newRole = enrichRoleWithSeniority({
           title: pos.Title,
@@ -335,25 +349,125 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
     );
 
     if (!existingCurrentRole) {
-      // Add current role with seniority classification
-      const newRole = enrichRoleWithSeniority({
-        title: currentRole,
-        companyId: currentCompanyId || null,
-        companyName: currentCompany,
-        location: observationData.Location,
-        description: null,
-        startDate: null, // Unknown without extended data
-        endDate: null,
-        isCurrent: true,
-      });
-      person.snapshot.roles.push(newRole);
-      updated = true;
+      if (person.snapshot.roles.length >= MAX_ROLES) {
+        logger.warn("Roles array at capacity, dropping new role", {
+          person_id: person._id,
+          currentCount: person.snapshot.roles.length,
+          maxRoles: MAX_ROLES,
+          droppedRole: { title: currentRole, company: currentCompany },
+        });
+      } else {
+        // Add current role with seniority classification
+        const newRole = enrichRoleWithSeniority({
+          title: currentRole,
+          companyId: currentCompanyId || null,
+          companyName: currentCompany,
+          location: observationData.Location,
+          description: null,
+          startDate: null, // Unknown without extended data
+          endDate: null,
+          isCurrent: true,
+        });
+        person.snapshot.roles.push(newRole);
+        updated = true;
+      }
     } else if (currentCompanyId && !existingCurrentRole.companyId) {
       // Update company ID if we now have it
       existingCurrentRole.companyId = currentCompanyId;
       updated = true;
     }
   }
+
+  return updated;
+}
+
+/**
+ * Update education from observation
+ *
+ * @param {Object} person - Person document
+ * @param {Array} schools - Array of school objects from webhook
+ * @returns {boolean} True if education was updated
+ */
+function updateEducation(person, schools) {
+  if (!schools || schools.length === 0) return false;
+
+  if (!person.snapshot.education) {
+    person.snapshot.education = [];
+  }
+
+  let updated = false;
+
+  schools.forEach((school) => {
+    const exists = person.snapshot.education.find(
+      (e) =>
+        e.school === school.Name &&
+        e.degree === school.Degree &&
+        e.field === school.Field,
+    );
+
+    if (!exists) {
+      if (person.snapshot.education.length >= MAX_EDUCATION) {
+        logger.warn("Education array at capacity, dropping new entry", {
+          person_id: person._id,
+          currentCount: person.snapshot.education.length,
+          maxEducation: MAX_EDUCATION,
+          droppedEntry: {
+            school: school.Name,
+            degree: school.Degree,
+            field: school.Field,
+          },
+        });
+        return;
+      }
+      person.snapshot.education.push({
+        school: school.Name,
+        degree: school.Degree,
+        field: school.Field,
+        startDate: parseSafeDate(school.From),
+        endDate: parseSafeDate(school.To),
+      });
+      updated = true;
+    }
+  });
+
+  return updated;
+}
+
+/**
+ * Update skills from observation
+ *
+ * @param {Object} person - Person document
+ * @param {Array} skills - Array of skill strings from webhook
+ * @returns {boolean} True if skills were updated
+ */
+function updateSkills(person, skills) {
+  if (!skills || skills.length === 0) return false;
+
+  if (!person.snapshot.skills) {
+    person.snapshot.skills = [];
+  }
+
+  const existingSkills = new Set(person.snapshot.skills);
+  let updated = false;
+  let capWarningLogged = false;
+
+  skills.forEach((skill) => {
+    if (existingSkills.has(skill)) return;
+    if (person.snapshot.skills.length >= MAX_SKILLS) {
+      if (!capWarningLogged) {
+        logger.warn("Skills array at capacity, dropping new skills", {
+          person_id: person._id,
+          currentCount: person.snapshot.skills.length,
+          maxSkills: MAX_SKILLS,
+        });
+        capWarningLogged = true;
+      }
+      return;
+    }
+    person.snapshot.skills.push(skill);
+    existingSkills.add(skill);
+    updated = true;
+  });
 
   return updated;
 }
@@ -722,50 +836,10 @@ async function upsertFromObservation(observationDoc, sourceType) {
     updateRolesTimeline(person, webhookData, observationMeta);
 
     // Step 8: Update education if present
-    if (
-      webhookData.extended?.schools &&
-      webhookData.extended.schools.length > 0
-    ) {
-      if (!person.snapshot.education) {
-        person.snapshot.education = [];
-      }
-
-      webhookData.extended.schools.forEach((school) => {
-        const exists = person.snapshot.education.find(
-          (e) =>
-            e.school === school.Name &&
-            e.degree === school.Degree &&
-            e.field === school.Field,
-        );
-
-        if (!exists) {
-          person.snapshot.education.push({
-            school: school.Name,
-            degree: school.Degree,
-            field: school.Field,
-            startDate: parseSafeDate(school.From),
-            endDate: parseSafeDate(school.To),
-          });
-        }
-      });
-    }
+    updateEducation(person, webhookData.extended?.schools);
 
     // Step 9: Update skills if present
-    if (
-      webhookData.extended?.skills &&
-      webhookData.extended.skills.length > 0
-    ) {
-      if (!person.snapshot.skills) {
-        person.snapshot.skills = [];
-      }
-
-      const existingSkills = new Set(person.snapshot.skills);
-      webhookData.extended.skills.forEach((skill) => {
-        if (!existingSkills.has(skill)) {
-          person.snapshot.skills.push(skill);
-        }
-      });
-    }
+    updateSkills(person, webhookData.extended?.skills);
 
     // Step 10: Compute derived metrics
     person.derived = computeDerivedMetrics(person.snapshot.roles);
@@ -826,4 +900,6 @@ module.exports = {
   clearDerivedField, // Export for testing
   computeDerivedMetrics, // Export for testing
   updateRolesTimeline, // Export for testing
+  updateEducation, // Export for testing
+  updateSkills, // Export for testing
 };
