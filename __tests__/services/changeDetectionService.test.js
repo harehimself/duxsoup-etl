@@ -542,6 +542,66 @@ describe("ChangeDetectionService", () => {
       expect(lateralMoveCall).toBeUndefined();
     });
 
+    it("should NOT detect lateral_move when titles are whitespace-only strings", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "   ",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "   ",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeUndefined();
+    });
+
+    it("should NOT detect lateral_move when titles are non-string types", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: 123,
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "VP of Sales",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeUndefined();
+    });
+
+    it("should NOT detect lateral_move when one title is empty string", async () => {
+      const oldSnapshot = {
+        currentCompany: "Google",
+        currentTitle: "",
+        roles: [],
+      };
+      const newSnapshot = {
+        currentCompany: "Meta",
+        currentTitle: "Manager",
+      };
+
+      Change.create.mockClear();
+      await detectChanges(basePerson, oldSnapshot, newSnapshot, "obs-1");
+
+      const lateralMoveCall = Change.create.mock.calls.find(
+        (call) => call[0].type === "lateral_move",
+      );
+      expect(lateralMoveCall).toBeUndefined();
+    });
+
     it("should include recentJobChange and enrichment fields on lateral_move records", async () => {
       const roleStartDate = new Date();
       roleStartDate.setDate(roleStartDate.getDate() - 180);
