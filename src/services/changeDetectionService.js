@@ -274,13 +274,24 @@ function detectLateralMove(oldSnapshot, newSnapshot) {
   const oldTitle = oldSnapshot.currentTitle;
   const newTitle = newSnapshot.currentTitle;
 
-  // Both titles required to compare seniority
-  if (!oldTitle || !newTitle) {
+  // Both titles must be non-empty strings; parseTitle defaults whitespace-only
+  // and non-string values to IC rank 1, which would cause false-positive matches
+  if (
+    typeof oldTitle !== "string" ||
+    typeof newTitle !== "string" ||
+    !oldTitle.trim() ||
+    !newTitle.trim()
+  ) {
     return null;
   }
 
   const oldParsed = parseTitle(oldTitle);
   const newParsed = parseTitle(newTitle);
+
+  // Reject if parseTitle couldn't produce a normalized title (invalid input)
+  if (!oldParsed.normalized || !newParsed.normalized) {
+    return null;
+  }
 
   // Both must have a resolved seniority rank
   if (!oldParsed.seniorityRank || !newParsed.seniorityRank) {
@@ -497,7 +508,7 @@ function buildPersonSnapshot(person, snapshot) {
  * @returns {String} Normalized string
  */
 function normalizeString(str) {
-  if (!str) return "";
+  if (!str || typeof str !== "string") return "";
   return str.trim().toLowerCase();
 }
 
