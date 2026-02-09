@@ -12,7 +12,23 @@
 
 ### High Priority
 
-_(All high-priority items completed — see Completed section)_
+- [ ] **Fix education object-to-string cast failure in person upsert** — DuxSoup occasionally sends rich objects (`{ textDirection, text, attributesV2 }`) instead of plain strings for school names in the `extended.schools` array. `updateEducation()` passes `school.Name` directly without type checking, causing Mongoose validation failure (`Cast to string failed`). This is an active production bug generating dead letters that will never self-heal via replay.
+  - Category: `bug`
+  - Files: `src/controllers/personController.js:391-434`
+  - Context: Observed in Render logs Feb 3-4 (30+ errors). Dead letter replay retries the same bad data every hour, failing each time. The affected person records never get their snapshot updated.
+  - Fix: Type-check `school.Name` — if it's an object with a `.text` property, extract that; otherwise `String()` coerce. Apply the same guard to `school.Degree` and `school.Field`.
+  - Acceptance: Person upsert succeeds when DuxSoup sends object-typed school fields. Dead letters for this error stop accumulating. Unit test covers object-shaped input.
+
+- [ ] **Merge open Dependabot PR #80** (nodemailer 8.0.0 -> 8.0.1) — Routine patch bump. CI passing. Should be merged promptly to stay current.
+  - Category: `maintenance`
+  - Acceptance: PR merged, dependency updated on master.
+
+- [ ] **Decode percent-encoded LinkedIn URLs before identity extraction** — Username extraction regex (`/\/in\/([a-zA-Z0-9_-]+)/`) truncates at `%` characters in percent-encoded URLs, producing invalid 1-2 character IDs (e.g., `j`, `fl`). There is zero `decodeURIComponent` usage anywhere in the identity pipeline.
+  - Category: `bug`
+  - Files: `src/utils/identityMatcher.js:35-113`
+  - Context: Root cause of the Feb 5 production errors (`Invalid person ID format: j`, `Invalid person ID format: fl`). DuxSoup occasionally sends URLs with encoded characters. The regex captures everything before the first `%`, which may be only 1-2 characters. The Person `_id` validator (min 3 chars) catches it, but by then the person upsert fails and creates a dead letter.
+  - Fix: Add `decodeURIComponent()` to URL inputs before regex extraction in `extractIdentifiers()`. Guard with try/catch for malformed encodings. Add test cases for encoded URLs.
+  - Acceptance: URLs like `/in/john%20doe` correctly extract `john doe` or are safely handled. No more single-character ID validation failures. Unit tests cover percent-encoded inputs.
 
 ### Medium Priority
 
@@ -61,16 +77,41 @@ _(All high-priority items completed — see Completed section)_
 
 - [x] ~~**Cap unbounded array growth on Person snapshot**~~ — Completed, see Completed section.
 
+- [ ] **Adopt semantic versioning with tagged releases** — 80+ PRs merged, zero releases or tags. No way to track what's deployed, roll back to a known version, or correlate deployment issues with code changes.
+  - Category: `dx/ops`
+  - Context: All work ships directly to `master` with auto-deploy to Render. If a bad commit deploys, there's no tagged version to roll back to. GitHub Releases page is empty.
+  - Fix: Create initial `v1.0.0` tag on current master. Tag subsequent deploys. Consider `standard-version` or GitHub Release automation.
+  - Acceptance: `git tag -l` shows at least one semver tag. GitHub Releases page has a published release.
+
+- [ ] **Add branch protection rules to `master`** — Commits have been pushed directly to master that broke CI (Feb 5 package-lock.json sync), then immediately fixed. No branch protection enforces CI status checks.
+  - Category: `reliability`
+  - Fix: GitHub Settings > Branches > Branch protection rule: require status checks to pass, optionally require PR review.
+  - Acceptance: Direct pushes to master that fail CI are blocked. PRs require green CI before merge.
+
+- [ ] **Debounce rapid-fire duplicate visits for same profile** — Render logs show DuxSoup sending 3-5 separate webhooks for the same `duxsoupId` within 30-60 seconds, each with a unique `event_key`. These are not idempotency duplicates — they create separate observations and re-run the full person upsert pipeline each time.
+  - Category: `data-quality`
+  - Files: `src/controllers/observationHandler.js`, `src/controllers/personController.js`
+  - Context: Example: `id.67070797` (ingmarpeters) generated 5 visits in 90 seconds on Feb 9. Each triggers a full person upsert, company upsert, and location upsert. The observation still writes (audit trail), but the snapshot re-computation is wasteful.
+  - Fix: Add a short debounce window (e.g., skip person/company/location upsert if same `duxsoupId` was processed within last 30 seconds). Use an in-memory Map with TTL, similar to `metricsCache.js`.
+  - Acceptance: Rapid-fire visits for the same profile only trigger one person upsert within the debounce window. All observations still write. Unit test confirms debounce behavior.
+
+- [ ] **Investigate absence of scan webhook activity** — Recent Render logs show 100% visit type with zero scans. If scan webhooks are expected from DuxSoup, the scan pipeline may be misconfigured or disabled on the DuxSoup side.
+  - Category: `investigation`
+  - Context: The codebase has full scan handling (`scanController.js`, `Scan` model) but no scan traffic has been observed in the recent log window. This could be normal (scans not configured) or could indicate a silent failure.
+  - Acceptance: Confirmed whether scans are expected. If not, document that scan handling is retained for future use.
+
+- [ ] **Normalize invalid role dates before save instead of failing** — Person model has a Mongoose validator (`endDate >= startDate`) on roles, but validation only fires at save time. When DuxSoup sends a role where `endDate < startDate`, the entire person upsert fails and creates a dead letter.
+  - Category: `bug`
+  - Files: `src/controllers/personController.js:288-382`, `src/models/person.js:55-67`
+  - Context: `updateRolesTimeline()` calls `parseSafeDate()` on `pos.From` and `pos.To` but does not check date ordering. The Mongoose validator catches it at `person.save()`, but by then it's too late — the entire snapshot update is lost. No test coverage for this case.
+  - Fix: In `updateRolesTimeline()`, after parsing dates, if `endDate < startDate`, either swap them or null out `endDate` (keep the role with `startDate` only). Log a warning with the original values.
+  - Acceptance: Roles with inverted dates are normalized instead of causing upsert failure. Unit test confirms date swap/nullification behavior.
+
 ### Low Priority / Tech Debt
 
 - [x] ~~**Parallelize CSV enrichment row processing**~~ — Completed, see Completed section.
 
-- [ ] **Cache expensive health metrics aggregations** — `healthController.js` runs 10+ `countDocuments()` calls and `distinct()` queries on every request with no caching. The dashboard endpoint hits the database heavily.
-  - Category: `performance`
-  - Files: `src/controllers/healthController.js:109-112, 589-610`
-  - Context: Health endpoints are called every 6 hours by the scheduler, but can also be hit manually. Each call runs ~10 parallel count queries. For large collections (100K+ people), this is expensive.
-  - Fix: Add in-memory TTL cache (5-minute expiry) for health metrics. Return cached results for repeated requests within the window.
-  - Acceptance: Second call within 5 minutes returns cached data. Unit test confirms cache hit/miss behavior.
+- [x] ~~**Cache expensive health metrics aggregations**~~ — Completed, see Completed section.
 
 - [ ] **Clean up export temp files on failure** — `exportService.js` writes CSV/JSON to temp directory but doesn't clean up files when export jobs fail mid-write.
   - Category: `reliability`
@@ -113,6 +154,12 @@ _(All high-priority items completed — see Completed section)_
   - Context: A record that fails 50 times will be retried every hour indefinitely. The `replay_attempts` counter is tracked but not used for backoff or max-retry decisions.
   - Fix: Skip records where `replay_attempts > MAX_RETRIES` (e.g., 10). Add exponential backoff based on attempt count. Mark records as `permanently_failed` after max retries.
   - Acceptance: Records with 10+ failures are skipped. `permanently_failed` status added to DeadLetter enum. Unit test confirms backoff logic.
+
+- [ ] **Suppress verbose dead letter replay output when queue is empty** — Scheduler logs the full replay banner (`DEAD LETTER REPLAY`, `Found 0 dead letters`, `No dead letters to replay`, etc.) every hour even when there's nothing to process. This adds noise to Render logs.
+  - Category: `noise-reduction`
+  - Files: `src/workers/scheduler.js`, dead letter replay script
+  - Fix: When count is 0, log a single info line (`Dead letter replay: 0 pending, skipped`) instead of the full banner output.
+  - Acceptance: Hourly replay with 0 records produces at most 2 log lines instead of 10+.
 
 ---
 
@@ -163,6 +210,14 @@ _(All high-priority items completed — see Completed section)_
   - Category: `reliability`
   - Impact: Prevents accidental data loss from incorrect merge winner selection.
 
+- [ ] **Webhook payload schema validation** — The education object-casting bug reveals that DuxSoup's payload format can change without warning. Add JSON Schema validation (e.g., `ajv`) on incoming webhooks to detect and log schema drift before it causes downstream failures.
+  - Category: `reliability`
+  - Impact: Early warning system for DuxSoup API changes. Schema violations logged as warnings without rejecting the webhook, allowing graceful degradation.
+
+- [ ] **Structured log forwarding to external aggregation** — Logs are well-structured JSON but there's no external aggregation beyond Render's 30-day window. Consider forwarding to a log aggregation service (Datadog, Logtail, Betterstack) for alerts, dashboards, and historical analysis.
+  - Category: `observability`
+  - Impact: Persistent log history, real-time alerting on error spikes, operational dashboards beyond Render's built-in viewer.
+
 ---
 
 ## Icebox
@@ -173,6 +228,7 @@ _(All high-priority items completed — see Completed section)_
 
 ## Completed
 
+- [x] **Cache expensive health metrics aggregations** — 2026-02-09, commit `8b256c8`. Added in-memory TTL cache (`src/utils/metricsCache.js`) with 5-minute expiry for health metrics. Cached results returned for repeated requests within the window.
 - [x] **Cap unbounded array growth on Person snapshot** — 2026-02-09. Added configurable caps (MAX_ROLES=50, MAX_EDUCATION=20, MAX_SKILLS=100) with env-var overrides in `src/constants/limits.js`. Extracted `updateEducation()` and `updateSkills()` helpers. Warnings logged with dropped-entry details when caps are hit. 14 new unit tests.
 - [x] **Fix fuzzy search over-matching across unrelated names** — 2026-02-08. Replaced OR-joined regex (`John|Doe`) with AND-joined conditions requiring all terms to match. Added aggregation pipeline with relevance scoring (fullName 3x weight). 4 new unit tests.
 - [x] **Add URL validation guard to `normalizeUrl()`** — 2026-02-08. Added guard clause rejecting non-URL strings (Sales Nav IDs, numeric IDs, usernames) that lack `https?://` scheme or `linkedin.com`. 8 new unit tests.
