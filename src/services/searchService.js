@@ -71,13 +71,11 @@ async function searchPeople(params) {
   // Apply pagination
   searchQuery = searchQuery.skip(parsedSkip).limit(parsedLimit);
 
-  // Execute query
-  const results = await searchQuery.lean().exec();
-
-  // Count total matches (expensive, consider caching for common queries)
-  const totalCount = await Person.countDocuments({
-    $text: { $search: query },
-  });
+  // Execute search and count in parallel to halve MongoDB round-trips
+  const [results, totalCount] = await Promise.all([
+    searchQuery.lean().exec(),
+    Person.countDocuments({ $text: { $search: query } }),
+  ]);
 
   logger.info("Search executed successfully", {
     query,
