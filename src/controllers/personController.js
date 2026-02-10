@@ -620,8 +620,8 @@ function updateEducation(person, schools) {
         school: name,
         degree,
         field,
-        startDate: parseSafeDate(school.From),
-        endDate: parseSafeDate(school.To),
+        startDate: parseSafeDate(coerceToString(school.From)),
+        endDate: parseSafeDate(coerceToString(school.To)),
       });
       updated = true;
     }

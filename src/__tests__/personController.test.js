@@ -1164,6 +1164,50 @@ describe("PersonController", () => {
         expect(updated).toBe(false);
         expect(person.snapshot.education).toHaveLength(1);
       });
+
+      it("should coerce rich object From/To dates to strings before parsing", () => {
+        const person = { _id: "test", snapshot: { education: [] } };
+        const schools = [
+          {
+            Name: "MIT",
+            Degree: "BS",
+            Field: "CS",
+            From: { text: "2018", textDirection: "ltr", attributesV2: [] },
+            To: { text: "2022", textDirection: "ltr", attributesV2: [] },
+          },
+        ];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(true);
+        const edu = person.snapshot.education[0];
+        expect(edu.school).toBe("MIT");
+        // Dates should be parsed from the extracted text, not null
+        expect(edu.startDate).toBeInstanceOf(Date);
+        expect(edu.endDate).toBeInstanceOf(Date);
+        expect(edu.startDate.getUTCFullYear()).toBe(2018);
+        expect(edu.endDate.getUTCFullYear()).toBe(2022);
+      });
+
+      it("should return null dates when From/To rich objects have no text", () => {
+        const person = { _id: "test", snapshot: { education: [] } };
+        const schools = [
+          {
+            Name: "Stanford",
+            Degree: "PhD",
+            Field: "Physics",
+            From: { textDirection: "ltr", attributesV2: [] },
+            To: null,
+          },
+        ];
+
+        const updated = updateEducation(person, schools);
+
+        expect(updated).toBe(true);
+        const edu = person.snapshot.education[0];
+        expect(edu.startDate).toBeNull();
+        expect(edu.endDate).toBeNull();
+      });
     });
 
     describe("coerceToString()", () => {

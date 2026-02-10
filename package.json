@@ -29,6 +29,7 @@
     "ops:link-orphans": "node scripts/cli.js link-orphans",
     "ops:migrate-ids": "node scripts/cli.js migrate-url-ids",
     "ops:rollback-merge": "node scripts/rollback-merge.js",
+    "resurrect:dead-letters": "node scripts/resurrectDeadLetters.js",
     "lint": "eslint src/ __tests__/",
     "prepare": "husky || true"
   },
