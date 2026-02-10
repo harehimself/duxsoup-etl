@@ -113,16 +113,16 @@ router.get(
 );
 
 // Person read endpoints
-router.get("/people/:id", getPersonById);
-router.get("/people/by-alias/:value", getPersonByAlias);
+router.get("/people/:id", readRateLimiter, getPersonById);
+router.get("/people/by-alias/:value", readRateLimiter, getPersonByAlias);
 
 // Company read endpoints
-router.get("/companies/:id", getCompanyById);
-router.get("/companies/by-alias/:value", getCompanyByAlias);
+router.get("/companies/:id", readRateLimiter, getCompanyById);
+router.get("/companies/by-alias/:value", readRateLimiter, getCompanyByAlias);
 
 // Location read endpoints
-router.get("/locations/:id", getLocationById);
-router.get("/locations/by-alias/:value", getLocationByAlias);
+router.get("/locations/:id", readRateLimiter, getLocationById);
+router.get("/locations/by-alias/:value", readRateLimiter, getLocationByAlias);
 
 // Main webhook endpoint (rate limited, no auth — DuxSoup cannot send credentials)
 router.post("/webhook", webhookRateLimiter, (req, res) => {
