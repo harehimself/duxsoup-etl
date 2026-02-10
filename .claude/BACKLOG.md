@@ -12,67 +12,88 @@
 
 ### High Priority
 
-- [x] ~~**Fix education object-to-string cast failure in person upsert**~~ — Completed, see Completed section.
+- [ ] **Remove `child_process.exec` from `/api/version` endpoint** — `src/routes/apiRoutes.js:90-91` shells out to `git rev-parse --short HEAD` on every request. This is a command injection risk (even though no user input flows in today) and fails in Docker/production where git may not be installed. Replace with a build-time `GIT_COMMIT` env var or read from a generated `version.json`.
+  - Priority: `high`
+  - Category: `security`
+  - Impact: Eliminates a shell exec in the request path and a potential attack surface.
 
-- [x] ~~**Merge open Dependabot PR #80** (nodemailer 8.0.0 -> 8.0.1)~~ — Completed, see Completed section.
+- [ ] **Remove unused `csv-writer` dependency** — `csv-writer` is still listed in `package.json` dependencies but has zero imports anywhere in the codebase after the streaming export rewrite. Dead dependency increases install size and audit surface.
+  - Priority: `high`
+  - Category: `tech-debt`
+  - Impact: Smaller `node_modules`, cleaner dependency tree.
 
-- [x] ~~**Decode percent-encoded LinkedIn URLs before identity extraction**~~ — Completed, see Completed section.
+- [ ] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() → modify in JS → save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
+  - Priority: `high`
+  - Category: `bug`
+  - Impact: Prevents data loss from concurrent webhook processing of the same company/location.
 
 ### Medium Priority
 
-- [x] ~~**Fix CLAUDE.md schema + endpoint docs drift**~~ — Completed, see Completed section.
+- [ ] **Add provenance tracking (`_meta`) to company snapshots** — Person snapshots track per-field provenance (`_meta.fieldName.observedAt`, `.source`, `.observationId`) but company snapshots use a simple `applySnapshotValue()` with no metadata. This means there's no way to audit when or from which observation a company field was last updated.
+  - Priority: `medium`
+  - Category: `feature`
+  - Impact: Parity with person model, enables debugging "where did this company name come from?"
 
-- [x] ~~**Tighten Sales Navigator ID detection across identity resolution**~~ — Completed, see Completed section.
+- [ ] **Add provenance tracking (`_meta`) to location snapshots** — Same gap as company: location snapshots have no per-field provenance. The location controller blindly overwrites fields with `parsed.X || location.snapshot.X`.
+  - Priority: `medium`
+  - Category: `feature`
+  - Impact: Audit trail for location data sources.
 
-- [x] ~~**Add URL validation guard to `normalizeUrl()`**~~ — Completed, see Completed section.
+- [ ] **Company controller: apply source precedence rules (visit > scan)** — `companyController.js` applies snapshot values unconditionally (any non-empty value overwrites). Unlike the person controller, there's no visit-beats-scan or newer-beats-older logic. A stale scan could overwrite a fresh visit's company name.
+  - Priority: `medium`
+  - Category: `bug`
+  - Impact: Ensures company snapshots follow the same precedence rules as person snapshots.
 
-- [x] ~~**Add missing indexes to Location model**~~ — Completed, see Completed section.
+- [ ] **Read endpoints missing rate limiting** — `GET /api/people/:id` and `GET /api/people/by-alias/:value` (and their company/location counterparts at `apiRoutes.js:131-140`) are not wrapped in `readRateLimiter`. All other read endpoints have rate limiting applied. An attacker could enumerate all person records at unrestricted speed.
+  - Priority: `medium`
+  - Category: `security`
+  - Impact: Closes a rate-limiting gap for entity lookup endpoints.
 
-- [x] ~~**Add TTL index for `recentJobChangeExpiresAt` on Change model**~~ — Completed, see Completed section.
+- [ ] **Scheduler `stopScheduler()` does not actually cancel cron jobs** — `src/workers/scheduler.js:204-213` sets `schedulerStarted = false` but doesn't call `task.stop()` on any cron task. The comment says "Tasks will naturally stop when process exits" but during graceful shutdown there's a window where jobs could fire after `stopScheduler()` is called but before `process.exit()`.
+  - Priority: `medium`
+  - Category: `bug`
+  - Impact: Prevents orphaned cron jobs from running during shutdown, especially dead letter replays that touch the database.
 
-- [x] ~~**Fix fuzzy search over-matching across unrelated names**~~ — Completed, see Completed section.
-
-- [x] ~~**Add `mergedInto` index to Person model for merge tracking**~~ — Completed, see Completed section.
-
-- [x] ~~**Cap unbounded array growth on Person snapshot**~~ — Completed, see Completed section.
-
-- [x] ~~**Adopt semantic versioning with tagged releases**~~ — Completed, see Completed section.
-
-- [x] ~~**Add branch protection rules to `master`**~~ — Completed, see Completed section.
-
-- [x] ~~**Debounce rapid-fire duplicate visits for same profile**~~ — Completed, see Completed section.
-
-- [x] ~~**Investigate absence of scan webhook activity**~~ — Completed, see Completed section.
-
-- [x] ~~**Add request timeout middleware**~~ — Completed, see Completed section.
-
-- [x] ~~**Normalize invalid role dates before save instead of failing**~~ — Completed, see Completed section.
+- [ ] **`isDuplicate` detection is unreliable in `observationHandler.js`** — `isDuplicate` is set to `false` after a successful `findOneAndUpdate` upsert (`observationHandler.js:94`), but `findOneAndUpdate` with `$setOnInsert` returns the existing document on conflict rather than throwing E11000. The flag is only set to `true` in the E11000 catch branch. This means re-processed webhooks silently pass as "new" and trigger redundant Phase 2 upserts.
+  - Priority: `medium`
+  - Category: `bug`
+  - Impact: Reduces unnecessary Phase 2 work and provides accurate duplicate metrics.
 
 ### Low Priority / Tech Debt
 
-- [x] ~~**Parallelize CSV enrichment row processing**~~ — Completed, see Completed section.
+- [ ] **Add integration tests for batch webhook endpoint** — The batch endpoint (`batchWebhookHandler.js`) has unit tests but no integration tests hitting a real MongoDB instance. The existing integration test suite (`api.integration.test.js`) doesn't cover `POST /api/webhook/batch`.
+  - Priority: `low`
+  - Category: `testing`
+  - Impact: Validates batch processing end-to-end with real database interactions.
 
-- [x] ~~**Cache expensive health metrics aggregations**~~ — Completed, see Completed section.
+- [ ] **Add integration tests for company and location upsert** — No integration tests exist for `companyController.js` or `locationController.js`. These are Phase 2 upserts that run on every webhook but are only covered by the person controller integration tests indirectly.
+  - Priority: `low`
+  - Category: `testing`
+  - Impact: Catches regressions in company/location identity resolution and snapshot updates.
 
-- [x] ~~**Clean up export temp files on failure**~~ — Completed, see Completed section.
+- [ ] **Debounce cache has no upper bound** — `src/utils/upsertDebounce.js` uses an unbounded `Map` with lazy cleanup on each `shouldSkip()` call. Under sustained high volume (thousands of unique profiles), the cache grows without limit until entries expire. Add a max-size eviction policy or periodic sweep.
+  - Priority: `low`
+  - Category: `reliability`
+  - Impact: Prevents unbounded memory growth under high webhook volume.
 
-- [x] ~~**Split adminRoutes.js into focused route modules**~~ — Completed, see Completed section.
+- [ ] **Metrics cache has no upper bound** — `src/utils/metricsCache.js` (used by health endpoints) similarly has no cap on the number of cached keys. While the current key set is small and fixed, there's no guard against future misuse.
+  - Priority: `low`
+  - Category: `tech-debt`
+  - Impact: Defensive coding against future cache key proliferation.
 
-- [x] ~~**Deduplicate person field normalization into a loop**~~ — Completed, see Completed section.
+- [ ] **Health check `searchPeople` does separate `countDocuments` for total** — `src/services/searchService.js:78-80` runs `Person.countDocuments({ $text: ... })` as a separate query after the main search. For large collections this is expensive. Consider using `$facet` in an aggregation pipeline to get results + count in one query, or return an estimated count.
+  - Priority: `low`
+  - Category: `performance`
+  - Impact: Reduces MongoDB load for search queries by ~50%.
 
-- [x] ~~**Reuse SMTP transporter in notification service**~~ — Completed, see Completed section.
+- [ ] **Export service still requires `csv-writer` in `package.json`** — The streaming export rewrite replaced `csv-writer` usage with built-in `escapeCsvField()`, but the dependency was never removed from `package.json`. (Same item as the high-priority removal above — listed here for cross-reference.)
+  - Priority: `low`
+  - Category: `tech-debt`
 
-- [x] ~~**Add request timeout middleware**~~ — Completed, see Completed section.
-
-- [x] ~~**Add exponential backoff for stuck dead letter replays**~~ — Completed, see Completed section.
-
-- [x] ~~**Webhook payload schema validation**~~ — Completed, see Completed section.
-
-- [x] ~~**Role deduplication during person upsert**~~ — Completed, see Completed section.
-
-- [x] ~~**Add merge safety validation**~~ — Completed, see Completed section.
-
-- [x] ~~**Suppress verbose dead letter replay output when queue is empty**~~ — Completed, see Completed section.
+- [ ] **Version endpoint contains hardcoded regex test output** — `src/routes/apiRoutes.js:96-106` returns `regex_test` debug output with hardcoded Sales Nav ID pattern checks in every `/api/version` response. This was likely a debugging aid that should be removed before it leaks internal implementation details.
+  - Priority: `low`
+  - Category: `cleanup`
+  - Impact: Cleaner API responses, no internal implementation leakage.
 
 ---
 
@@ -85,28 +106,35 @@
   - Category: `feature`
   - Impact: Enables temporal queries ("who changed jobs in Q1"), audit trails, and rollback of bad data. Could be implemented as a separate `PersonHistory` collection with snapshot-per-observation or periodic snapshots.
 
-- [x] ~~**Batch webhook processing endpoint**~~ — Completed, see Completed section.
-
-- [x] ~~**Streaming export for large datasets**~~ — Completed, see Completed section.
-
-- [x] ~~**API documentation (OpenAPI/Swagger)**~~ — Completed, see Completed section.
-
-- [x] ~~**Dead letter alerting integration test**~~ — Completed, see Completed section.
-
-- [x] ~~**Data quality dashboard**~~ — Completed, see Completed section.
-
-- [x] ~~**Dependency audit**~~ — Completed, see Completed section.
-
-- [x] ~~**Alert deduplication in notification service**~~ — Completed, see Completed section.
-
-- [x] ~~**Lateral move detection in change service**~~ — Completed, see Completed section.
-
-_(Role deduplication, merge safety validation, and webhook payload schema validation promoted to Active Sprint — see Low Priority section above.)_
-
 - [ ] **Structured log forwarding to external aggregation** — Logs are well-structured JSON but there's no external aggregation beyond Render's 30-day window. Consider forwarding to a log aggregation service (Datadog, Logtail, Betterstack) for alerts, dashboards, and historical analysis.
   - Priority: `backlog`
   - Category: `observability`
   - Impact: Persistent log history, real-time alerting on error spikes, operational dashboards beyond Render's built-in viewer.
+
+- [ ] **Webhook replay from dead letters should also upsert company/location** — When `replayDeadLetters.js` replays a failed observation, it calls `upsertFromObservation()` for the person but does not replay `upsertCompanyFromObservation()` or `upsertLocationFromObservation()`. If the original Phase 2 company/location upsert also failed, replay won't recover those entities.
+  - Priority: `backlog`
+  - Category: `feature`
+  - Impact: Complete recovery of all entity types during dead letter replay.
+
+- [ ] **Webhook idempotency relies on SHA1 (event_key)** — `event_key` is computed with SHA1 (`src/utils/eventKey.js`), which is cryptographically weak. While this is used for idempotency (not security), consider migrating to SHA-256 for defense in depth against collision attacks on webhook deduplication.
+  - Priority: `backlog`
+  - Category: `security`
+  - Impact: Stronger collision resistance for idempotency keys.
+
+- [ ] **Add `PATCH /api/people/:id` for manual corrections** — Currently there's no way to manually correct a person's snapshot data through the API. Admin corrections require direct MongoDB access. A PATCH endpoint with webhookAuth protection would enable operational corrections without database access.
+  - Priority: `backlog`
+  - Category: `feature`
+  - Impact: Enables ops team to fix data quality issues without SSH/database access.
+
+- [ ] **Add webhook delivery acknowledgment/retry protocol** — DuxSoup fires webhooks without delivery guarantees. If the server returns 5xx or times out, DuxSoup may not retry. Consider adding a webhook receipt log and a reconciliation job that compares DuxSoup's expected delivery count against received webhooks.
+  - Priority: `backlog`
+  - Category: `reliability`
+  - Impact: Detects silent webhook data loss.
+
+- [ ] **OpenAPI spec drift detection** — The OpenAPI spec in `src/openapi.js` is manually maintained. It can drift from the actual routes. Consider generating the spec from route definitions or adding a test that validates the spec against registered Express routes.
+  - Priority: `backlog`
+  - Category: `testing`
+  - Impact: Ensures API documentation stays accurate.
 
 ---
 
