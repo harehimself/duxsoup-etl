@@ -30,8 +30,10 @@ async function getOrFetch(key, fetchFn, ttlMs = DEFAULT_TTL_MS) {
   const data = await fetchFn();
 
   if (ttlMs > 0) {
-    // Evict expired entries if at capacity
-    if (store.size >= MAX_METRICS_CACHE_SIZE) {
+    // Only evict if this key is truly new — a concurrent call for the
+    // same key may have already populated it while we were awaiting fetchFn.
+    const isNewKey = !store.has(key);
+    if (isNewKey && store.size >= MAX_METRICS_CACHE_SIZE) {
       const now = Date.now();
       for (const [k, v] of store) {
         if (v.expiresAt <= now) store.delete(k);
