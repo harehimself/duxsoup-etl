@@ -17,7 +17,7 @@
   - Category: `bug`
   - Impact: 8 failing tests on master. Blocks CI trustworthiness.
 
-- [ ] **Fix VisitTime schema to accept number or string** — 100% of production webhooks trigger a schema validation warning because DuxSoup sends `VisitTime` as a Unix timestamp (number), but `webhookSchemas.js` expects a string. Update the schema to accept `oneOf: [string, number]` or auto-coerce numbers to ISO date strings. This is the single largest source of log noise in production.
+- [x] **Fix VisitTime schema to accept number or string** — 100% of production webhooks trigger a schema validation warning because DuxSoup sends `VisitTime` as a Unix timestamp (number), but `webhookSchemas.js` expects a string. Update the schema to accept `oneOf: [string, number]` or auto-coerce numbers to ISO date strings. This is the single largest source of log noise in production.
   - Priority: `high`
   - Category: `bug`
   - Impact: Eliminates all current production schema warnings, restoring clean logs for real issue detection.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Fix VisitTime/ScanTime schema to accept number or string** — 2026-02-10. DuxSoup sends timestamps as Unix numbers but schema only allowed strings, causing 100% of webhooks to trigger validation warnings. Updated `webhookSchemas.js` to accept `['string', 'number']` for both `VisitTime` and `ScanTime`. Flipped test from "detect number as error" to "accept number". Added ScanTime number test. All 842 tests pass.
 - [x] **Fix ajv version mismatch and 8 failing tests** — 2026-02-10. Lockfile had ajv 6.12.6 despite `package.json` declaring `^8.17.1`. ajv v6 uses `dataPath` while the validator code uses v8's `instancePath`, causing all 8 type-error tests to produce `"dataundefined"` paths. Fixed by running `npm install ajv@latest` to sync to v8.17.1. All 841 tests pass.
 - [x] **Remove `child_process.exec` from `/api/version` endpoint** — 2026-02-10, PR #91. Replaced shell exec with build-time `GIT_COMMIT` env var. Also removed hardcoded regex test debug output from the version response.
 - [x] **Remove unused `csv-writer` dependency** — 2026-02-10, PR #92. Removed from `package.json` after the streaming export rewrite made it unnecessary.
