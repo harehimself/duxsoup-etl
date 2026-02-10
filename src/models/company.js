@@ -77,6 +77,9 @@ const companySchema = new mongoose.Schema(
       // Metadata
       employeeCount: { type: String, maxlength: 50 },
       founded: { type: String, maxlength: 50 },
+
+      // Per-field provenance: { fieldName: { value, observedAt, source, observationId } }
+      _meta: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
 
     // References to observations where this company appeared

@@ -204,7 +204,24 @@ describe("CompanyController", () => {
 
       const existingDoc = buildCompanyDoc({
         _id: "12345678",
-        snapshot: { name: "Acme Inc", industry: "Technology" },
+        snapshot: {
+          name: "Acme Inc",
+          industry: "Technology",
+          _meta: {
+            name: {
+              value: "Acme Inc",
+              observedAt: new Date("2024-06-01"),
+              source: "visit",
+              observationId: "obs-1",
+            },
+            industry: {
+              value: "Technology",
+              observedAt: new Date("2024-06-01"),
+              source: "visit",
+              observationId: "obs-1",
+            },
+          },
+        },
         observations: { visits: ["obs-1"], scans: [] },
       });
 
@@ -214,7 +231,7 @@ describe("CompanyController", () => {
 
       await upsertCompanyFromObservation(observationDoc, "visit");
 
-      // applySnapshotValue guard: empty string and null should not overwrite
+      // shouldOverwrite guard: empty string and null should not overwrite
       expect(existingDoc.snapshot.name).toBe("Acme Inc");
       expect(existingDoc.snapshot.industry).toBe("Technology");
     });
@@ -302,6 +319,223 @@ describe("CompanyController", () => {
       expect(result).toBeNull();
       expect(Company.findOne).not.toHaveBeenCalled();
       expect(Company.create).not.toHaveBeenCalled();
+    });
+
+    // ───────────────────────────────────────────
+    // (f) Provenance: _meta tracked on snapshot fields
+    // ───────────────────────────────────────────
+    it("should store _meta provenance on newly set snapshot fields", async () => {
+      const visitTime = new Date("2024-09-01");
+      const observationDoc = {
+        _id: "obs-prov",
+        rawData: {
+          data: {
+            Company: "ProvCorp",
+            CompanyID: "55555555",
+            Industry: "Finance",
+            VisitTime: visitTime,
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "55555555",
+        canonical_id: "canonical-prov",
+        aliases: [{ type: "numericId", value: "55555555" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const doc = buildCompanyDoc({
+        _id: "55555555",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+      Company.findOne.mockResolvedValue(doc);
+      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Company.findById.mockResolvedValue(doc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      expect(doc.snapshot._meta.name).toEqual(
+        expect.objectContaining({
+          value: "ProvCorp",
+          source: "visit",
+          observationId: "obs-prov",
+        }),
+      );
+      expect(doc.snapshot._meta.industry).toEqual(
+        expect.objectContaining({
+          value: "Finance",
+          source: "visit",
+        }),
+      );
+    });
+
+    // ───────────────────────────────────────────
+    // (g) Precedence: visit beats scan for same field
+    // ───────────────────────────────────────────
+    it("should not let a scan overwrite a visit-sourced field", async () => {
+      const observationDoc = {
+        _id: "obs-scan",
+        rawData: {
+          data: {
+            Company: "ScanCorp",
+            CompanyID: "77777777",
+            Industry: "Stale Industry",
+            ScanTime: new Date("2024-10-01"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "77777777",
+        canonical_id: "canonical-scan",
+        aliases: [{ type: "numericId", value: "77777777" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const existingDoc = buildCompanyDoc({
+        _id: "77777777",
+        snapshot: {
+          name: "VisitCorp",
+          industry: "Fresh Industry",
+          _meta: {
+            name: {
+              value: "VisitCorp",
+              observedAt: new Date("2024-09-15"),
+              source: "visit",
+              observationId: "obs-visit",
+            },
+            industry: {
+              value: "Fresh Industry",
+              observedAt: new Date("2024-09-15"),
+              source: "visit",
+              observationId: "obs-visit",
+            },
+          },
+        },
+        observations: { visits: ["obs-visit"], scans: [] },
+      });
+
+      Company.findOne.mockResolvedValue(existingDoc);
+      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Company.findById.mockResolvedValue(existingDoc);
+
+      await upsertCompanyFromObservation(observationDoc, "scan");
+
+      // Visit-sourced values should NOT be overwritten by scan
+      expect(existingDoc.snapshot.name).toBe("VisitCorp");
+      expect(existingDoc.snapshot.industry).toBe("Fresh Industry");
+    });
+
+    // ───────────────────────────────────────────
+    // (h) Precedence: visit overwrites scan-sourced field
+    // ───────────────────────────────────────────
+    it("should let a visit overwrite a scan-sourced field", async () => {
+      const observationDoc = {
+        _id: "obs-visit-new",
+        rawData: {
+          data: {
+            Company: "VisitNewCorp",
+            CompanyID: "88888888",
+            Industry: "New Industry",
+            VisitTime: new Date("2024-10-01"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "88888888",
+        canonical_id: "canonical-visit-new",
+        aliases: [{ type: "numericId", value: "88888888" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const existingDoc = buildCompanyDoc({
+        _id: "88888888",
+        snapshot: {
+          name: "ScanOldCorp",
+          industry: "Old Industry",
+          _meta: {
+            name: {
+              value: "ScanOldCorp",
+              observedAt: new Date("2024-09-01"),
+              source: "scan",
+              observationId: "obs-scan-old",
+            },
+            industry: {
+              value: "Old Industry",
+              observedAt: new Date("2024-09-01"),
+              source: "scan",
+              observationId: "obs-scan-old",
+            },
+          },
+        },
+        observations: { visits: [], scans: ["obs-scan-old"] },
+      });
+
+      Company.findOne.mockResolvedValue(existingDoc);
+      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Company.findById.mockResolvedValue(existingDoc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      // Visit should overwrite scan-sourced values
+      expect(existingDoc.snapshot.name).toBe("VisitNewCorp");
+      expect(existingDoc.snapshot.industry).toBe("New Industry");
+      expect(existingDoc.snapshot._meta.name.source).toBe("visit");
+    });
+
+    // ───────────────────────────────────────────
+    // (i) Same source: newer observation wins
+    // ───────────────────────────────────────────
+    it("should let newer same-source observation overwrite older one", async () => {
+      const observationDoc = {
+        _id: "obs-newer",
+        rawData: {
+          data: {
+            Company: "NewerCorp",
+            CompanyID: "66666666",
+            VisitTime: new Date("2024-11-01"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "66666666",
+        canonical_id: "canonical-newer",
+        aliases: [{ type: "numericId", value: "66666666" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const existingDoc = buildCompanyDoc({
+        _id: "66666666",
+        snapshot: {
+          name: "OlderCorp",
+          _meta: {
+            name: {
+              value: "OlderCorp",
+              observedAt: new Date("2024-10-01"),
+              source: "visit",
+              observationId: "obs-older",
+            },
+          },
+        },
+        observations: { visits: ["obs-older"], scans: [] },
+      });
+
+      Company.findOne.mockResolvedValue(existingDoc);
+      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Company.findById.mockResolvedValue(existingDoc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      expect(existingDoc.snapshot.name).toBe("NewerCorp");
+      expect(existingDoc.snapshot._meta.name.observationId).toBe("obs-newer");
     });
   });
 });
