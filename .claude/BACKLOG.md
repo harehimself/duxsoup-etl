@@ -38,7 +38,7 @@
   - Impact: Eliminates 55+ recurring errors (44 upsert + 11 replay) and stops wasted retry cycles.
   - Discovered: 2026-02-10, Render log review.
 
-- [ ] **Fix identity resolution for international/locale-suffixed LinkedIn URLs** — 18 production errors from URLs like `linkedin.com/in/flávia-silva/en` being used as person `_id`. Despite the percent-encoding fix (commit `196`), decoded international characters in profiles with `/en` locale suffixes pass through as person IDs. Also seeing fragments `j` and `fl` leak through extraction, suggesting the URL-to-username parser truncates at certain characters. Review `salesNavIdExtractor.js` and `identityMatcher.js` for these edge cases.
+- [x] **Fix identity resolution for international/locale-suffixed LinkedIn URLs** — 18 production errors from URLs like `linkedin.com/in/flávia-silva/en` being used as person `_id`. Despite the percent-encoding fix (commit `196`), decoded international characters in profiles with `/en` locale suffixes pass through as person IDs. Also seeing fragments `j` and `fl` leak through extraction, suggesting the URL-to-username parser truncates at certain characters. Review `salesNavIdExtractor.js` and `identityMatcher.js` for these edge cases.
   - Priority: `high`
   - Category: `bug`
   - Impact: Eliminates 18+ recurring identity resolution errors and prevents bad person records.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Fix identity resolution for international/locale-suffixed LinkedIn URLs** — 2026-02-10, commit `d8df92f`. Added locale suffix stripping (`/en`, `/fr`, etc.) to LinkedIn URL parsing in `salesNavIdExtractor.js` and `identityMatcher.js`. Prevents locale-suffixed URLs from leaking through as person `_id` values.
 - [x] **Fix dead letter replay loop for education cast-to-string errors** — 2026-02-10. Investigation confirmed the replay path already goes through the same `upsertFromObservation()` with `coerceToString()` — the original hypothesis was incorrect. The real issue: dead letters purged as `permanently_failed` by `purgeStuckDeadLetters.js` can't benefit from the code fix. Added `scripts/resurrectDeadLetters.js` to reset permanently_failed dead letters matching now-fixed error patterns (Cast to string) back to `pending` for retry. Also extended `coerceToString()` to education date fields (`school.From`/`school.To`) to prevent silent data loss when DuxSoup sends rich objects for dates. Dry-run by default, `--commit` to execute, `--pattern` for custom error matching. 15 unit tests for resurrect script + 2 new education date tests. All 880 tests pass.
 - [x] **Company/location controllers: eliminate find-modify-save race condition** — 2026-02-10, PR #103. Replaced multi-step find→mutate→save with atomic `findOneAndUpdate` operations. Eliminates E11000 race, separate reload, and non-atomic `save()`. Also fixed export service CSV header edge case for empty cursors.
 - [x] **Purge permanently-stuck dead letters with validation errors** — 2026-02-10. Added `scripts/purgeStuckDeadLetters.js` with `isPermanentError()` classifier matching 7 permanent error patterns (CastError, ValidationError, invalid _id, E11000, etc.). Dry-run by default, `--commit` to execute. Skips transient errors (timeouts, connection failures). Falls back to `last_replay_error` when `error.message` is absent. 16 unit tests. All 858 tests pass.
