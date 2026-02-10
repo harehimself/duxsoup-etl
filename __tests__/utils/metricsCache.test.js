@@ -1,3 +1,7 @@
+jest.mock("../../src/constants/limits", () => ({
+  MAX_METRICS_CACHE_SIZE: 3, // small for testing
+}));
+
 const {
   getOrFetch,
   invalidate,
@@ -126,6 +130,24 @@ describe("MetricsCache", () => {
 
       expect(getStats().size).toBe(0);
       expect(getStats().keys).toEqual([]);
+    });
+  });
+
+  describe("max size eviction", () => {
+    it("should evict oldest entry when cache reaches MAX_METRICS_CACHE_SIZE", async () => {
+      const fetchFn = jest.fn().mockResolvedValue("data");
+
+      // Fill cache to capacity (MAX_METRICS_CACHE_SIZE = 3)
+      await getOrFetch("a", fetchFn, 60000);
+      await getOrFetch("b", fetchFn, 60000);
+      await getOrFetch("c", fetchFn, 60000);
+      expect(getStats().size).toBe(3);
+
+      // Adding one more should evict the oldest
+      await getOrFetch("d", fetchFn, 60000);
+
+      expect(getStats().size).toBeLessThanOrEqual(3);
+      expect(getStats().keys).toContain("d");
     });
   });
 

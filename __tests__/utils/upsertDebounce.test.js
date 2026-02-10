@@ -1,5 +1,12 @@
+jest.mock("../../src/utils/logger", () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
 jest.mock("../../src/constants/limits", () => ({
   DEBOUNCE_WINDOW_MS: 100, // short window for fast tests
+  MAX_DEBOUNCE_CACHE_SIZE: 5, // small size for eviction tests
 }));
 
 const {
@@ -65,6 +72,39 @@ describe("upsertDebounce", () => {
       expect(getStats().size).toBe(0);
       // Previously-debounced key should now proceed
       expect(shouldSkip("pid.abc")).toBe(false);
+    });
+  });
+
+  describe("max size eviction", () => {
+    it("should evict oldest entries when cache reaches MAX_DEBOUNCE_CACHE_SIZE", () => {
+      // Fill cache to capacity (MAX_DEBOUNCE_CACHE_SIZE = 5)
+      for (let i = 0; i < 5; i++) {
+        shouldSkip(`pid.${i}`);
+      }
+      expect(getStats().size).toBe(5);
+
+      // Adding one more should trigger eviction
+      shouldSkip("pid.new");
+
+      // Cache should not exceed max size
+      expect(getStats().size).toBeLessThanOrEqual(5);
+      // The new entry should be present
+      expect(getStats().keys).toContain("pid.new");
+    });
+
+    it("should log a warning when eviction occurs", () => {
+      const logger = require("../../src/utils/logger");
+      for (let i = 0; i < 5; i++) {
+        shouldSkip(`pid.evict.${i}`);
+      }
+      logger.warn.mockClear();
+
+      shouldSkip("pid.evict.trigger");
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Debounce cache at capacity, evicted oldest entries",
+        expect.objectContaining({ maxSize: 5 }),
+      );
     });
   });
 

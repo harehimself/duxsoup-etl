@@ -1,4 +1,8 @@
-const { DEBOUNCE_WINDOW_MS } = require("../constants/limits");
+const {
+  DEBOUNCE_WINDOW_MS,
+  MAX_DEBOUNCE_CACHE_SIZE,
+} = require("../constants/limits");
+const logger = require("./logger");
 
 /**
  * In-memory debounce for Phase 2 entity upserts.
@@ -33,6 +37,21 @@ function shouldSkip(key) {
   const expiresAt = _cache.get(key);
   if (expiresAt !== undefined && expiresAt > now) {
     return true; // Still within debounce window — skip
+  }
+
+  // Evict oldest entries if cache is at capacity
+  if (_cache.size >= MAX_DEBOUNCE_CACHE_SIZE) {
+    const evictCount = Math.ceil(MAX_DEBOUNCE_CACHE_SIZE * 0.1);
+    const iter = _cache.keys();
+    for (let i = 0; i < evictCount; i++) {
+      const oldest = iter.next();
+      if (oldest.done) break;
+      _cache.delete(oldest.value);
+    }
+    logger.warn("Debounce cache at capacity, evicted oldest entries", {
+      evicted: evictCount,
+      maxSize: MAX_DEBOUNCE_CACHE_SIZE,
+    });
   }
 
   // First occurrence (or expired) — mark and proceed
