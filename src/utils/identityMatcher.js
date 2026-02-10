@@ -51,7 +51,7 @@ function safeDecode(url) {
 function extractLinkedInUsername(data) {
   // Pattern to match LinkedIn usernames — broad character class to support
   // decoded international characters (é, ö, etc.) from percent-encoded URLs
-  const usernamePattern = /\/in\/([^/?#]+?)\/?(?:[?#]|$)/;
+  const usernamePattern = /\/in\/([^/?#]+?)(?:\/[a-z]{2})?\/?(?:[?#]|$)/;
   const pidPattern = /^pid\.([a-zA-Z0-9_-]+)$/;
   // Pattern to detect Sales Nav IDs (should NOT be treated as usernames)
   const salesNavIdPattern = /^A(Cw|Co)AA/;
@@ -181,6 +181,8 @@ function normalizeUrl(url) {
     normalized = normalized.replace(/^www\./, "");
     // Normalize double slashes and trailing slash
     normalized = normalized.replace(/\/\/+/g, "/").replace(/\/$/, "");
+    // Strip locale suffix from /in/ profile URLs (e.g. /in/username/en → /in/username)
+    normalized = normalized.replace(/(\/in\/[^/?#]+)\/[a-z]{2}$/, "$1");
     return normalized;
   } catch (_e) {
     return url;
@@ -236,7 +238,7 @@ function normalizeDuxsoupId(duxsoupId) {
  * @returns {string|null} - Vanity name or null
  */
 function extractVanityName(data) {
-  const vanityPattern = /\/in\/([^/?#]+?)\/?(?:[?#]|$)/;
+  const vanityPattern = /\/in\/([^/?#]+?)(?:\/[a-z]{2})?\/?(?:[?#]|$)/;
   const salesNavIdPattern = /^A(Cw|Co)AA/;
 
   function extractFromUrl(url) {

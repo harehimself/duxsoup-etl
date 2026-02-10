@@ -132,8 +132,8 @@ const personSchema = new mongoose.Schema(
           return (
             /^AC[wo]AA[A-Z][A-Za-z0-9_-]+$/i.test(v) ||
             /^\d{8,}$/.test(v) ||
-            /^linkedin\.com\/in\/[\w-]+$/i.test(v) ||
-            (/^[\w-]{3,100}$/.test(v) && !/[@\s]/.test(v))
+            /^linkedin\.com\/in\/[\p{L}\p{N}_-]+$/iu.test(v) ||
+            (/^[\p{L}\p{N}_-]{3,100}$/u.test(v) && !/[@\s]/.test(v))
           );
         },
         message: (props) =>

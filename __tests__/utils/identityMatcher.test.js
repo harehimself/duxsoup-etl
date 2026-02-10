@@ -9,6 +9,7 @@ const {
   generateIdentityKey,
   isSamePerson,
   safeDecode,
+  resolvePersonIdentity,
 } = require("../../src/utils/identityMatcher");
 
 describe("Identity Matcher Utility", () => {
@@ -552,6 +553,138 @@ describe("Identity Matcher Utility", () => {
 
     it("should handle empty string", () => {
       expect(safeDecode("")).toBe("");
+    });
+  });
+
+  describe("extractLinkedInUsername — locale-suffixed URLs", () => {
+    it("should extract username from URL with /en locale suffix", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/flávia-silva/en",
+      };
+      expect(extractLinkedInUsername(data)).toBe("flávia-silva");
+    });
+
+    it("should extract username from URL with /fr locale suffix", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/jean-dupont/fr",
+      };
+      expect(extractLinkedInUsername(data)).toBe("jean-dupont");
+    });
+
+    it("should extract username from locale URL with trailing slash", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/hans-müller/de/",
+      };
+      expect(extractLinkedInUsername(data)).toBe("hans-müller");
+    });
+
+    it("should extract username from percent-encoded URL with locale suffix", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/fl%C3%A1via-silva/en",
+      };
+      expect(extractLinkedInUsername(data)).toBe("flávia-silva");
+    });
+
+    it("should still extract username from URL without locale suffix", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/john-doe/",
+      };
+      expect(extractLinkedInUsername(data)).toBe("john-doe");
+    });
+  });
+
+  describe("extractVanityName — locale-suffixed URLs", () => {
+    it("should extract vanity name from URL with /en locale suffix", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/flávia-silva/en",
+      };
+      expect(extractVanityName(data)).toBe("flávia-silva");
+    });
+
+    it("should extract vanity name from URL with /fr locale suffix", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/jean-dupont/fr",
+      };
+      expect(extractVanityName(data)).toBe("jean-dupont");
+    });
+
+    it("should extract vanity name from locale URL with trailing slash", () => {
+      const data = {
+        Profile: "https://www.linkedin.com/in/hans-müller/de/",
+      };
+      expect(extractVanityName(data)).toBe("hans-müller");
+    });
+  });
+
+  describe("normalizeUrl — locale suffix stripping", () => {
+    it("should strip /en locale suffix from /in/ profile URL", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com/in/flávia-silva/en",
+      );
+      expect(result).toBe("linkedin.com/in/flávia-silva");
+    });
+
+    it("should strip /fr locale suffix from /in/ profile URL", () => {
+      const result = normalizeUrl("https://www.linkedin.com/in/jean-dupont/fr");
+      expect(result).toBe("linkedin.com/in/jean-dupont");
+    });
+
+    it("should not strip 3+ letter path segments (not a locale)", () => {
+      const result = normalizeUrl("https://www.linkedin.com/in/john-doe/eng");
+      expect(result).toBe("linkedin.com/in/john-doe/eng");
+    });
+
+    it("should not strip locale-like segments from non-/in/ paths", () => {
+      const result = normalizeUrl("https://www.linkedin.com/company/acme/en");
+      expect(result).toBe("linkedin.com/company/acme/en");
+    });
+
+    it("should strip locale suffix with trailing slash", () => {
+      const result = normalizeUrl(
+        "https://www.linkedin.com/in/flávia-silva/en/",
+      );
+      expect(result).toBe("linkedin.com/in/flávia-silva");
+    });
+  });
+
+  describe("resolvePersonIdentity — locale-suffixed URL end-to-end", () => {
+    it("should resolve person identity from locale-suffixed URL", () => {
+      const webhookData = {
+        id: "pid.flávia-silva",
+        Profile: "https://www.linkedin.com/in/fl%C3%A1via-silva/en",
+      };
+
+      const result = resolvePersonIdentity(webhookData);
+
+      expect(result.person_id).toBe("flávia-silva");
+      expect(result.primary_id_type).toBe("linkedInUsername");
+      expect(result.aliases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "linkedInUsername",
+            value: "flávia-silva",
+          }),
+          expect.objectContaining({
+            type: "vanityName",
+            value: "flávia-silva",
+          }),
+        ]),
+      );
+    });
+
+    it("should produce clean profileUrl alias without locale suffix", () => {
+      const webhookData = {
+        Profile: "https://www.linkedin.com/in/flávia-silva/en",
+      };
+
+      const result = resolvePersonIdentity(webhookData);
+
+      const profileUrlAlias = result.aliases.find(
+        (a) => a.type === "profileUrl",
+      );
+      expect(profileUrlAlias).toBeDefined();
+      expect(profileUrlAlias.value).toBe("linkedin.com/in/flávia-silva");
+      expect(profileUrlAlias.value).not.toContain("/en");
     });
   });
 });
