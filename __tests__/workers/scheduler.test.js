@@ -1,8 +1,9 @@
 const cron = require("node-cron");
 
 // Mock dependencies before requiring scheduler
+const mockStop = jest.fn();
 jest.mock("node-cron", () => ({
-  schedule: jest.fn(),
+  schedule: jest.fn(() => ({ stop: mockStop })),
 }));
 
 jest.mock("../../src/utils/logger", () => ({
@@ -29,6 +30,9 @@ describe("Scheduler", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStop.mockClear();
+    // Restore mock implementation cleared by clearAllMocks
+    cron.schedule.mockImplementation(() => ({ stop: mockStop }));
 
     // Reset schedulerStarted state by re-requiring
     jest.isolateModules(() => {
@@ -104,6 +108,49 @@ describe("Scheduler", () => {
         "Scheduled dead letter replay failed",
         expect.objectContaining({ error: "replay crashed" }),
       );
+    });
+  });
+
+  describe("stopScheduler()", () => {
+    it("should call stop() on all scheduled cron tasks", () => {
+      jest.isolateModules(() => {
+        mockStop.mockClear();
+        cron.schedule.mockClear();
+        const mod = require("../../src/workers/scheduler");
+        mod.startScheduler(true);
+        const taskCount = cron.schedule.mock.calls.length;
+        expect(taskCount).toBeGreaterThan(0);
+
+        mod.stopScheduler();
+        expect(mockStop).toHaveBeenCalledTimes(taskCount);
+      });
+    });
+
+    it("should be safe to call when scheduler is not started", () => {
+      jest.isolateModules(() => {
+        mockStop.mockClear();
+        const mod = require("../../src/workers/scheduler");
+        // Don't start the scheduler — stopScheduler should be a no-op
+        mod.stopScheduler();
+        expect(mockStop).not.toHaveBeenCalled();
+      });
+    });
+
+    it("should allow scheduler to be restarted after stop", () => {
+      jest.isolateModules(() => {
+        mockStop.mockClear();
+        const localCron = require("node-cron");
+        const mod = require("../../src/workers/scheduler");
+        localCron.schedule.mockClear();
+        mod.startScheduler(true);
+        const firstCallCount = localCron.schedule.mock.calls.length;
+
+        mod.stopScheduler();
+        localCron.schedule.mockClear();
+
+        mod.startScheduler(true);
+        expect(localCron.schedule.mock.calls.length).toBe(firstCallCount);
+      });
     });
   });
 });
