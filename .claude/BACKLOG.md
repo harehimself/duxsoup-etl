@@ -27,7 +27,7 @@
   - Category: `bug`
   - Impact: Prevents data loss from concurrent webhook processing of the same company/location.
 
-- [ ] **Remove `playground-1.mongodb.js` and `.history/` from repo** — Development artifacts committed to the repository. `playground-1.mongodb.js` is a MongoDB playground file and `.history/` contains VSCode local history. Add both to `.gitignore` and remove from tracking.
+- [x] **Remove `playground-1.mongodb.js` and `.history/` from repo** — Development artifacts committed to the repository. `playground-1.mongodb.js` is a MongoDB playground file and `.history/` contains VSCode local history. Add both to `.gitignore` and remove from tracking.
   - Priority: `high`
   - Category: `cleanup`
   - Impact: Cleaner repo, no development artifacts in production.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Remove `playground-1.mongodb.js` and `.history/` from repo** — 2026-02-10. Investigation found files exist locally but were never committed — `.gitignore` already had patterns for both (`playground-*.mongodb.js` and `.history/`). No git changes needed.
 - [x] **Fix VisitTime/ScanTime schema to accept number or string** — 2026-02-10. DuxSoup sends timestamps as Unix numbers but schema only allowed strings, causing 100% of webhooks to trigger validation warnings. Updated `webhookSchemas.js` to accept `['string', 'number']` for both `VisitTime` and `ScanTime`. Flipped test from "detect number as error" to "accept number". Added ScanTime number test. All 842 tests pass.
 - [x] **Fix ajv version mismatch and 8 failing tests** — 2026-02-10. Lockfile had ajv 6.12.6 despite `package.json` declaring `^8.17.1`. ajv v6 uses `dataPath` while the validator code uses v8's `instancePath`, causing all 8 type-error tests to produce `"dataundefined"` paths. Fixed by running `npm install ajv@latest` to sync to v8.17.1. All 841 tests pass.
 - [x] **Remove `child_process.exec` from `/api/version` endpoint** — 2026-02-10, PR #91. Replaced shell exec with build-time `GIT_COMMIT` env var. Also removed hardcoded regex test debug output from the version response.
