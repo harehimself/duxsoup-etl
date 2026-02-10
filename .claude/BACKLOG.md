@@ -12,7 +12,7 @@
 
 ### High Priority
 
-- [ ] **Fix ajv version mismatch and 8 failing tests** — `package.json` declares `ajv@^8.17.1` but lockfile has `6.12.6` installed. The ajv v6 error format differs from v8, causing all 8 tests in `webhookSchemaValidator.test.js` to fail (error messages show `"dataundefined"` instead of field paths like `"data/VisitTime"`). Run `npm install ajv@latest` to sync, then fix assertions.
+- [x] **Fix ajv version mismatch and 8 failing tests** — `package.json` declares `ajv@^8.17.1` but lockfile has `6.12.6` installed. The ajv v6 error format differs from v8, causing all 8 tests in `webhookSchemaValidator.test.js` to fail (error messages show `"dataundefined"` instead of field paths like `"data/VisitTime"`). Run `npm install ajv@latest` to sync, then fix assertions.
   - Priority: `high`
   - Category: `bug`
   - Impact: 8 failing tests on master. Blocks CI trustworthiness.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Fix ajv version mismatch and 8 failing tests** — 2026-02-10. Lockfile had ajv 6.12.6 despite `package.json` declaring `^8.17.1`. ajv v6 uses `dataPath` while the validator code uses v8's `instancePath`, causing all 8 type-error tests to produce `"dataundefined"` paths. Fixed by running `npm install ajv@latest` to sync to v8.17.1. All 841 tests pass.
 - [x] **Remove `child_process.exec` from `/api/version` endpoint** — 2026-02-10, PR #91. Replaced shell exec with build-time `GIT_COMMIT` env var. Also removed hardcoded regex test debug output from the version response.
 - [x] **Remove unused `csv-writer` dependency** — 2026-02-10, PR #92. Removed from `package.json` after the streaming export rewrite made it unnecessary.
 - [x] **Add provenance tracking (`_meta`) to company snapshots** — 2026-02-10, PR #98. Company snapshots now track per-field provenance with `_meta` metadata matching the person model pattern.
