@@ -6,10 +6,7 @@ jest.mock("../../src/utils/logger", () => ({
 }));
 
 jest.mock("../../src/models/company", () => ({
-  findOne: jest.fn(),
-  findById: jest.fn(),
-  create: jest.fn(),
-  updateOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
 }));
 
 jest.mock("../../src/utils/identityMatcher", () => ({
@@ -28,25 +25,23 @@ const { resolveCompanyIdentity } = require("../../src/utils/identityMatcher");
 const { dedupeAliases } = require("../../src/utils/aliasHelpers");
 
 /**
- * Helper: build a mock company document with save() and Mongoose-like behavior
+ * Helper: build a plain company document (simulates findOneAndUpdate return)
  */
 function buildCompanyDoc(fields = {}) {
-  const doc = {
+  return {
     _id: fields._id || "12345678",
     canonical_id: fields.canonical_id || "canonical-uuid",
     aliases: fields.aliases || [],
     snapshot: fields.snapshot || {},
     observations: fields.observations || { visits: [], scans: [] },
     meta: fields.meta || {},
-    save: jest.fn().mockResolvedValue(undefined),
     ...fields,
   };
-  return doc;
 }
 
 describe("CompanyController", () => {
   beforeEach(() => {
-    // Default: dedupeAliases returns its input
+    jest.clearAllMocks();
     dedupeAliases.mockImplementation((arr) => arr);
   });
 
@@ -54,7 +49,7 @@ describe("CompanyController", () => {
     // ───────────────────────────────────────────
     // (a) New company created from observation with CompanyID
     // ───────────────────────────────────────────
-    it("should create new company with numeric _id and proper aliases", async () => {
+    it("should create new company via atomic upsert with proper aliases", async () => {
       const observationDoc = {
         _id: "obs-1",
         rawData: {
@@ -79,50 +74,71 @@ describe("CompanyController", () => {
         primary_id_type: "numericId",
       });
 
-      // No existing company
-      Company.findOne.mockResolvedValue(null);
-
+      // Step 1: findOneAndUpdate (upsert) returns newly created doc
       const createdDoc = buildCompanyDoc({
+        _id: "12345678",
+        canonical_id: "canonical-acme",
+        aliases: [],
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      // Step 2: findOneAndUpdate (update) returns updated doc
+      const updatedDoc = buildCompanyDoc({
         _id: "12345678",
         canonical_id: "canonical-acme",
         aliases: [
           { type: "numericId", value: "12345678" },
           { type: "name", value: "Acme Inc" },
         ],
+        snapshot: { name: "Acme Inc", industry: "Technology" },
+        observations: { visits: ["obs-1"], scans: [] },
       });
-      Company.create.mockResolvedValue(createdDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Company.findById.mockResolvedValue(createdDoc);
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(createdDoc) // Step 1: upsert
+        .mockResolvedValueOnce(updatedDoc); // Step 3: atomic update
 
       const result = await upsertCompanyFromObservation(
         observationDoc,
         "visit",
       );
 
-      expect(Company.create).toHaveBeenCalledWith(
+      // Verify step 1: atomic upsert with $setOnInsert
+      expect(Company.findOneAndUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          _id: "12345678",
-          canonical_id: "canonical-acme",
+          $or: [{ _id: "12345678" }, { canonical_id: "canonical-acme" }],
         }),
+        expect.objectContaining({
+          $setOnInsert: expect.objectContaining({
+            _id: "12345678",
+            canonical_id: "canonical-acme",
+          }),
+        }),
+        { upsert: true, new: true },
       );
 
-      // Verify aliases include numericId and name
-      const createCall = Company.create.mock.calls[0][0];
-      expect(createCall.aliases).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ type: "numericId", value: "12345678" }),
-          expect.objectContaining({ type: "name", value: "Acme Inc" }),
-        ]),
+      // Verify step 3: atomic update with $set + $addToSet
+      expect(Company.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: "12345678" },
+        expect.objectContaining({
+          $set: expect.objectContaining({
+            "snapshot.name": "Acme Inc",
+            "snapshot.industry": "Technology",
+          }),
+          $addToSet: { "observations.visits": "obs-1" },
+        }),
+        { new: true },
       );
 
       expect(result).toBeTruthy();
-      expect(createdDoc.save).toHaveBeenCalled();
+      expect(result._id).toBe("12345678");
     });
 
     // ───────────────────────────────────────────
     // (b) Existing company updated
     // ───────────────────────────────────────────
-    it("should update existing company snapshot, add observation, and increment meta", async () => {
+    it("should update existing company snapshot and add observation atomically", async () => {
       const observationDoc = {
         _id: "obs-2",
         rawData: {
@@ -143,6 +159,7 @@ describe("CompanyController", () => {
         primary_id_type: "numericId",
       });
 
+      // Step 1: existing doc returned from upsert (not newly created)
       const existingDoc = buildCompanyDoc({
         _id: "12345678",
         canonical_id: "canonical-acme",
@@ -152,30 +169,34 @@ describe("CompanyController", () => {
         meta: { observationsCount: 1 },
       });
 
-      Company.findOne.mockResolvedValue(existingDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-
-      // After reload, observations array has the new observation
-      const reloadedDoc = buildCompanyDoc({
-        ...existingDoc,
+      const updatedDoc = buildCompanyDoc({
+        _id: "12345678",
+        canonical_id: "canonical-acme",
+        aliases: [{ type: "numericId", value: "12345678" }],
+        snapshot: { name: "Acme Inc", industry: "SaaS" },
         observations: { visits: ["obs-1", "obs-2"], scans: [] },
+        meta: { observationsCount: 2 },
       });
-      Company.findById.mockResolvedValue(reloadedDoc);
 
-      await upsertCompanyFromObservation(observationDoc, "visit");
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(updatedDoc);
 
-      // $addToSet used for atomic observation reference
-      expect(Company.updateOne).toHaveBeenCalledWith(
-        { _id: "12345678" },
-        { $addToSet: { "observations.visits": "obs-2" } },
+      const result = await upsertCompanyFromObservation(
+        observationDoc,
+        "visit",
       );
 
-      // Snapshot updated
-      expect(reloadedDoc.snapshot.industry).toBe("SaaS");
+      // $addToSet in the atomic update
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      expect(updateCall[1].$addToSet).toEqual({
+        "observations.visits": "obs-2",
+      });
 
-      // Meta updated
-      expect(reloadedDoc.meta.observationsCount).toBe(2);
-      expect(reloadedDoc.save).toHaveBeenCalled();
+      // observations count pre-computed
+      expect(updateCall[1].$set["meta.observationsCount"]).toBe(2);
+
+      expect(result).toBeTruthy();
     });
 
     // ───────────────────────────────────────────
@@ -225,21 +246,23 @@ describe("CompanyController", () => {
         observations: { visits: ["obs-1"], scans: [] },
       });
 
-      Company.findOne.mockResolvedValue(existingDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Company.findById.mockResolvedValue(existingDoc);
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(existingDoc);
 
       await upsertCompanyFromObservation(observationDoc, "visit");
 
-      // shouldOverwrite guard: empty string and null should not overwrite
-      expect(existingDoc.snapshot.name).toBe("Acme Inc");
-      expect(existingDoc.snapshot.industry).toBe("Technology");
+      // Verify $set does NOT include snapshot.name or snapshot.industry
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      expect($set["snapshot.name"]).toBeUndefined();
+      expect($set["snapshot.industry"]).toBeUndefined();
     });
 
     // ───────────────────────────────────────────
-    // (d) E11000 race condition handled gracefully
+    // (d) No separate E11000 handling needed (atomic upsert)
     // ───────────────────────────────────────────
-    it("should handle E11000 race condition by falling through to findById", async () => {
+    it("should use atomic upsert instead of separate create with E11000 catch", async () => {
       const observationDoc = {
         _id: "obs-4",
         rawData: {
@@ -259,33 +282,27 @@ describe("CompanyController", () => {
         primary_id_type: "numericId",
       });
 
-      // No existing company found initially
-      Company.findOne.mockResolvedValue(null);
-
-      // E11000 on create
-      const dupError = new Error("E11000 duplicate key");
-      dupError.code = 11000;
-      Company.create.mockRejectedValue(dupError);
-
-      // findById finds the existing document
-      const existingDoc = buildCompanyDoc({
+      const doc = buildCompanyDoc({
         _id: "99999999",
         canonical_id: "canonical-race",
-        aliases: [{ type: "numericId", value: "99999999" }],
-        snapshot: { name: "RaceCorp" },
+        snapshot: {},
         observations: { visits: [], scans: [] },
       });
-      Company.findById.mockResolvedValue(existingDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(doc)
+        .mockResolvedValueOnce(doc);
 
       const result = await upsertCompanyFromObservation(
         observationDoc,
         "visit",
       );
 
-      expect(Company.findById).toHaveBeenCalledWith("99999999");
+      // Uses findOneAndUpdate with upsert, not separate findOne + create
+      expect(Company.findOneAndUpdate.mock.calls[0][2]).toEqual(
+        expect.objectContaining({ upsert: true, new: true }),
+      );
       expect(result).toBeTruthy();
-      expect(existingDoc.save).toHaveBeenCalled();
     });
 
     // ───────────────────────────────────────────
@@ -297,7 +314,6 @@ describe("CompanyController", () => {
         rawData: {
           data: {
             Company: "Acme Inc",
-            // No CompanyID, no CompanyProfile with numeric ID
             VisitTime: new Date("2024-08-15"),
           },
         },
@@ -317,14 +333,13 @@ describe("CompanyController", () => {
       );
 
       expect(result).toBeNull();
-      expect(Company.findOne).not.toHaveBeenCalled();
-      expect(Company.create).not.toHaveBeenCalled();
+      expect(Company.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
     // ───────────────────────────────────────────
     // (f) Provenance: _meta tracked on snapshot fields
     // ───────────────────────────────────────────
-    it("should store _meta provenance on newly set snapshot fields", async () => {
+    it("should include _meta provenance in $set for newly set snapshot fields", async () => {
       const visitTime = new Date("2024-09-01");
       const observationDoc = {
         _id: "obs-prov",
@@ -351,20 +366,24 @@ describe("CompanyController", () => {
         snapshot: {},
         observations: { visits: [], scans: [] },
       });
-      Company.findOne.mockResolvedValue(doc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Company.findById.mockResolvedValue(doc);
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(doc)
+        .mockResolvedValueOnce(doc);
 
       await upsertCompanyFromObservation(observationDoc, "visit");
 
-      expect(doc.snapshot._meta.name).toEqual(
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+
+      expect($set["snapshot._meta.name"]).toEqual(
         expect.objectContaining({
           value: "ProvCorp",
           source: "visit",
           observationId: "obs-prov",
         }),
       );
-      expect(doc.snapshot._meta.industry).toEqual(
+      expect($set["snapshot._meta.industry"]).toEqual(
         expect.objectContaining({
           value: "Finance",
           source: "visit",
@@ -419,15 +438,17 @@ describe("CompanyController", () => {
         observations: { visits: ["obs-visit"], scans: [] },
       });
 
-      Company.findOne.mockResolvedValue(existingDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Company.findById.mockResolvedValue(existingDoc);
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(existingDoc);
 
       await upsertCompanyFromObservation(observationDoc, "scan");
 
-      // Visit-sourced values should NOT be overwritten by scan
-      expect(existingDoc.snapshot.name).toBe("VisitCorp");
-      expect(existingDoc.snapshot.industry).toBe("Fresh Industry");
+      // Verify $set does NOT include snapshot.name or snapshot.industry
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      expect($set["snapshot.name"]).toBeUndefined();
+      expect($set["snapshot.industry"]).toBeUndefined();
     });
 
     // ───────────────────────────────────────────
@@ -477,16 +498,18 @@ describe("CompanyController", () => {
         observations: { visits: [], scans: ["obs-scan-old"] },
       });
 
-      Company.findOne.mockResolvedValue(existingDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Company.findById.mockResolvedValue(existingDoc);
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(existingDoc);
 
       await upsertCompanyFromObservation(observationDoc, "visit");
 
       // Visit should overwrite scan-sourced values
-      expect(existingDoc.snapshot.name).toBe("VisitNewCorp");
-      expect(existingDoc.snapshot.industry).toBe("New Industry");
-      expect(existingDoc.snapshot._meta.name.source).toBe("visit");
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      expect($set["snapshot.name"]).toBe("VisitNewCorp");
+      expect($set["snapshot.industry"]).toBe("New Industry");
+      expect($set["snapshot._meta.name"].source).toBe("visit");
     });
 
     // ───────────────────────────────────────────
@@ -528,14 +551,94 @@ describe("CompanyController", () => {
         observations: { visits: ["obs-older"], scans: [] },
       });
 
-      Company.findOne.mockResolvedValue(existingDoc);
-      Company.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Company.findById.mockResolvedValue(existingDoc);
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(existingDoc);
 
       await upsertCompanyFromObservation(observationDoc, "visit");
 
-      expect(existingDoc.snapshot.name).toBe("NewerCorp");
-      expect(existingDoc.snapshot._meta.name.observationId).toBe("obs-newer");
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      expect($set["snapshot.name"]).toBe("NewerCorp");
+      expect($set["snapshot._meta.name"].observationId).toBe("obs-newer");
+    });
+
+    // ───────────────────────────────────────────
+    // (j) Observations count computed correctly
+    // ───────────────────────────────────────────
+    it("should compute correct observations count for new observation", async () => {
+      const observationDoc = {
+        _id: "obs-count",
+        rawData: {
+          data: {
+            Company: "CountCorp",
+            CompanyID: "11111111",
+            VisitTime: new Date("2024-12-01"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "11111111",
+        canonical_id: "canonical-count",
+        aliases: [{ type: "numericId", value: "11111111" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const existingDoc = buildCompanyDoc({
+        _id: "11111111",
+        observations: {
+          visits: ["obs-prev-1", "obs-prev-2"],
+          scans: ["obs-scan-1"],
+        },
+      });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(existingDoc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      // 2 visits + 1 scan + 1 new = 4
+      expect(updateCall[1].$set["meta.observationsCount"]).toBe(4);
+    });
+
+    it("should not double-count when observation already linked", async () => {
+      const observationDoc = {
+        _id: "obs-dup",
+        rawData: {
+          data: {
+            Company: "DupCorp",
+            CompanyID: "22222222",
+            VisitTime: new Date("2024-12-01"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "22222222",
+        canonical_id: "canonical-dup",
+        aliases: [{ type: "numericId", value: "22222222" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const existingDoc = buildCompanyDoc({
+        _id: "22222222",
+        observations: { visits: ["obs-dup"], scans: [] }, // already linked
+      });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(existingDoc)
+        .mockResolvedValueOnce(existingDoc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      // Already linked, so count stays at 1
+      expect(updateCall[1].$set["meta.observationsCount"]).toBe(1);
     });
   });
 });

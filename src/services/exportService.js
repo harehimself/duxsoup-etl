@@ -322,6 +322,13 @@ function createCsvTransform(fields) {
         callback(err);
       }
     },
+    flush(callback) {
+      // Ensure header is written even when cursor returns zero documents
+      if (!headerWritten) {
+        this.push(fields.map(escapeCsvField).join(",") + "\n");
+      }
+      callback();
+    },
   });
 }
 

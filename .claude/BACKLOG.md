@@ -22,7 +22,7 @@
   - Category: `bug`
   - Impact: Eliminates all current production schema warnings, restoring clean logs for real issue detection.
 
-- [ ] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() -> modify in JS -> save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
+- [x] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() -> modify in JS -> save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
   - Priority: `high`
   - Category: `bug`
   - Impact: Prevents data loss from concurrent webhook processing of the same company/location.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Company/location controllers: eliminate find-modify-save race condition** — 2026-02-10, PR #103. Replaced multi-step find→mutate→save with atomic `findOneAndUpdate` operations. Eliminates E11000 race, separate reload, and non-atomic `save()`. Also fixed export service CSV header edge case for empty cursors.
 - [x] **Purge permanently-stuck dead letters with validation errors** — 2026-02-10. Added `scripts/purgeStuckDeadLetters.js` with `isPermanentError()` classifier matching 7 permanent error patterns (CastError, ValidationError, invalid _id, E11000, etc.). Dry-run by default, `--commit` to execute. Skips transient errors (timeouts, connection failures). Falls back to `last_replay_error` when `error.message` is absent. 16 unit tests. All 858 tests pass.
 - [x] **Remove `playground-1.mongodb.js` and `.history/` from repo** — 2026-02-10. Investigation found files exist locally but were never committed — `.gitignore` already had patterns for both (`playground-*.mongodb.js` and `.history/`). No git changes needed.
 - [x] **Fix VisitTime/ScanTime schema to accept number or string** — 2026-02-10. DuxSoup sends timestamps as Unix numbers but schema only allowed strings, causing 100% of webhooks to trigger validation warnings. Updated `webhookSchemas.js` to accept `['string', 'number']` for both `VisitTime` and `ScanTime`. Flipped test from "detect number as error" to "accept number". Added ScanTime number test. All 842 tests pass.
