@@ -82,7 +82,7 @@
   - Category: `observability`
   - Impact: Operational control over log verbosity without redeployment.
 
-- [ ] **Set `ALLOWED_ORIGINS` environment variable on Render** — Fires a warning on every deploy/restart: "ALLOWED_ORIGINS not set - CORS will reject all cross-origin browser requests." While server-to-server webhooks are unaffected, any browser-based API consumers (Swagger UI at `/api/docs`, future dashboards) are blocked by CORS. Set to `https://duxsoup.onrender.com` at minimum.
+- [x] **Set `ALLOWED_ORIGINS` environment variable on Render** — Fires a warning on every deploy/restart: "ALLOWED_ORIGINS not set - CORS will reject all cross-origin browser requests." While server-to-server webhooks are unaffected, any browser-based API consumers (Swagger UI at `/api/docs`, future dashboards) are blocked by CORS. Set to `https://duxsoup.onrender.com` at minimum.
   - Priority: `medium`
   - Category: `config`
   - Impact: Eliminates startup warning, enables browser-based API access to Swagger UI.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Set `ALLOWED_ORIGINS` environment variable on Render** — 2026-02-10. Set `ALLOWED_ORIGINS=https://duxsoup.onrender.com` via Render MCP env var update (merge mode). Eliminates startup CORS warning, enables browser-based access to Swagger UI at `/api/docs`. No code changes — config-only.
 - [x] **Configurable Winston log level via env var** — 2026-02-10. Added `LOG_LEVEL` env var override to `src/utils/logger.js`. Defaults to `info` in production, `debug` in development; any valid Winston level can be set via env var without redeployment. 4 new tests.
 - [x] **Bulk alias lookup endpoint** — 2026-02-10. Added `POST /api/people/by-aliases` accepting `{ values: string[] }` (max 50, deduped). Single `$in` query on `aliases.value` multikey index. Returns `{ success, total, found, notFound, results: [{ value, found, person }] }`. Added `findPeopleByAliases` to `personReadService.js`, `getPersonsByAliases` to `personReadController.js`. 13 new tests (4 service + 9 controller).
 - [x] **Add data freshness alerting** — 2026-02-10. Added `checkDataFreshness()` to health check job, monitoring visit and scan pipelines independently. Queries most recent Visit/Scan records in parallel. Fires `stale_visits`/`stale_scans` warnings when age exceeds `DATA_FRESHNESS_THRESHOLD_HOURS` (default 6h, env-configurable). Also fires `no_visits`/`no_scans` warnings when no records exist. Covers both "data freshness alerting" and "per-type webhook freshness monitoring" backlog items. 8 new tests.
