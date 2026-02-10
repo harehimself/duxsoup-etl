@@ -14,6 +14,7 @@ const {
   getCompanyCoverage,
   getLocationCoverage,
   getDataQuality,
+  getDataQualityDashboard,
   getDashboard,
   testNotifications,
 } = require("../controllers/healthController");
@@ -116,6 +117,7 @@ router.get("/health/canonical-coverage", readRateLimiter, getCanonicalCoverage);
 router.get("/health/company-coverage", readRateLimiter, getCompanyCoverage);
 router.get("/health/location-coverage", readRateLimiter, getLocationCoverage);
 router.get("/health/data-quality", readRateLimiter, getDataQuality);
+router.get("/health/quality", readRateLimiter, getDataQualityDashboard);
 router.get("/health/dashboard", readRateLimiter, getDashboard);
 router.get(
   "/health/test-notifications",

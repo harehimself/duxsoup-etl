@@ -165,6 +165,7 @@ See `src/models/` for full schemas.
 - `GET /api/health/company-coverage` - Company collection coverage
 - `GET /api/health/location-coverage` - Location collection coverage
 - `GET /api/health/data-quality` - Data quality metrics
+- `GET /api/health/quality` - Structural data quality dashboard (identity, aliases, enrichment, freshness)
 - `GET /api/health/dashboard` - Consolidated health dashboard
 
 ### Read APIs

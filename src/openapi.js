@@ -459,8 +459,7 @@ const spec = {
                       id: "abc123",
                       userid: "user1",
                       VisitTime: "2025-01-15T10:30:00Z",
-                      Profile:
-                        "https://www.linkedin.com/in/johndoe",
+                      Profile: "https://www.linkedin.com/in/johndoe",
                       "First Name": "John",
                       "Last Name": "Doe",
                       Title: "VP Engineering",
@@ -594,7 +593,8 @@ const spec = {
       get: {
         tags: ["Companies"],
         summary: "Get company by ID",
-        description: "Retrieve a company snapshot by numeric LinkedIn company ID.",
+        description:
+          "Retrieve a company snapshot by numeric LinkedIn company ID.",
         parameters: [
           {
             name: "id",
@@ -953,12 +953,7 @@ const spec = {
                   fields: {
                     type: "array",
                     items: { type: "string" },
-                    example: [
-                      "firstName",
-                      "lastName",
-                      "currentTitle",
-                      "email",
-                    ],
+                    example: ["firstName", "lastName", "currentTitle", "email"],
                   },
                 },
               },
@@ -1619,6 +1614,56 @@ const spec = {
         summary: "Data quality metrics",
         responses: {
           200: { description: "Data quality audit" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/health/quality": {
+      get: {
+        tags: ["Health"],
+        summary: "Structural data quality dashboard",
+        description:
+          "Identity resolution gaps, alias coverage, enrichment depth, and freshness buckets.",
+        parameters: [
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+            description: "Bypass cache and recompute metrics",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Data quality report",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        totalPeople: {
+                          type: "integer",
+                          example: 12345,
+                        },
+                        identity: { type: "object" },
+                        aliases: { type: "object" },
+                        enrichment: { type: "object" },
+                        freshness: { type: "object" },
+                        timestamp: {
+                          type: "string",
+                          format: "date-time",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           429: { $ref: "#/components/responses/RateLimited" },
         },
       },

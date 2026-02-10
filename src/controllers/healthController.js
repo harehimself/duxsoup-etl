@@ -742,6 +742,286 @@ async function getDashboard(req, res) {
 }
 
 /**
+ * GET /health/quality
+ * Structural data quality dashboard — identity resolution, alias coverage,
+ * enrichment depth, and freshness buckets.
+ */
+async function getDataQualityDashboard(req, res) {
+  try {
+    const fresh = req.query.fresh === "true";
+    const data = await metricsCache.getOrFetch(
+      "quality-dashboard",
+      async () => {
+        const now = new Date();
+        const d7 = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        const d30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        const d90 = new Date(now - 90 * 24 * 60 * 60 * 1000);
+
+        const notMerged = { mergedInto: { $exists: false } };
+
+        const [identityResult, aliasResult, enrichmentResult, freshnessResult] =
+          await Promise.all([
+            // Pipeline A — Identity counts
+            Person.aggregate([
+              { $match: notMerged },
+              {
+                $project: {
+                  hasSalesNavId: {
+                    $gt: [
+                      {
+                        $size: {
+                          $filter: {
+                            input: { $ifNull: ["$aliases", []] },
+                            cond: { $eq: ["$$this.type", "salesNavId"] },
+                          },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  hasNumericId: {
+                    $gt: [
+                      {
+                        $size: {
+                          $filter: {
+                            input: { $ifNull: ["$aliases", []] },
+                            cond: { $eq: ["$$this.type", "numericId"] },
+                          },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  hasCanonicalId: {
+                    $cond: [{ $ifNull: ["$canonical_id", false] }, true, false],
+                  },
+                },
+              },
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  withSalesNavId: {
+                    $sum: { $cond: ["$hasSalesNavId", 1, 0] },
+                  },
+                  withNumericId: {
+                    $sum: { $cond: ["$hasNumericId", 1, 0] },
+                  },
+                  withStableId: {
+                    $sum: {
+                      $cond: [
+                        { $or: ["$hasSalesNavId", "$hasNumericId"] },
+                        1,
+                        0,
+                      ],
+                    },
+                  },
+                  withCanonicalId: {
+                    $sum: { $cond: ["$hasCanonicalId", 1, 0] },
+                  },
+                },
+              },
+            ]),
+
+            // Pipeline B — Alias type distribution
+            Person.aggregate([
+              { $match: notMerged },
+              { $unwind: "$aliases" },
+              { $group: { _id: "$aliases.type", count: { $sum: 1 } } },
+            ]),
+
+            // Pipeline C — Enrichment coverage
+            Person.aggregate([
+              { $match: notMerged },
+              {
+                $project: {
+                  hasRoles: {
+                    $and: [
+                      { $isArray: "$snapshot.roles" },
+                      { $gt: [{ $size: "$snapshot.roles" }, 0] },
+                    ],
+                  },
+                  hasEducation: {
+                    $and: [
+                      { $isArray: "$snapshot.education" },
+                      { $gt: [{ $size: "$snapshot.education" }, 0] },
+                    ],
+                  },
+                  hasSkills: {
+                    $and: [
+                      { $isArray: "$snapshot.skills" },
+                      { $gt: [{ $size: "$snapshot.skills" }, 0] },
+                    ],
+                  },
+                  hasEmail: {
+                    $and: [
+                      { $ne: ["$snapshot.email", null] },
+                      { $ne: ["$snapshot.email", ""] },
+                    ],
+                  },
+                  hasPhone: {
+                    $and: [
+                      { $ne: ["$snapshot.phone", null] },
+                      { $ne: ["$snapshot.phone", ""] },
+                    ],
+                  },
+                },
+              },
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  withRoles: { $sum: { $cond: ["$hasRoles", 1, 0] } },
+                  withEducation: {
+                    $sum: { $cond: ["$hasEducation", 1, 0] },
+                  },
+                  withSkills: { $sum: { $cond: ["$hasSkills", 1, 0] } },
+                  withEmail: { $sum: { $cond: ["$hasEmail", 1, 0] } },
+                  withPhone: { $sum: { $cond: ["$hasPhone", 1, 0] } },
+                },
+              },
+            ]),
+
+            // Pipeline D — Freshness buckets
+            Person.aggregate([
+              { $match: notMerged },
+              {
+                $project: {
+                  last7d: { $gte: ["$meta.lastObservedAt", d7] },
+                  last30d: { $gte: ["$meta.lastObservedAt", d30] },
+                  stale90d: { $lt: ["$meta.lastObservedAt", d90] },
+                },
+              },
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  updatedLast7d: { $sum: { $cond: ["$last7d", 1, 0] } },
+                  updatedLast30d: { $sum: { $cond: ["$last30d", 1, 0] } },
+                  stale90d: { $sum: { $cond: ["$stale90d", 1, 0] } },
+                },
+              },
+            ]),
+          ]);
+
+        const id = identityResult[0] || {
+          total: 0,
+          withSalesNavId: 0,
+          withNumericId: 0,
+          withStableId: 0,
+          withCanonicalId: 0,
+        };
+        const en = enrichmentResult[0] || {
+          total: 0,
+          withRoles: 0,
+          withEducation: 0,
+          withSkills: 0,
+          withEmail: 0,
+          withPhone: 0,
+        };
+        const fr = freshnessResult[0] || {
+          total: 0,
+          updatedLast7d: 0,
+          updatedLast30d: 0,
+          stale90d: 0,
+        };
+
+        const totalPeople = id.total;
+        const pct = (count) =>
+          totalPeople > 0
+            ? Math.round((count / totalPeople) * 100 * 10) / 10
+            : 0;
+
+        // Build alias map from aggregation result
+        const aliasMap = {};
+        for (const row of aliasResult) {
+          aliasMap[row._id] = row.count;
+        }
+
+        return {
+          totalPeople,
+          identity: {
+            withSalesNavId: {
+              count: id.withSalesNavId,
+              percent: pct(id.withSalesNavId),
+            },
+            withNumericId: {
+              count: id.withNumericId,
+              percent: pct(id.withNumericId),
+            },
+            withStableId: {
+              count: id.withStableId,
+              percent: pct(id.withStableId),
+            },
+            withoutStableId: {
+              count: totalPeople - id.withStableId,
+              percent: pct(totalPeople - id.withStableId),
+            },
+            withCanonicalId: {
+              count: id.withCanonicalId,
+              percent: pct(id.withCanonicalId),
+            },
+            withoutCanonicalId: {
+              count: totalPeople - id.withCanonicalId,
+              percent: pct(totalPeople - id.withCanonicalId),
+            },
+          },
+          aliases: {
+            salesNavId: aliasMap.salesNavId || 0,
+            numericId: aliasMap.numericId || 0,
+            duxsoupId: aliasMap.duxsoupId || 0,
+            linkedInUsername: aliasMap.linkedInUsername || 0,
+            vanityName: aliasMap.vanityName || 0,
+            publicUrl: aliasMap.publicUrl || 0,
+            salesUrl: aliasMap.salesUrl || 0,
+            recruiterUrl: aliasMap.recruiterUrl || 0,
+          },
+          enrichment: {
+            withRoles: { count: en.withRoles, percent: pct(en.withRoles) },
+            withoutRoles: {
+              count: totalPeople - en.withRoles,
+              percent: pct(totalPeople - en.withRoles),
+            },
+            withEducation: {
+              count: en.withEducation,
+              percent: pct(en.withEducation),
+            },
+            withSkills: { count: en.withSkills, percent: pct(en.withSkills) },
+            withEmail: { count: en.withEmail, percent: pct(en.withEmail) },
+            withPhone: { count: en.withPhone, percent: pct(en.withPhone) },
+          },
+          freshness: {
+            updatedLast7d: {
+              count: fr.updatedLast7d,
+              percent: pct(fr.updatedLast7d),
+            },
+            updatedLast30d: {
+              count: fr.updatedLast30d,
+              percent: pct(fr.updatedLast30d),
+            },
+            stale90d: { count: fr.stale90d, percent: pct(fr.stale90d) },
+          },
+          timestamp: now.toISOString(),
+        };
+      },
+      fresh ? 0 : undefined,
+    );
+
+    res.json({ success: true, data });
+  } catch (error) {
+    logger.error("Failed to get data quality dashboard", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Failed to compute data quality dashboard",
+      message: error.message,
+    });
+  }
+}
+
+/**
  * GET /health/test-notifications
  * Test notification configuration (email + SMS)
  */
@@ -776,6 +1056,7 @@ module.exports = {
   getCompanyCoverage,
   getLocationCoverage,
   getDataQuality,
+  getDataQualityDashboard,
   getDashboard,
   testNotifications,
 };

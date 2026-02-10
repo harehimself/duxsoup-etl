@@ -99,17 +99,11 @@
 
 - [x] ~~**Dead letter alerting integration test**~~ — Completed, see Completed section.
 
-- [ ] **Data quality dashboard** — Expose a `/api/health/quality` endpoint showing: alias coverage, canonical_id coverage, Person records without roles, people without stable IDs (salesNavId or numericId).
-  - Priority: `backlog`
-  - Category: `observability`
-  - Impact: Proactive detection of identity resolution gaps or enrichment drift.
+- [x] ~~**Data quality dashboard**~~ — Completed, see Completed section.
 
 - [x] ~~**Dependency audit**~~ — Completed, see Completed section.
 
-- [ ] **Alert deduplication in notification service** — No check for whether the same alert was recently sent. A flapping health check could spam the same alert every 6 hours.
-  - Priority: `backlog`
-  - Category: `reliability`
-  - Impact: Prevents alert fatigue. Track last alert hash + timestamp, suppress duplicates within a window.
+- [x] ~~**Alert deduplication in notification service**~~ — Completed, see Completed section.
 
 - [x] ~~**Lateral move detection in change service**~~ — Completed, see Completed section.
 
@@ -130,6 +124,8 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 
 ## Completed
 
+- [x] **Alert deduplication in notification service** — 2026-02-09, commit `5c1911c`. Added deduplication to suppress repeated health notifications within a configurable window.
+- [x] **Data quality dashboard** — 2026-02-09. Added `GET /api/health/quality` endpoint with 4 parallel aggregation pipelines: identity resolution coverage (salesNavId/numericId/stableId/canonicalId), alias type distribution, enrichment depth (roles/education/skills/email/phone), and freshness buckets (7d/30d/90d). Excludes merged records. Uses metricsCache with 5-minute TTL. 11 new unit tests.
 - [x] **Split adminRoutes.js into focused route modules** — 2026-02-10. Split 829-line monolith into 3 focused sub-routers: `adminLinkingRoutes.js` (check-upgradable, run-linking), `adminRebuildRoutes.js` (rebuild-people, rebuild-people-full), `adminMaintenanceRoutes.js` (drop-id-index, fix-alias-types, inspect-observations). Hub `adminRoutes.js` reduced to 40 lines mounting sub-routers + health + test-notifications. All 772 tests pass. No API path changes.
 - [x] **Deduplicate person field normalization into a loop** — 2026-02-09. Replaced 27 sequential `normalizeField()` calls (19 direct field mappings + 8 location sub-fields) with data-driven `FIELD_MAPPINGS` array and `LOCATION_FIELDS` array iterated by loops. Supports optional `transform` functions (parseConnections, parseDegree) and fallback source keys (array of webhook keys). Complex fields (birthday, fullName, title parsing, company URL) remain inline. Reduced `upsertFromObservation()` normalization section from ~260 lines to ~110. 11 new unit tests verifying mapping completeness, no duplicates, transforms, fallback resolution, and location field coverage.
 - [x] **Add exponential backoff for stuck dead letter replays** — 2026-02-09. Found already implemented: `permanently_failed` status in DeadLetter enum, `MAX_RETRY_ATTEMPTS = 10` with env override in `src/constants/limits.js`, exponential backoff (2m → 4m → 8m → ... → 720m cap) in `src/utils/backoff.js`, `markReplayFailed()` transitions to `permanently_failed` at 10 attempts, `findEligibleForReplay()` / `countEligibleForReplay()` skip ineligible records, scheduler uses backoff-aware eligibility check. 6 backoff unit tests + 8 dead letter model tests.
