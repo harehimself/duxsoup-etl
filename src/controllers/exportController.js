@@ -2,129 +2,92 @@ const {
   createExportJob,
   getExportJobStatus,
   getExportFile,
-} = require('../services/exportService');
-const { processExportJob } = require('../services/exportService');
-const logger = require('../utils/logger');
+} = require("../services/exportService");
+const { processExportJob } = require("../services/exportService");
+const logger = require("../utils/logger");
 
 /**
  * Export Controller
  *
- * Handles HTTP requests for exporting people data to CSV/JSON
+ * Handles HTTP requests for exporting people/company/location data to CSV/JSON.
+ * Uses a factory pattern to avoid duplicating handler logic per entity type.
  */
 
 /**
- * Create a new CSV export job
+ * Factory: create an export handler for a given entity type and format.
  *
- * POST /api/export/people/csv
- *
- * Request body:
- * {
- *   "filters": { "snapshot.currentCompany": "Google" },
- *   "fields": ["firstName", "lastName", "currentTitle", "email"]
- * }
- *
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- * @param {Function} next - Express next middleware
+ * @param {String} entityType - 'people' | 'companies' | 'locations'
+ * @param {String} format - 'csv' | 'json'
+ * @returns {Function} Express route handler
  */
-async function createCsvExportHandler(req, res, next) {
-  try {
-    const { filters, fields } = req.body;
+function createExportHandler(entityType, format) {
+  return async function exportHandler(req, res, next) {
+    try {
+      const { filters, fields } = req.body;
 
-    logger.info('Received CSV export request', { filters, fields });
+      logger.info(
+        `Received ${entityType} ${format.toUpperCase()} export request`,
+        {
+          entityType,
+          filters,
+          fields,
+        },
+      );
 
-    const job = await createExportJob({
-      format: 'csv',
-      filters,
-      fields,
-    });
-
-    // Start processing job asynchronously (don't await)
-    processExportJob(job._id).catch((err) => {
-      logger.error('Failed to process export job', {
-        jobId: job._id,
-        error: err.message,
+      const job = await createExportJob({
+        format,
+        entityType,
+        filters,
+        fields,
       });
-    });
 
-    res.status(202).json({
-      success: true,
-      data: {
-        jobId: job._id,
-        status: job.status,
-        statusUrl: `/api/export/status/${job._id}`,
-        message: 'Export job created. Poll statusUrl to check progress.',
-      },
-    });
-  } catch (err) {
-    logger.error('Error creating CSV export', {
-      error: err.message,
-      stack: err.stack,
-    });
-    next(err);
-  }
+      // Start processing job asynchronously (don't await)
+      processExportJob(job._id).catch((err) => {
+        logger.error("Failed to process export job", {
+          jobId: job._id,
+          error: err.message,
+        });
+      });
+
+      res.status(202).json({
+        success: true,
+        data: {
+          jobId: job._id,
+          entityType,
+          status: job.status,
+          statusUrl: `/api/export/status/${job._id}`,
+          message: "Export job created. Poll statusUrl to check progress.",
+        },
+      });
+    } catch (err) {
+      logger.error(`Error creating ${entityType} ${format} export`, {
+        error: err.message,
+        stack: err.stack,
+      });
+      next(err);
+    }
+  };
 }
 
-/**
- * Create a new JSON export job
- *
- * POST /api/export/people/json
- *
- * Request body:
- * {
- *   "filters": { "snapshot.currentCompany": "Google" }
- * }
- *
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- * @param {Function} next - Express next middleware
- */
-async function createJsonExportHandler(req, res, next) {
-  try {
-    const { filters, fields } = req.body;
+// People handlers
+const createCsvExportHandler = createExportHandler("people", "csv");
+const createJsonExportHandler = createExportHandler("people", "json");
 
-    logger.info('Received JSON export request', { filters, fields });
+// Company handlers
+const createCompanyCsvExportHandler = createExportHandler("companies", "csv");
+const createCompanyJsonExportHandler = createExportHandler("companies", "json");
 
-    const job = await createExportJob({
-      format: 'json',
-      filters,
-      fields,
-    });
-
-    // Start processing job asynchronously (don't await)
-    processExportJob(job._id).catch((err) => {
-      logger.error('Failed to process export job', {
-        jobId: job._id,
-        error: err.message,
-      });
-    });
-
-    res.status(202).json({
-      success: true,
-      data: {
-        jobId: job._id,
-        status: job.status,
-        statusUrl: `/api/export/status/${job._id}`,
-        message: 'Export job created. Poll statusUrl to check progress.',
-      },
-    });
-  } catch (err) {
-    logger.error('Error creating JSON export', {
-      error: err.message,
-      stack: err.stack,
-    });
-    next(err);
-  }
-}
+// Location handlers
+const createLocationCsvExportHandler = createExportHandler("locations", "csv");
+const createLocationJsonExportHandler = createExportHandler(
+  "locations",
+  "json",
+);
 
 /**
  * Get export job status
  *
  * GET /api/export/status/:jobId
- *
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- * @param {Function} next - Express next middleware
  */
 async function getExportStatusHandler(req, res, next) {
   try {
@@ -136,6 +99,7 @@ async function getExportStatusHandler(req, res, next) {
       jobId: job._id,
       status: job.status,
       format: job.format,
+      entityType: job.entityType || "people",
       createdAt: job.createdAt,
       startedAt: job.startedAt,
       completedAt: job.completedAt,
@@ -143,7 +107,7 @@ async function getExportStatusHandler(req, res, next) {
     };
 
     // Include result if completed
-    if (job.status === 'completed' && job.result) {
+    if (job.status === "completed" && job.result) {
       response.result = {
         downloadUrl: job.result.downloadUrl,
         rowCount: job.result.rowCount,
@@ -152,7 +116,7 @@ async function getExportStatusHandler(req, res, next) {
     }
 
     // Include error if failed
-    if (job.status === 'failed' && job.error) {
+    if (job.status === "failed" && job.error) {
       response.error = {
         code: job.error.code,
         message: job.error.message,
@@ -164,7 +128,7 @@ async function getExportStatusHandler(req, res, next) {
       data: response,
     });
   } catch (err) {
-    logger.error('Error getting export status', {
+    logger.error("Error getting export status", {
       error: err.message,
       stack: err.stack,
     });
@@ -176,10 +140,6 @@ async function getExportStatusHandler(req, res, next) {
  * Download export file
  *
  * GET /api/export/download/:jobId
- *
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- * @param {Function} next - Express next middleware
  */
 async function downloadExportHandler(req, res, next) {
   try {
@@ -188,18 +148,18 @@ async function downloadExportHandler(req, res, next) {
     const { filePath, format } = await getExportFile(jobId);
 
     // Set appropriate headers
-    const contentType = format === 'csv' ? 'text/csv' : 'application/json';
+    const contentType = format === "csv" ? "text/csv" : "application/json";
     const fileName = `export-${jobId}.${format}`;
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
 
     // Stream file to response
-    const fs = require('fs');
+    const fs = require("fs");
     const stream = fs.createReadStream(filePath);
 
-    stream.on('error', (err) => {
-      logger.error('Error streaming export file', {
+    stream.on("error", (err) => {
+      logger.error("Error streaming export file", {
         jobId,
         error: err.message,
       });
@@ -208,9 +168,9 @@ async function downloadExportHandler(req, res, next) {
 
     stream.pipe(res);
 
-    logger.info('Export file downloaded', { jobId, format });
+    logger.info("Export file downloaded", { jobId, format });
   } catch (err) {
-    logger.error('Error downloading export', {
+    logger.error("Error downloading export", {
       error: err.message,
       stack: err.stack,
     });
@@ -221,6 +181,10 @@ async function downloadExportHandler(req, res, next) {
 module.exports = {
   createCsvExportHandler,
   createJsonExportHandler,
+  createCompanyCsvExportHandler,
+  createCompanyJsonExportHandler,
+  createLocationCsvExportHandler,
+  createLocationJsonExportHandler,
   getExportStatusHandler,
   downloadExportHandler,
 };

@@ -12,6 +12,14 @@ jest.mock("../../src/models/person", () => ({
   find: jest.fn(),
 }));
 
+jest.mock("../../src/models/company", () => ({
+  find: jest.fn(),
+}));
+
+jest.mock("../../src/models/location", () => ({
+  find: jest.fn(),
+}));
+
 jest.mock("../../src/models/exportJob", () => ({
   create: jest.fn(),
   findById: jest.fn(),
@@ -19,6 +27,7 @@ jest.mock("../../src/models/exportJob", () => ({
 
 jest.mock("../../src/utils/queryValidation", () => ({
   validateQuery: jest.fn((params) => params),
+  checkForDangerousOperators: jest.fn(),
 }));
 
 jest.mock("../../src/utils/logger", () => ({
@@ -39,8 +48,13 @@ const {
   getExportJobStatus,
   getExportFile,
   DEFAULT_CSV_FIELDS,
+  PEOPLE_DEFAULT_CSV_FIELDS,
+  COMPANY_DEFAULT_CSV_FIELDS,
+  LOCATION_DEFAULT_CSV_FIELDS,
 } = require("../../src/services/exportService");
 const Person = require("../../src/models/person");
+const Company = require("../../src/models/company");
+const Location = require("../../src/models/location");
 const ExportJob = require("../../src/models/exportJob");
 
 const EXPORT_TEMP_DIR = process.env.EXPORT_TEMP_DIR || "/tmp/duxsoup-exports";
@@ -69,6 +83,15 @@ describe("ExportService", () => {
   });
 
   // ───────────────────────────────────────────
+  // Backward compatibility
+  // ───────────────────────────────────────────
+  describe("exports", () => {
+    it("should export DEFAULT_CSV_FIELDS as alias for PEOPLE_DEFAULT_CSV_FIELDS", () => {
+      expect(DEFAULT_CSV_FIELDS).toBe(PEOPLE_DEFAULT_CSV_FIELDS);
+    });
+  });
+
+  // ───────────────────────────────────────────
   // createExportJob()
   // ───────────────────────────────────────────
   describe("createExportJob()", () => {
@@ -82,7 +105,8 @@ describe("ExportService", () => {
       ExportJob.create.mockResolvedValue({
         _id: "job-123",
         format: "csv",
-        fields: DEFAULT_CSV_FIELDS,
+        entityType: "people",
+        fields: PEOPLE_DEFAULT_CSV_FIELDS,
         status: "pending",
       });
 
@@ -91,7 +115,8 @@ describe("ExportService", () => {
       expect(ExportJob.create).toHaveBeenCalledWith(
         expect.objectContaining({
           format: "csv",
-          fields: DEFAULT_CSV_FIELDS,
+          entityType: "people",
+          fields: PEOPLE_DEFAULT_CSV_FIELDS,
           status: "pending",
         }),
       );
@@ -122,6 +147,50 @@ describe("ExportService", () => {
       const createArg = ExportJob.create.mock.calls[0][0];
       expect(createArg.expiresAt).toBeInstanceOf(Date);
       expect(createArg.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it("should create company export job with company default fields", async () => {
+      ExportJob.create.mockResolvedValue({
+        _id: "job-co-1",
+        format: "csv",
+        entityType: "companies",
+        fields: COMPANY_DEFAULT_CSV_FIELDS,
+        status: "pending",
+      });
+
+      await createExportJob({ format: "csv", entityType: "companies" });
+
+      expect(ExportJob.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: "companies",
+          fields: COMPANY_DEFAULT_CSV_FIELDS,
+        }),
+      );
+    });
+
+    it("should create location export job with location default fields", async () => {
+      ExportJob.create.mockResolvedValue({
+        _id: "job-loc-1",
+        format: "csv",
+        entityType: "locations",
+        fields: LOCATION_DEFAULT_CSV_FIELDS,
+        status: "pending",
+      });
+
+      await createExportJob({ format: "csv", entityType: "locations" });
+
+      expect(ExportJob.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: "locations",
+          fields: LOCATION_DEFAULT_CSV_FIELDS,
+        }),
+      );
+    });
+
+    it("should throw INVALID_ENTITY_TYPE for unknown entity type", async () => {
+      await expect(
+        createExportJob({ format: "csv", entityType: "widgets" }),
+      ).rejects.toThrow("Unknown entity type");
     });
   });
 
@@ -157,6 +226,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-csv",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName", "lastName"],
@@ -192,6 +262,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-json",
         format: "json",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -233,6 +304,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-fail",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -264,6 +336,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-cleanup",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -299,6 +372,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-json-fail",
         format: "json",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -324,6 +398,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-ok",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -342,9 +417,6 @@ describe("ExportService", () => {
     });
 
     it("should throw EXPORT_TOO_LARGE when streaming exceeds max rows", async () => {
-      // Create enough docs to exceed the limit (default 100000)
-      // We override EXPORT_MAX_ROWS for this test by using a small dataset
-      // and checking the error message pattern
       const docs = [];
       for (let i = 0; i < 100001; i++) {
         docs.push({ _id: `p${i}` });
@@ -355,6 +427,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-big",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -378,6 +451,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-empty",
         format: "json",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName"],
@@ -406,6 +480,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-empty-csv",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName", "lastName", "email"],
@@ -443,6 +518,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-escape",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName", "lastName"],
@@ -454,7 +530,6 @@ describe("ExportService", () => {
 
       const filePath = path.join(EXPORT_TEMP_DIR, "job-escape.csv");
       const content = await fsp.readFile(filePath, "utf8");
-      // Quotes should be doubled, fields with commas/quotes should be quoted
       expect(content).toContain('"John ""Jack"""');
       expect(content).toContain('"Doe, Jr."');
 
@@ -470,6 +545,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-url",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["firstName", "linkedInUrl"],
@@ -496,6 +572,7 @@ describe("ExportService", () => {
       const jobDoc = {
         _id: "job-date",
         format: "csv",
+        entityType: "people",
         status: "pending",
         filters: {},
         fields: ["lastObservedAt"],
@@ -511,6 +588,112 @@ describe("ExportService", () => {
 
       // Clean up
       await fsp.unlink(filePath).catch(() => {});
+    });
+
+    // ── Company export streaming ──────────────────────────────────────
+
+    it("should stream company CSV export using Company model", async () => {
+      const mockData = [
+        {
+          _id: "82978333",
+          snapshot: { name: "Acme Corp", industry: "Technology" },
+        },
+      ];
+      const queryMock = buildQueryMock(mockData);
+      Company.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-co-csv",
+        format: "csv",
+        entityType: "companies",
+        status: "pending",
+        filters: {},
+        fields: ["name", "industry", "companyId"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-co-csv");
+
+      expect(jobDoc.status).toBe("completed");
+      expect(jobDoc.result.rowCount).toBe(1);
+      expect(Company.find).toHaveBeenCalled();
+
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-co-csv.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(content).toContain("name,industry,companyId");
+      expect(content).toContain("Acme Corp,Technology,82978333");
+
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
+    // ── Location export streaming ─────────────────────────────────────
+
+    it("should stream location CSV export using Location model", async () => {
+      const mockData = [
+        {
+          _id: "san-francisco-ca-us",
+          snapshot: {
+            name: "San Francisco, CA, US",
+            city: "San Francisco",
+            country: "United States",
+          },
+        },
+      ];
+      const queryMock = buildQueryMock(mockData);
+      Location.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-loc-csv",
+        format: "csv",
+        entityType: "locations",
+        status: "pending",
+        filters: {},
+        fields: ["name", "city", "country", "locationId"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-loc-csv");
+
+      expect(jobDoc.status).toBe("completed");
+      expect(jobDoc.result.rowCount).toBe(1);
+      expect(Location.find).toHaveBeenCalled();
+
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-loc-csv.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(content).toContain("name,city,country,locationId");
+      expect(content).toContain("San Francisco");
+      expect(content).toContain("san-francisco-ca-us");
+
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
+    it("should default entityType to people when not set on job", async () => {
+      const queryMock = buildQueryMock([
+        { _id: "p1", snapshot: { firstName: "Test" } },
+      ]);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-legacy",
+        format: "csv",
+        // entityType NOT set (simulates old job records)
+        status: "pending",
+        filters: {},
+        fields: ["firstName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-legacy");
+
+      expect(jobDoc.status).toBe("completed");
+      expect(Person.find).toHaveBeenCalled();
+
+      await fsp
+        .unlink(path.join(EXPORT_TEMP_DIR, "job-legacy.csv"))
+        .catch(() => {});
     });
   });
 

@@ -168,6 +168,7 @@ See `src/models/` for full schemas.
 - `GET /api/health/data-quality` - Data quality metrics
 - `GET /api/health/quality` - Structural data quality dashboard (identity, aliases, enrichment, freshness)
 - `GET /api/health/dashboard` - Consolidated health dashboard
+- `GET /api/health/throughput` - Real-time webhook throughput metrics (1m/5m/15m/1h windows)
 
 ### Read APIs
 - `GET /api/people/:id` - Get person by ID
@@ -186,6 +187,10 @@ See `src/models/` for full schemas.
 ### Export
 - `POST /api/export/people/csv` - Create CSV export job
 - `POST /api/export/people/json` - Create JSON export job
+- `POST /api/export/companies/csv` - Create company CSV export job
+- `POST /api/export/companies/json` - Create company JSON export job
+- `POST /api/export/locations/csv` - Create location CSV export job
+- `POST /api/export/locations/json` - Create location JSON export job
 - `GET /api/export/status/:jobId` - Check export job status
 - `GET /api/export/download/:jobId` - Download completed export
 

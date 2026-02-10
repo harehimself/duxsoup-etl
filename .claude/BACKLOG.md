@@ -52,17 +52,17 @@
 
 ### Medium Priority
 
-- [ ] **Add export job cleanup scheduler** — `EXPORT_TTL_HOURS` (default 24h) is defined in `exportService.js` but there is no background job to actually delete expired export files from `/tmp/duxsoup-exports`. Stale files accumulate on disk indefinitely. Add a scheduled job to the scheduler that prunes files older than `EXPORT_TTL_HOURS`.
+- [x] **Add export job cleanup scheduler** — `EXPORT_TTL_HOURS` (default 24h) is defined in `exportService.js` but there is no background job to actually delete expired export files from `/tmp/duxsoup-exports`. Stale files accumulate on disk indefinitely. Add a scheduled job to the scheduler that prunes files older than `EXPORT_TTL_HOURS`.
   - Priority: `medium`
   - Category: `reliability`
   - Impact: Prevents disk space exhaustion from accumulated export files.
 
-- [ ] **Add company/location export endpoints** — Only people can be exported via `POST /api/export/people/csv` and `/json`. Companies and locations have read/query APIs but no export capability. Add `POST /api/export/companies/{csv,json}` and `POST /api/export/locations/{csv,json}` using the same streaming export infrastructure.
+- [x] **Add company/location export endpoints** — Only people can be exported via `POST /api/export/people/csv` and `/json`. Companies and locations have read/query APIs but no export capability. Add `POST /api/export/companies/{csv,json}` and `POST /api/export/locations/{csv,json}` using the same streaming export infrastructure.
   - Priority: `medium`
   - Category: `feature`
   - Impact: Enables bulk data extraction for all entity types.
 
-- [ ] **Add webhook throughput metrics endpoint** — No endpoint exposes processing latency, throughput rate, or error rates over time. Add `GET /api/health/throughput` returning recent processing stats (webhooks/min, avg latency, debounce rate, Phase 2 success rate) using in-memory counters with rolling windows.
+- [x] **Add webhook throughput metrics endpoint** — No endpoint exposes processing latency, throughput rate, or error rates over time. Add `GET /api/health/throughput` returning recent processing stats (webhooks/min, avg latency, debounce rate, Phase 2 success rate) using in-memory counters with rolling windows.
   - Priority: `medium`
   - Category: `observability`
   - Impact: Enables monitoring dashboards and alerting on processing degradation.
@@ -199,6 +199,9 @@
 
 ## Completed
 
+- [x] **Add webhook throughput metrics endpoint** — 2026-02-10. Added `GET /api/health/throughput` with real-time processing stats across 1m/5m/15m/1h windows. Created `src/utils/throughputTracker.js` using circular buffer of 3600 per-second buckets (~300KB memory). Tracks total, success, failure, debounced, duplicate, phase2Failure counts, per-type breakdown, rate/min, success rate, and avg latency. Instrumented `observationHandler.js` with `finally`-block recording on every code path. Uses `metricsCache` with 30s TTL for near-real-time data. 17 new tests.
+- [x] **Add company/location export endpoints** — 2026-02-10. Extended streaming export infrastructure to support companies and locations. Added `entityType` field to ExportJob model. Created `COMPANY_FIELD_MAPPING`/`LOCATION_FIELD_MAPPING` with entity-specific defaults. Added `ENTITY_CONFIG` registry mapping entity types to models, fields, and ID formatters. Refactored `exportController.js` with `createExportHandler(entityType, format)` factory pattern. Added 4 new routes: `POST /api/export/{companies,locations}/{csv,json}`. Uses `checkForDangerousOperators` for entity-agnostic filter validation. 39 new tests.
+- [x] **Add export job cleanup scheduler** — 2026-02-10. Added `src/workers/jobs/exportCleanup.js` that deletes export temp files older than `EXPORT_TTL_HOURS` (default 24h). Handles missing directory, skips subdirectories, isolates per-file errors. Added Job 5 to scheduler running every 6 hours (`0 */6 * * *`). 6 new tests.
 - [x] **Fix identity resolution for international/locale-suffixed LinkedIn URLs** — 2026-02-10, commit `d8df92f`. Added locale suffix stripping (`/en`, `/fr`, etc.) to LinkedIn URL parsing in `salesNavIdExtractor.js` and `identityMatcher.js`. Prevents locale-suffixed URLs from leaking through as person `_id` values.
 - [x] **Fix dead letter replay loop for education cast-to-string errors** — 2026-02-10. Investigation confirmed the replay path already goes through the same `upsertFromObservation()` with `coerceToString()` — the original hypothesis was incorrect. The real issue: dead letters purged as `permanently_failed` by `purgeStuckDeadLetters.js` can't benefit from the code fix. Added `scripts/resurrectDeadLetters.js` to reset permanently_failed dead letters matching now-fixed error patterns (Cast to string) back to `pending` for retry. Also extended `coerceToString()` to education date fields (`school.From`/`school.To`) to prevent silent data loss when DuxSoup sends rich objects for dates. Dry-run by default, `--commit` to execute, `--pattern` for custom error matching. 15 unit tests for resurrect script + 2 new education date tests. All 880 tests pass.
 - [x] **Company/location controllers: eliminate find-modify-save race condition** — 2026-02-10, PR #103. Replaced multi-step find→mutate→save with atomic `findOneAndUpdate` operations. Eliminates E11000 race, separate reload, and non-atomic `save()`. Also fixed export service CSV header edge case for empty cursors.

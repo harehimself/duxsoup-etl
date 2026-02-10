@@ -207,6 +207,25 @@ function startScheduler(isLeader = true) {
     }),
   );
 
+  // Job 5: Export file cleanup (every 6 hours)
+  scheduledTasks.push(
+    cron.schedule("0 */6 * * *", async () => {
+      try {
+        logger.info("Running scheduled export file cleanup");
+
+        const { cleanupExpiredExports } = require("./jobs/exportCleanup");
+        const stats = await cleanupExpiredExports();
+
+        logger.info("Scheduled export file cleanup complete", stats);
+      } catch (err) {
+        logger.error("Scheduled export file cleanup failed", {
+          error: err.message,
+          stack: err.stack,
+        });
+      }
+    }),
+  );
+
   schedulerStarted = true;
   logger.info("Background job scheduler started successfully");
 }

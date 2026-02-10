@@ -1047,6 +1047,36 @@ async function testNotifications(req, res) {
   }
 }
 
+/**
+ * GET /health/throughput
+ * Real-time webhook throughput metrics (1m, 5m, 15m, 1h windows)
+ */
+async function getThroughput(req, res) {
+  try {
+    const fresh = req.query.fresh === "true";
+    const data = await metricsCache.getOrFetch(
+      "throughput",
+      async () => {
+        const throughputTracker = require("../utils/throughputTracker");
+        return throughputTracker.getStats();
+      },
+      fresh ? 0 : 30000, // 30s TTL for near-real-time data
+    );
+
+    res.json({ success: true, data });
+  } catch (error) {
+    logger.error("Failed to get throughput metrics", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Failed to compute throughput metrics",
+      message: error.message,
+    });
+  }
+}
+
 module.exports = {
   getIngestionHealth,
   getParityHealth,
@@ -1059,4 +1089,5 @@ module.exports = {
   getDataQualityDashboard,
   getDashboard,
   testNotifications,
+  getThroughput,
 };

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 /**
  * Export Job Model
@@ -15,19 +15,26 @@ const exportJobSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Entity type being exported
+    entityType: {
+      type: String,
+      enum: ["people", "companies", "locations"],
+      default: "people",
+    },
+
     // Export format
     format: {
       type: String,
       required: true,
-      enum: ['csv', 'json'],
+      enum: ["csv", "json"],
     },
 
     // Job status
     status: {
       type: String,
       required: true,
-      enum: ['pending', 'processing', 'completed', 'failed'],
-      default: 'pending',
+      enum: ["pending", "processing", "completed", "failed"],
+      default: "pending",
     },
 
     // Query filters (same format as Query API)
@@ -76,4 +83,4 @@ const exportJobSchema = new mongoose.Schema(
 exportJobSchema.index({ status: 1, createdAt: -1 });
 exportJobSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index (auto-delete)
 
-module.exports = mongoose.model('ExportJob', exportJobSchema);
+module.exports = mongoose.model("ExportJob", exportJobSchema);

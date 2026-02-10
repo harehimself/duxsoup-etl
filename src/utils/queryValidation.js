@@ -1,4 +1,4 @@
-const { AppError } = require('./errors');
+const { AppError } = require("./errors");
 
 /**
  * Query Validation Utility
@@ -10,65 +10,65 @@ const { AppError } = require('./errors');
  */
 
 const ALLOWED_FILTER_OPERATORS = [
-  '$eq',
-  '$ne',
-  '$gt',
-  '$gte',
-  '$lt',
-  '$lte',
-  '$in',
-  '$nin',
-  '$regex',
-  '$options',
-  '$exists',
-  '$and',
-  '$or',
+  "$eq",
+  "$ne",
+  "$gt",
+  "$gte",
+  "$lt",
+  "$lte",
+  "$in",
+  "$nin",
+  "$regex",
+  "$options",
+  "$exists",
+  "$and",
+  "$or",
 ];
 
 const ALLOWED_SORT_FIELDS = [
-  'snapshot.fullName',
-  'snapshot.currentTitle',
-  'snapshot.currentCompany',
-  'snapshot.connections',
-  'snapshot.city',
-  'snapshot.state',
-  'snapshot.country',
-  'meta.lastObservedAt',
-  'meta.observationsCount',
-  'createdAt',
-  'updatedAt',
-  'derived.leadScore',
+  "snapshot.fullName",
+  "snapshot.currentTitle",
+  "snapshot.currentCompany",
+  "snapshot.connections",
+  "snapshot.city",
+  "snapshot.state",
+  "snapshot.country",
+  "meta.lastObservedAt",
+  "meta.observationsCount",
+  "createdAt",
+  "updatedAt",
+  "derived.leadScore",
 ];
 
 const ALLOWED_FILTER_FIELDS = [
-  'snapshot.fullName',
-  'snapshot.firstName',
-  'snapshot.lastName',
-  'snapshot.currentTitle',
-  'snapshot.currentCompany',
-  'snapshot.currentCompanyId',
-  'snapshot.industry',
-  'snapshot.location',
-  'snapshot.city',
-  'snapshot.state',
-  'snapshot.stateCode',
-  'snapshot.country',
-  'snapshot.countryCode',
-  'snapshot.connections',
-  'snapshot.email',
-  'snapshot.phone',
-  'snapshot.degree',
-  'snapshot.skills',
-  'snapshot.roles.title',
-  'snapshot.roles.companyName',
-  'snapshot.roles.isCurrent',
-  'snapshot.education.school',
-  'snapshot.education.degree',
-  'snapshot.education.field',
-  'derived.leadScore',
-  'derived.segment',
-  'meta.lastObservedAt',
-  'createdAt',
+  "snapshot.fullName",
+  "snapshot.firstName",
+  "snapshot.lastName",
+  "snapshot.currentTitle",
+  "snapshot.currentCompany",
+  "snapshot.currentCompanyId",
+  "snapshot.industry",
+  "snapshot.location",
+  "snapshot.city",
+  "snapshot.state",
+  "snapshot.stateCode",
+  "snapshot.country",
+  "snapshot.countryCode",
+  "snapshot.connections",
+  "snapshot.email",
+  "snapshot.phone",
+  "snapshot.degree",
+  "snapshot.skills",
+  "snapshot.roles.title",
+  "snapshot.roles.companyName",
+  "snapshot.roles.isCurrent",
+  "snapshot.education.school",
+  "snapshot.education.degree",
+  "snapshot.education.field",
+  "derived.leadScore",
+  "derived.segment",
+  "meta.lastObservedAt",
+  "createdAt",
 ];
 
 const MAX_LIMIT = 1000;
@@ -116,7 +116,7 @@ function validateQuery(queryParams) {
  * @throws {AppError} If filters contain disallowed operators or fields
  */
 function validateFilters(filters) {
-  if (!filters || typeof filters !== 'object') {
+  if (!filters || typeof filters !== "object") {
     return {};
   }
 
@@ -128,10 +128,10 @@ function validateFilters(filters) {
 
   for (const [field, value] of Object.entries(filters)) {
     // Allow logical operators ($and, $or)
-    if (field === '$and' || field === '$or') {
+    if (field === "$and" || field === "$or") {
       if (!Array.isArray(value)) {
         throw new AppError(
-          'INVALID_FILTER',
+          "INVALID_FILTER",
           `${field} must be an array of filter objects`,
         );
       }
@@ -144,18 +144,18 @@ function validateFilters(filters) {
     // Check if field is allowed
     if (!ALLOWED_FILTER_FIELDS.includes(field)) {
       throw new AppError(
-        'INVALID_FILTER_FIELD',
-        `Field "${field}" is not allowed for filtering. Allowed fields: ${ALLOWED_FILTER_FIELDS.join(', ')}`,
+        "INVALID_FILTER_FIELD",
+        `Field "${field}" is not allowed for filtering. Allowed fields: ${ALLOWED_FILTER_FIELDS.join(", ")}`,
       );
     }
 
     // Validate operator
-    if (typeof value === 'object' && value !== null) {
+    if (typeof value === "object" && value !== null) {
       for (const operator of Object.keys(value)) {
         if (!ALLOWED_FILTER_OPERATORS.includes(operator)) {
           throw new AppError(
-            'INVALID_OPERATOR',
-            `Operator "${operator}" is not allowed. Allowed operators: ${ALLOWED_FILTER_OPERATORS.join(', ')}`,
+            "INVALID_OPERATOR",
+            `Operator "${operator}" is not allowed. Allowed operators: ${ALLOWED_FILTER_OPERATORS.join(", ")}`,
           );
         }
       }
@@ -174,21 +174,21 @@ function validateFilters(filters) {
  * @throws {AppError} If dangerous operators found
  */
 function checkForDangerousOperators(obj) {
-  const dangerousOps = ['$where', '$expr', '$function', '$accumulator'];
+  const dangerousOps = ["$where", "$expr", "$function", "$accumulator"];
 
   const checkRecursive = (o) => {
-    if (!o || typeof o !== 'object') return;
+    if (!o || typeof o !== "object") return;
 
     for (const key of Object.keys(o)) {
       if (dangerousOps.includes(key)) {
         throw new AppError(
-          'FORBIDDEN_OPERATOR',
+          "FORBIDDEN_OPERATOR",
           `Operator "${key}" is not allowed for security reasons`,
         );
       }
 
       // Recursively check nested objects
-      if (typeof o[key] === 'object') {
+      if (typeof o[key] === "object") {
         checkRecursive(o[key]);
       }
     }
@@ -205,7 +205,7 @@ function checkForDangerousOperators(obj) {
  * @throws {AppError} If sort contains disallowed fields
  */
 function validateSort(sort) {
-  if (!sort || typeof sort !== 'object') {
+  if (!sort || typeof sort !== "object") {
     return {};
   }
 
@@ -214,14 +214,14 @@ function validateSort(sort) {
   for (const [field, direction] of Object.entries(sort)) {
     if (!ALLOWED_SORT_FIELDS.includes(field)) {
       throw new AppError(
-        'INVALID_SORT_FIELD',
-        `Field "${field}" is not allowed for sorting. Allowed fields: ${ALLOWED_SORT_FIELDS.join(', ')}`,
+        "INVALID_SORT_FIELD",
+        `Field "${field}" is not allowed for sorting. Allowed fields: ${ALLOWED_SORT_FIELDS.join(", ")}`,
       );
     }
 
     if (direction !== 1 && direction !== -1) {
       throw new AppError(
-        'INVALID_SORT_DIRECTION',
+        "INVALID_SORT_DIRECTION",
         `Sort direction must be 1 (ascending) or -1 (descending)`,
       );
     }
@@ -247,12 +247,12 @@ function validateLimit(limit) {
   const parsed = parseInt(limit, 10);
 
   if (isNaN(parsed) || parsed < 1) {
-    throw new AppError('INVALID_LIMIT', 'Limit must be a positive integer');
+    throw new AppError("INVALID_LIMIT", "Limit must be a positive integer");
   }
 
   if (parsed > MAX_LIMIT) {
     throw new AppError(
-      'LIMIT_EXCEEDED',
+      "LIMIT_EXCEEDED",
       `Limit cannot exceed ${MAX_LIMIT}. Use pagination for larger result sets.`,
     );
   }
@@ -275,7 +275,7 @@ function validateSkip(skip) {
   const parsed = parseInt(skip, 10);
 
   if (isNaN(parsed) || parsed < 0) {
-    throw new AppError('INVALID_SKIP', 'Skip must be a non-negative integer');
+    throw new AppError("INVALID_SKIP", "Skip must be a non-negative integer");
   }
 
   return parsed;
@@ -284,6 +284,7 @@ function validateSkip(skip) {
 module.exports = {
   validateQuery,
   validateFilters,
+  checkForDangerousOperators,
   validateSort,
   validateLimit,
   validateSkip,

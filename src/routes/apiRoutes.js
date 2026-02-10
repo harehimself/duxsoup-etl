@@ -18,6 +18,7 @@ const {
   getDataQualityDashboard,
   getDashboard,
   testNotifications,
+  getThroughput,
 } = require("../controllers/healthController");
 const {
   getPersonById,
@@ -105,6 +106,7 @@ router.get("/health/location-coverage", readRateLimiter, getLocationCoverage);
 router.get("/health/data-quality", readRateLimiter, getDataQuality);
 router.get("/health/quality", readRateLimiter, getDataQualityDashboard);
 router.get("/health/dashboard", readRateLimiter, getDashboard);
+router.get("/health/throughput", readRateLimiter, getThroughput);
 router.get(
   "/health/test-notifications",
   readRateLimiter,

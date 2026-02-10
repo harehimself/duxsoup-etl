@@ -5,8 +5,10 @@ const { createWriteStream } = require("fs");
 const { Transform, pipeline } = require("stream");
 const { promisify } = require("util");
 const Person = require("../models/person");
+const Company = require("../models/company");
+const Location = require("../models/location");
 const ExportJob = require("../models/exportJob");
-const { validateQuery } = require("../utils/queryValidation");
+const { checkForDangerousOperators } = require("../utils/queryValidation");
 const logger = require("../utils/logger");
 const { AppError } = require("../utils/errors");
 
@@ -15,8 +17,8 @@ const pipelineAsync = promisify(pipeline);
 /**
  * Export Service
  *
- * Handles async export of people data to CSV/JSON using streaming
- * to avoid loading entire datasets into memory.
+ * Handles async export of people/company/location data to CSV/JSON
+ * using streaming to avoid loading entire datasets into memory.
  */
 
 // Export configuration
@@ -24,8 +26,9 @@ const EXPORT_TEMP_DIR = process.env.EXPORT_TEMP_DIR || "/tmp/duxsoup-exports";
 const EXPORT_MAX_ROWS = parseInt(process.env.EXPORT_MAX_ROWS || "100000", 10);
 const EXPORT_TTL_HOURS = parseInt(process.env.EXPORT_TTL_HOURS || "24", 10);
 
-// Default CSV columns
-const DEFAULT_CSV_FIELDS = [
+// ─── People field mapping ────────────────────────────────────────────
+
+const PEOPLE_DEFAULT_CSV_FIELDS = [
   "firstName",
   "lastName",
   "currentTitle",
@@ -41,8 +44,7 @@ const DEFAULT_CSV_FIELDS = [
   "lastObservedAt",
 ];
 
-// Field mapping (CSV header -> database path)
-const FIELD_MAPPING = {
+const PEOPLE_FIELD_MAPPING = {
   firstName: "snapshot.firstName",
   lastName: "snapshot.lastName",
   fullName: "snapshot.fullName",
@@ -55,7 +57,7 @@ const FIELD_MAPPING = {
   countryCode: "snapshot.countryCode",
   email: "snapshot.email",
   phone: "snapshot.phone",
-  linkedInUrl: "_id", // Use _id (canonical ID) as profile URL
+  linkedInUrl: "_id",
   connections: "snapshot.connections",
   industry: "snapshot.industry",
   location: "snapshot.location",
@@ -64,29 +66,124 @@ const FIELD_MAPPING = {
   lastObservedAt: "meta.lastObservedAt",
 };
 
+// ─── Company field mapping ───────────────────────────────────────────
+
+const COMPANY_DEFAULT_CSV_FIELDS = [
+  "name",
+  "industry",
+  "location",
+  "website",
+  "employeeCount",
+  "companyId",
+  "lastObservedAt",
+];
+
+const COMPANY_FIELD_MAPPING = {
+  name: "snapshot.name",
+  industry: "snapshot.industry",
+  location: "snapshot.location",
+  description: "snapshot.description",
+  website: "snapshot.website",
+  companyProfileUrl: "snapshot.companyProfileUrl",
+  employeeCount: "snapshot.employeeCount",
+  founded: "snapshot.founded",
+  companyId: "_id",
+  lastObservedAt: "meta.lastObservedAt",
+};
+
+// ─── Location field mapping ──────────────────────────────────────────
+
+const LOCATION_DEFAULT_CSV_FIELDS = [
+  "name",
+  "city",
+  "state",
+  "country",
+  "countryCode",
+  "locationType",
+  "locationId",
+  "lastObservedAt",
+];
+
+const LOCATION_FIELD_MAPPING = {
+  name: "snapshot.name",
+  normalized: "snapshot.normalized",
+  city: "snapshot.city",
+  state: "snapshot.state",
+  stateCode: "snapshot.stateCode",
+  country: "snapshot.country",
+  countryCode: "snapshot.countryCode",
+  province: "snapshot.province",
+  region: "snapshot.region",
+  locationType: "snapshot.locationType",
+  locationId: "_id",
+  lastObservedAt: "meta.lastObservedAt",
+};
+
+// ─── Entity config registry ─────────────────────────────────────────
+
+const ENTITY_CONFIG = {
+  people: {
+    model: Person,
+    fieldMapping: PEOPLE_FIELD_MAPPING,
+    defaultFields: PEOPLE_DEFAULT_CSV_FIELDS,
+    formatId: formatLinkedInUrl,
+  },
+  companies: {
+    model: Company,
+    fieldMapping: COMPANY_FIELD_MAPPING,
+    defaultFields: COMPANY_DEFAULT_CSV_FIELDS,
+    formatId: (id) => id,
+  },
+  locations: {
+    model: Location,
+    fieldMapping: LOCATION_FIELD_MAPPING,
+    defaultFields: LOCATION_DEFAULT_CSV_FIELDS,
+    formatId: (id) => id,
+  },
+};
+
+/**
+ * Get entity config, throwing if the entity type is unknown.
+ */
+function getEntityConfig(entityType) {
+  const config = ENTITY_CONFIG[entityType];
+  if (!config) {
+    throw new AppError(
+      "INVALID_ENTITY_TYPE",
+      `Unknown entity type: ${entityType}. Must be one of: ${Object.keys(ENTITY_CONFIG).join(", ")}`,
+    );
+  }
+  return config;
+}
+
 /**
  * Create a new export job
  *
  * @param {Object} params - Export parameters
  * @param {String} params.format - Export format (csv or json)
+ * @param {String} [params.entityType='people'] - Entity type to export
  * @param {Object} params.filters - MongoDB filters
  * @param {Array<String>} params.fields - Fields to include
  * @returns {Promise<Object>} Export job
  */
 async function createExportJob(params) {
-  const { format, filters = {}, fields } = params;
+  const { format, entityType = "people", filters = {}, fields } = params;
 
   // Validate format
   if (!["csv", "json"].includes(format)) {
     throw new AppError("INVALID_FORMAT", "Format must be csv or json");
   }
 
-  // Validate filters (use same validation as Query API)
-  validateQuery({ filters });
+  // Validate entity type and get default fields
+  const entityConfig = getEntityConfig(entityType);
+
+  // Validate filters — only check for dangerous operators (field allowlist
+  // is entity-specific and the export service trusts caller-provided fields)
+  checkForDangerousOperators(filters);
 
   // Determine fields to export
   const exportFields =
-    fields && fields.length > 0 ? fields : DEFAULT_CSV_FIELDS;
+    fields && fields.length > 0 ? fields : entityConfig.defaultFields;
 
   // Create job ID
   const jobId = crypto.randomUUID();
@@ -97,6 +194,7 @@ async function createExportJob(params) {
   // Create job record
   const job = await ExportJob.create({
     _id: jobId,
+    entityType,
     format,
     filters,
     fields: exportFields,
@@ -106,6 +204,7 @@ async function createExportJob(params) {
 
   logger.info("Export job created", {
     jobId,
+    entityType,
     format,
     filters,
     fieldsCount: exportFields.length,
@@ -134,6 +233,7 @@ async function processExportJob(jobId) {
     );
   }
 
+  const entityType = job.entityType || "people";
   const ext = job.format === "csv" ? "csv" : "json";
   const filePath = path.join(EXPORT_TEMP_DIR, `${jobId}.${ext}`);
 
@@ -143,18 +243,23 @@ async function processExportJob(jobId) {
     job.startedAt = new Date();
     await job.save();
 
-    logger.info("Processing export job", { jobId, format: job.format });
+    logger.info("Processing export job", {
+      jobId,
+      entityType,
+      format: job.format,
+    });
 
     // Ensure export directory exists
     await fs.mkdir(EXPORT_TEMP_DIR, { recursive: true });
 
     // Stream data from cursor through transform to file
-    const cursor = createExportCursor(job.filters, job.fields);
+    const cursor = createExportCursor(job.filters, job.fields, entityType);
     const rowCount = await streamToFile(
       cursor,
       filePath,
       job.format,
       job.fields,
+      entityType,
     );
 
     // Get file stats
@@ -217,26 +322,28 @@ async function processExportJob(jobId) {
 /**
  * Create a MongoDB cursor for export data
  *
- * Returns a streaming cursor instead of loading all documents into memory.
- *
  * @param {Object} filters - MongoDB filters
  * @param {Array<String>} fields - Fields to include
+ * @param {String} [entityType='people'] - Entity type
  * @returns {Cursor} Mongoose cursor (readable stream in object mode)
  */
-function createExportCursor(filters, fields) {
+function createExportCursor(filters, fields, entityType = "people") {
+  const entityConfig = getEntityConfig(entityType);
+  const { model, fieldMapping } = entityConfig;
+
   // Build projection from field names
   const projection = {};
   for (const field of fields) {
-    const dbPath = FIELD_MAPPING[field];
+    const dbPath = fieldMapping[field];
     if (dbPath) {
       projection[dbPath] = 1;
     }
   }
 
-  // Always include _id for linkedInUrl
+  // Always include _id
   projection._id = 1;
 
-  return Person.find(filters).select(projection).lean().cursor();
+  return model.find(filters).select(projection).lean().cursor();
 }
 
 /**
@@ -246,9 +353,16 @@ function createExportCursor(filters, fields) {
  * @param {String} filePath - Output file path
  * @param {String} format - Export format (csv or json)
  * @param {Array<String>} fields - Fields to include (for CSV)
+ * @param {String} [entityType='people'] - Entity type
  * @returns {Promise<Number>} Row count
  */
-async function streamToFile(cursor, filePath, format, fields) {
+async function streamToFile(
+  cursor,
+  filePath,
+  format,
+  fields,
+  entityType = "people",
+) {
   let rowCount = 0;
 
   // Row counter + limit enforcer (object mode in, object mode out)
@@ -271,8 +385,15 @@ async function streamToFile(cursor, filePath, format, fields) {
   });
 
   // Format-specific transform (object mode in, string/buffer out)
+  const entityConfig = getEntityConfig(entityType);
   const formatTransform =
-    format === "csv" ? createCsvTransform(fields) : createJsonTransform();
+    format === "csv"
+      ? createCsvTransform(
+          fields,
+          entityConfig.fieldMapping,
+          entityConfig.formatId,
+        )
+      : createJsonTransform();
 
   const fileStream = createWriteStream(filePath, { encoding: "utf8" });
 
@@ -285,10 +406,17 @@ async function streamToFile(cursor, filePath, format, fields) {
  * Create a Transform stream that converts documents to CSV rows
  *
  * @param {Array<String>} fields - Fields to include as CSV columns
+ * @param {Object} fieldMapping - Field name to DB path mapping
+ * @param {Function} formatIdFn - Function to format _id values
  * @returns {Transform} Transform stream (object mode in, string out)
  */
-function createCsvTransform(fields) {
+function createCsvTransform(fields, fieldMapping, formatIdFn) {
   let headerWritten = false;
+
+  // Determine which field name maps to _id for this entity
+  const idFields = Object.entries(fieldMapping)
+    .filter(([, dbPath]) => dbPath === "_id")
+    .map(([name]) => name);
 
   return new Transform({
     objectMode: true,
@@ -304,10 +432,10 @@ function createCsvTransform(fields) {
 
         // Extract field values from document
         const values = fields.map((field) => {
-          const dbPath = FIELD_MAPPING[field];
+          const dbPath = fieldMapping[field];
           if (!dbPath) return "";
-          if (field === "linkedInUrl") {
-            return formatLinkedInUrl(doc._id);
+          if (idFields.includes(field)) {
+            return formatIdFn(doc._id);
           }
           if (field === "lastObservedAt") {
             const date = getNestedValue(doc, dbPath);
@@ -496,5 +624,9 @@ module.exports = {
   processExportJob,
   getExportJobStatus,
   getExportFile,
-  DEFAULT_CSV_FIELDS,
+  PEOPLE_DEFAULT_CSV_FIELDS,
+  COMPANY_DEFAULT_CSV_FIELDS,
+  LOCATION_DEFAULT_CSV_FIELDS,
+  // Backward compatibility alias
+  DEFAULT_CSV_FIELDS: PEOPLE_DEFAULT_CSV_FIELDS,
 };

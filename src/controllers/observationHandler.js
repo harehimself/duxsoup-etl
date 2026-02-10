@@ -15,6 +15,7 @@ const { upsertLocationFromObservation } = require("./locationController");
 const DeadLetter = require("../models/deadLetter");
 const { resolvePersonIdentity } = require("../utils/identityMatcher");
 const { shouldSkip } = require("../utils/upsertDebounce");
+const throughputTracker = require("../utils/throughputTracker");
 
 /**
  * Core observation processing logic, independent of Express req/res.
@@ -24,6 +25,15 @@ const { shouldSkip } = require("../utils/upsertDebounce");
  * @returns {Promise<{success: boolean, status: number, data?: Object, error?: string, message?: string}>}
  */
 async function processObservationPayload(config, payload) {
+  const startTime = Date.now();
+  const trackingEvent = {
+    type: config.type,
+    success: false,
+    debounced: false,
+    duplicate: false,
+    phase2Failure: false,
+  };
+
   const envConfig = getConfig();
 
   // Schema drift detection (warn-only, never blocks processing)
@@ -259,6 +269,12 @@ async function processObservationPayload(config, payload) {
     response.duplicate = isDuplicate;
     response.debounced = debounced;
 
+    // Track throughput
+    trackingEvent.success = true;
+    trackingEvent.duplicate = isDuplicate;
+    trackingEvent.debounced = debounced;
+    trackingEvent.phase2Failure = !peopleUpsertSuccess;
+
     return { success: true, status: 200, data: response };
   } catch (error) {
     logger.error(`Error processing ${config.type} data:`, {
@@ -282,6 +298,9 @@ async function processObservationPayload(config, payload) {
       error: errorResponse.error,
       data: errorResponse,
     };
+  } finally {
+    trackingEvent.latencyMs = Date.now() - startTime;
+    throughputTracker.record(trackingEvent);
   }
 }
 
