@@ -35,30 +35,6 @@ function shouldOverwrite(existingMeta, incomingMeta) {
   return incomingTime >= existingTime;
 }
 
-/**
- * Apply a snapshot field with provenance tracking (_meta).
- */
-function applySnapshotField(snapshot, field, value, meta) {
-  const existingMeta = snapshot._meta?.[field];
-  const incomingMeta = { value, ...meta };
-
-  if (!shouldOverwrite(existingMeta, incomingMeta)) {
-    return false;
-  }
-
-  snapshot[field] = value;
-
-  if (!snapshot._meta) snapshot._meta = {};
-  snapshot._meta[field] = {
-    value,
-    observedAt: meta.observedAt,
-    source: meta.source,
-    observationId: meta.observationId,
-  };
-
-  return true;
-}
-
 async function upsertLocationFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
   const webhookData =
@@ -84,22 +60,21 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
     observationId,
   };
 
-  let location = await Location.findOne({
-    $or: [
-      { _id: identity.location_id },
-      { canonical_id: identity.canonical_id },
-    ],
-  });
+  // Parse structured location fields from identity
+  const parsed = identity.parsed || {};
 
-  if (!location) {
-    // Parse structured location fields from identity.parsed
-    const parsed = identity.parsed || {};
-
-    try {
-      location = await Location.create({
+  // Step 1: Atomic find-or-create — eliminates E11000 race between findOne + create
+  const location = await Location.findOneAndUpdate(
+    {
+      $or: [
+        { _id: identity.location_id },
+        { canonical_id: identity.canonical_id },
+      ],
+    },
+    {
+      $setOnInsert: {
         _id: identity.location_id,
         canonical_id: identity.canonical_id,
-        aliases: dedupeAliases(identity.aliases),
         snapshot: {
           name: identity.normalized,
           normalized: identity.normalized,
@@ -114,46 +89,33 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
         },
         observations: { visits: [], scans: [] },
         meta: {},
-      });
-    } catch (err) {
-      if (err.code === 11000) {
-        location = await Location.findById(identity.location_id);
-        if (!location) {
-          throw err;
-        }
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  // Always merge aliases
-  {
-    const mergedAliases = dedupeAliases([
-      ...(location.aliases || []),
-      ...(identity.aliases || []),
-    ]);
-    location.aliases = mergedAliases;
-  }
-
-  // Update snapshot fields with precedence + provenance
-  location.snapshot = location.snapshot || {};
-  applySnapshotField(
-    location.snapshot,
-    "normalized",
-    identity.normalized,
-    observationMeta,
-  );
-  applySnapshotField(
-    location.snapshot,
-    "name",
-    identity.normalized,
-    observationMeta,
+      },
+    },
+    { upsert: true, new: true },
   );
 
+  // Step 2: Compute all updates from current state
+  const $set = {};
+  const snapshot = location.snapshot || {};
+
+  // Merge aliases
+  $set.aliases = dedupeAliases([
+    ...(location.aliases || []),
+    ...(identity.aliases || []),
+  ]);
+
+  // Apply snapshot fields with provenance (shouldOverwrite decides per-field)
+  const existingMetaMap = snapshot._meta || {};
+
+  // Core fields
+  const snapshotFields = [
+    ["normalized", identity.normalized],
+    ["name", identity.normalized],
+  ];
+
+  // Parsed location fields
   if (identity.parsed) {
-    const parsed = identity.parsed;
-    const fields = [
+    snapshotFields.push(
       ["city", parsed.city],
       ["state", parsed.state],
       ["stateCode", parsed.stateCode],
@@ -162,44 +124,65 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
       ["province", parsed.province],
       ["region", parsed.region],
       ["locationType", parsed.locationType],
-    ];
-    for (const [field, value] of fields) {
-      applySnapshotField(location.snapshot, field, value, observationMeta);
+    );
+  }
+
+  for (const [field, value] of snapshotFields) {
+    const existing = existingMetaMap[field];
+    const incoming = { value, ...observationMeta };
+
+    if (shouldOverwrite(existing, incoming)) {
+      $set[`snapshot.${field}`] = value;
+      $set[`snapshot._meta.${field}`] = {
+        value,
+        observedAt: observationMeta.observedAt,
+        source: observationMeta.source,
+        observationId: observationMeta.observationId,
+      };
     }
   }
 
-  // Use $addToSet for atomic uniqueness on observation references
-  const observationField =
-    sourceType === "visit" ? "observations.visits" : "observations.scans";
-  await Location.updateOne(
-    { _id: location._id },
-    { $addToSet: { [observationField]: observationId } },
-  );
-
-  // Reload to get updated observations count
-  location = await Location.findById(location._id);
-
-  location.meta = location.meta || {};
-  location.meta.lastObservedAt = observedAt;
-  location.meta.lastObservation = {
+  // Meta fields
+  $set["meta.lastObservedAt"] = observedAt;
+  $set["meta.lastObservation"] = {
     type: sourceType,
     id: observationId,
-    observedAt: observedAt,
+    observedAt,
   };
-  location.meta.observationsCount =
-    (location.observations.visits.length || 0) +
-    (location.observations.scans.length || 0);
 
-  await location.save();
+  // Pre-compute observations count (account for the $addToSet below)
+  const observationField =
+    sourceType === "visit" ? "observations.visits" : "observations.scans";
+  const obsArray =
+    sourceType === "visit"
+      ? location.observations.visits
+      : location.observations.scans;
+  const isAlreadyLinked = obsArray.some(
+    (id) => id.toString() === observationId.toString(),
+  );
+  $set["meta.observationsCount"] =
+    (location.observations.visits?.length || 0) +
+    (location.observations.scans?.length || 0) +
+    (isAlreadyLinked ? 0 : 1);
+
+  // Step 3: Single atomic update — $set + $addToSet in one operation
+  const updated = await Location.findOneAndUpdate(
+    { _id: location._id },
+    {
+      $set,
+      $addToSet: { [observationField]: observationId },
+    },
+    { new: true },
+  );
 
   logger.info("Upserted location from observation", {
-    location_id: location._id,
-    canonical_id: location.canonical_id,
+    location_id: updated._id,
+    canonical_id: updated.canonical_id,
     observation_id: observationId,
     sourceType,
   });
 
-  return location;
+  return updated;
 }
 
 module.exports = {

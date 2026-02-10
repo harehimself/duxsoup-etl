@@ -41,36 +41,6 @@ function shouldOverwrite(existingMeta, incomingMeta) {
   return incomingTime >= existingTime;
 }
 
-/**
- * Apply a snapshot field with provenance tracking (_meta).
- *
- * @param {Object} snapshot - Company snapshot subdocument
- * @param {string} field    - Field name (e.g. 'name')
- * @param {*}      value    - Incoming value
- * @param {Object} meta     - { observedAt, source, observationId }
- * @returns {boolean} True if value was updated
- */
-function applySnapshotField(snapshot, field, value, meta) {
-  const existingMeta = snapshot._meta?.[field];
-  const incomingMeta = { value, ...meta };
-
-  if (!shouldOverwrite(existingMeta, incomingMeta)) {
-    return false;
-  }
-
-  snapshot[field] = value;
-
-  if (!snapshot._meta) snapshot._meta = {};
-  snapshot._meta[field] = {
-    value,
-    observedAt: meta.observedAt,
-    source: meta.source,
-    observationId: meta.observationId,
-  };
-
-  return true;
-}
-
 async function upsertCompanyFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
   const webhookData =
@@ -95,103 +65,102 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     observationId,
   };
 
-  let company = await Company.findOne({
-    $or: [
-      { _id: identity.company_id },
-      { canonical_id: identity.canonical_id },
-    ],
-  });
-
-  if (!company) {
-    try {
-      company = await Company.create({
+  // Step 1: Atomic find-or-create — eliminates E11000 race between findOne + create
+  const company = await Company.findOneAndUpdate(
+    {
+      $or: [
+        { _id: identity.company_id },
+        { canonical_id: identity.canonical_id },
+      ],
+    },
+    {
+      $setOnInsert: {
         _id: identity.company_id,
         canonical_id: identity.canonical_id,
-        aliases: dedupeAliases(identity.aliases),
         snapshot: {},
         observations: { visits: [], scans: [] },
         meta: {},
-      });
-    } catch (err) {
-      if (err.code === 11000) {
-        // Race condition: another request inserted this company between our find and create
-        company = await Company.findById(identity.company_id);
-        if (!company) {
-          throw err; // Unexpected: duplicate key but document not found
-        }
-      } else {
-        throw err;
-      }
+      },
+    },
+    { upsert: true, new: true },
+  );
+
+  // Step 2: Compute all updates from current state
+  const $set = {};
+  const snapshot = company.snapshot || {};
+
+  // Merge aliases
+  $set.aliases = dedupeAliases([
+    ...(company.aliases || []),
+    ...(identity.aliases || []),
+  ]);
+
+  // Apply snapshot fields with provenance (shouldOverwrite decides per-field)
+  const snapshotFields = [
+    ["name", webhookData.Company],
+    ["industry", webhookData.Industry],
+    ["companyProfileUrl", webhookData.CompanyProfile],
+    ["website", webhookData.CompanyWebsite],
+  ];
+
+  const existingMetaMap = snapshot._meta || {};
+
+  for (const [field, value] of snapshotFields) {
+    const existing = existingMetaMap[field];
+    const incoming = { value, ...observationMeta };
+
+    if (shouldOverwrite(existing, incoming)) {
+      $set[`snapshot.${field}`] = value;
+      $set[`snapshot._meta.${field}`] = {
+        value,
+        observedAt: observationMeta.observedAt,
+        source: observationMeta.source,
+        observationId: observationMeta.observationId,
+      };
     }
   }
 
-  // Always merge aliases
-  {
-    const mergedAliases = dedupeAliases([
-      ...(company.aliases || []),
-      ...(identity.aliases || []),
-    ]);
-    company.aliases = mergedAliases;
-  }
-
-  // Use $addToSet for atomic uniqueness on observation references
-  const observationField =
-    sourceType === "visit" ? "observations.visits" : "observations.scans";
-  await Company.updateOne(
-    { _id: company._id },
-    { $addToSet: { [observationField]: observationId } },
-  );
-
-  // Reload to get updated observations count
-  company = await Company.findById(company._id);
-
-  company.meta = company.meta || {};
-  company.meta.lastObservedAt = observedAt;
-  company.meta.lastObservation = {
+  // Meta fields
+  $set["meta.lastObservedAt"] = observedAt;
+  $set["meta.lastObservation"] = {
     type: sourceType,
     id: observationId,
-    observedAt: observedAt,
+    observedAt,
   };
-  company.meta.observationsCount =
-    (company.observations.visits.length || 0) +
-    (company.observations.scans.length || 0);
 
-  company.snapshot = company.snapshot || {};
-  applySnapshotField(
-    company.snapshot,
-    "name",
-    webhookData.Company,
-    observationMeta,
+  // Pre-compute observations count (account for the $addToSet below)
+  const observationField =
+    sourceType === "visit" ? "observations.visits" : "observations.scans";
+  const obsArray =
+    sourceType === "visit"
+      ? company.observations.visits
+      : company.observations.scans;
+  const isAlreadyLinked = obsArray.some(
+    (id) => id.toString() === observationId.toString(),
   );
-  applySnapshotField(
-    company.snapshot,
-    "industry",
-    webhookData.Industry,
-    observationMeta,
-  );
-  applySnapshotField(
-    company.snapshot,
-    "companyProfileUrl",
-    webhookData.CompanyProfile,
-    observationMeta,
-  );
-  applySnapshotField(
-    company.snapshot,
-    "website",
-    webhookData.CompanyWebsite,
-    observationMeta,
-  );
+  $set["meta.observationsCount"] =
+    (company.observations.visits?.length || 0) +
+    (company.observations.scans?.length || 0) +
+    (isAlreadyLinked ? 0 : 1);
 
-  await company.save();
+  // Step 3: Single atomic update — $set + $addToSet in one operation
+  const updated = await Company.findOneAndUpdate(
+    { _id: company._id },
+    {
+      $set,
+      $addToSet: { [observationField]: observationId },
+    },
+    { new: true },
+  );
 
   logger.info("Upserted company from observation", {
-    company_id: company._id,
-    canonical_id: company.canonical_id,
+    company_id: updated._id,
+    canonical_id: updated.canonical_id,
     observation_id: observationId,
     sourceType,
   });
 
-  return company;
+  return updated;
 }
 
 module.exports = {
