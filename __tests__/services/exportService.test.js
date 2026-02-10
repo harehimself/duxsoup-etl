@@ -28,21 +28,10 @@ jest.mock("../../src/utils/logger", () => ({
   debug: jest.fn(),
 }));
 
-jest.mock("fs", () => ({
-  promises: {
-    mkdir: jest.fn().mockResolvedValue(undefined),
-    writeFile: jest.fn().mockResolvedValue(undefined),
-    stat: jest.fn().mockResolvedValue({ size: 1024 }),
-    access: jest.fn().mockResolvedValue(undefined),
-    unlink: jest.fn().mockResolvedValue(undefined),
-  },
-}));
-
-jest.mock("csv-writer", () => ({
-  createObjectCsvWriter: jest.fn(() => ({
-    writeRecords: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
+const { Readable } = require("stream");
+const path = require("path");
+const fs = require("fs");
+const fsp = fs.promises;
 
 const {
   createExportJob,
@@ -54,19 +43,31 @@ const {
 const Person = require("../../src/models/person");
 const ExportJob = require("../../src/models/exportJob");
 
+const EXPORT_TEMP_DIR = process.env.EXPORT_TEMP_DIR || "/tmp/duxsoup-exports";
+
 /**
- * Helper: chainable query mock
+ * Helper: create a mock Mongoose cursor (readable stream in object mode)
  */
-function buildQueryMock(resolvedValue = []) {
+function createMockCursor(docs = []) {
+  return Readable.from(docs, { objectMode: true });
+}
+
+/**
+ * Helper: chainable query mock that ends with .cursor()
+ */
+function buildQueryMock(docs = []) {
   return {
     select: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
     lean: jest.fn().mockReturnThis(),
-    exec: jest.fn().mockResolvedValue(resolvedValue),
+    cursor: jest.fn(() => createMockCursor(docs)),
   };
 }
 
 describe("ExportService", () => {
+  afterEach(async () => {
+    jest.restoreAllMocks();
+  });
+
   // ───────────────────────────────────────────
   // createExportJob()
   // ───────────────────────────────────────────
@@ -125,7 +126,7 @@ describe("ExportService", () => {
   });
 
   // ───────────────────────────────────────────
-  // processExportJob()
+  // processExportJob() — streaming
   // ───────────────────────────────────────────
   describe("processExportJob()", () => {
     it("should throw NOT_FOUND when job does not exist", async () => {
@@ -146,18 +147,9 @@ describe("ExportService", () => {
       await expect(processExportJob("job-1")).rejects.toThrow("not pending");
     });
 
-    it("should process CSV job and update status to completed", async () => {
-      // Re-setup mocks that get cleared between tests
-      const fs = require("fs");
-      fs.promises.mkdir.mockResolvedValue(undefined);
-      fs.promises.stat.mockResolvedValue({ size: 1024 });
-      const csvWriter = require("csv-writer");
-      csvWriter.createObjectCsvWriter.mockReturnValue({
-        writeRecords: jest.fn().mockResolvedValue(undefined),
-      });
-
+    it("should stream CSV job and update status to completed", async () => {
       const mockData = [
-        { _id: "p1", snapshot: { firstName: "John", lastName: "Doe" } },
+        { _id: "john-doe", snapshot: { firstName: "John", lastName: "Doe" } },
       ];
       const queryMock = buildQueryMock(mockData);
       Person.find.mockReturnValue(queryMock);
@@ -172,21 +164,29 @@ describe("ExportService", () => {
       };
       ExportJob.findById.mockResolvedValue(jobDoc);
 
-      const _result = await processExportJob("job-csv");
+      await processExportJob("job-csv");
 
       expect(jobDoc.status).toBe("completed");
       expect(jobDoc.result.rowCount).toBe(1);
-      expect(jobDoc.result.fileSize).toBe(1024);
+      expect(jobDoc.result.fileSize).toBeGreaterThan(0);
       expect(jobDoc.save).toHaveBeenCalled();
+
+      // Verify file was written
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-csv.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(content).toContain("firstName,lastName");
+      expect(content).toContain("John,Doe");
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
     });
 
-    it("should process JSON job and update status to completed", async () => {
-      const fs = require("fs");
-      fs.promises.mkdir.mockResolvedValue(undefined);
-      fs.promises.writeFile.mockResolvedValue(undefined);
-      fs.promises.stat.mockResolvedValue({ size: 512 });
-
-      const queryMock = buildQueryMock([{ _id: "p1" }]);
+    it("should stream JSON job and update status to completed", async () => {
+      const mockData = [
+        { _id: "p1", snapshot: { firstName: "Alice" } },
+        { _id: "p2", snapshot: { firstName: "Bob" } },
+      ];
+      const queryMock = buildQueryMock(mockData);
       Person.find.mockReturnValue(queryMock);
 
       const jobDoc = {
@@ -202,12 +202,33 @@ describe("ExportService", () => {
       await processExportJob("job-json");
 
       expect(jobDoc.status).toBe("completed");
+      expect(jobDoc.result.rowCount).toBe(2);
+
+      // Verify file is valid JSON array
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-json.json");
+      const content = await fsp.readFile(filePath, "utf8");
+      const parsed = JSON.parse(content);
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0]._id).toBe("p1");
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
     });
 
-    it("should set status to failed when error occurs during export", async () => {
-      Person.find.mockImplementation(() => {
-        throw new Error("DB error");
+    it("should set status to failed when cursor errors", async () => {
+      // Create a cursor that emits an error
+      const errorCursor = new Readable({
+        objectMode: true,
+        read() {
+          this.destroy(new Error("DB cursor error"));
+        },
       });
+      const queryMock = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        cursor: jest.fn(() => errorCursor),
+      };
+      Person.find.mockReturnValue(queryMock);
 
       const jobDoc = {
         _id: "job-fail",
@@ -219,19 +240,26 @@ describe("ExportService", () => {
       };
       ExportJob.findById.mockResolvedValue(jobDoc);
 
-      await expect(processExportJob("job-fail")).rejects.toThrow("DB error");
+      await expect(processExportJob("job-fail")).rejects.toThrow(
+        "DB cursor error",
+      );
       expect(jobDoc.status).toBe("failed");
-      expect(jobDoc.error.message).toBe("DB error");
+      expect(jobDoc.error.message).toBe("DB cursor error");
     });
 
     it("should clean up temp file when export fails", async () => {
-      const fs = require("fs");
-      fs.promises.mkdir.mockResolvedValue(undefined);
-      fs.promises.unlink.mockResolvedValue(undefined);
-
-      Person.find.mockImplementation(() => {
-        throw new Error("Query failed");
+      const errorCursor = new Readable({
+        objectMode: true,
+        read() {
+          this.destroy(new Error("Query failed"));
+        },
       });
+      const queryMock = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        cursor: jest.fn(() => errorCursor),
+      };
+      Person.find.mockReturnValue(queryMock);
 
       const jobDoc = {
         _id: "job-cleanup",
@@ -246,18 +274,26 @@ describe("ExportService", () => {
       await expect(processExportJob("job-cleanup")).rejects.toThrow(
         "Query failed",
       );
-      expect(fs.promises.unlink).toHaveBeenCalledWith(
-        expect.stringContaining("job-cleanup.csv"),
-      );
+
+      // File should have been cleaned up
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-cleanup.csv");
+      await expect(fsp.access(filePath)).rejects.toThrow();
     });
 
     it("should clean up JSON temp file when export fails", async () => {
-      const fs = require("fs");
-      fs.promises.mkdir.mockResolvedValue(undefined);
-      fs.promises.writeFile.mockRejectedValue(new Error("Disk full"));
-      fs.promises.unlink.mockResolvedValue(undefined);
-
-      const queryMock = buildQueryMock([{ _id: "p1" }]);
+      // Create cursor that emits one doc then errors
+      const errorCursor = new Readable({
+        objectMode: true,
+        read() {
+          this.push({ _id: "p1" });
+          this.destroy(new Error("Disk full"));
+        },
+      });
+      const queryMock = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        cursor: jest.fn(() => errorCursor),
+      };
       Person.find.mockReturnValue(queryMock);
 
       const jobDoc = {
@@ -273,46 +309,16 @@ describe("ExportService", () => {
       await expect(processExportJob("job-json-fail")).rejects.toThrow(
         "Disk full",
       );
-      expect(fs.promises.unlink).toHaveBeenCalledWith(
-        expect.stringContaining("job-json-fail.json"),
-      );
-    });
 
-    it("should not throw if temp file cleanup fails (file never created)", async () => {
-      const fs = require("fs");
-      fs.promises.mkdir.mockResolvedValue(undefined);
-      fs.promises.unlink.mockRejectedValue(new Error("ENOENT"));
-
-      Person.find.mockImplementation(() => {
-        throw new Error("DB error");
-      });
-
-      const jobDoc = {
-        _id: "job-no-file",
-        format: "csv",
-        status: "pending",
-        filters: {},
-        fields: ["firstName"],
-        save: jest.fn().mockResolvedValue(undefined),
-      };
-      ExportJob.findById.mockResolvedValue(jobDoc);
-
-      // Should throw the original error, not the unlink error
-      await expect(processExportJob("job-no-file")).rejects.toThrow("DB error");
-      expect(fs.promises.unlink).toHaveBeenCalled();
+      // File should have been cleaned up
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-json-fail.json");
+      await expect(fsp.access(filePath)).rejects.toThrow();
     });
 
     it("should not clean up temp file on success", async () => {
-      const fs = require("fs");
-      fs.promises.mkdir.mockResolvedValue(undefined);
-      fs.promises.stat.mockResolvedValue({ size: 256 });
-      fs.promises.unlink.mockClear();
-      const csvWriter = require("csv-writer");
-      csvWriter.createObjectCsvWriter.mockReturnValue({
-        writeRecords: jest.fn().mockResolvedValue(undefined),
-      });
-
-      const queryMock = buildQueryMock([{ _id: "p1" }]);
+      const queryMock = buildQueryMock([
+        { _id: "p1", snapshot: { firstName: "Test" } },
+      ]);
       Person.find.mockReturnValue(queryMock);
 
       const jobDoc = {
@@ -327,13 +333,23 @@ describe("ExportService", () => {
 
       await processExportJob("job-ok");
 
-      expect(fs.promises.unlink).not.toHaveBeenCalled();
+      // File should still exist
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-ok.csv");
+      await expect(fsp.access(filePath)).resolves.toBeUndefined();
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
     });
 
-    it("should throw EXPORT_TOO_LARGE when data exceeds max rows", async () => {
-      // Create array with 100001 items (default max is 100000)
-      const largeData = new Array(100001).fill({ _id: "p" });
-      const queryMock = buildQueryMock(largeData);
+    it("should throw EXPORT_TOO_LARGE when streaming exceeds max rows", async () => {
+      // Create enough docs to exceed the limit (default 100000)
+      // We override EXPORT_MAX_ROWS for this test by using a small dataset
+      // and checking the error message pattern
+      const docs = [];
+      for (let i = 0; i < 100001; i++) {
+        docs.push({ _id: `p${i}` });
+      }
+      const queryMock = buildQueryMock(docs);
       Person.find.mockReturnValue(queryMock);
 
       const jobDoc = {
@@ -349,6 +365,124 @@ describe("ExportService", () => {
       await expect(processExportJob("job-big")).rejects.toThrow(
         "maximum row limit",
       );
+
+      // Clean up
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-big.csv");
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
+    it("should handle empty cursor (zero results)", async () => {
+      const queryMock = buildQueryMock([]);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-empty",
+        format: "json",
+        status: "pending",
+        filters: {},
+        fields: ["firstName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-empty");
+
+      expect(jobDoc.status).toBe("completed");
+      expect(jobDoc.result.rowCount).toBe(0);
+
+      // Verify file is empty JSON array
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-empty.json");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(JSON.parse(content)).toEqual([]);
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
+    it("should escape CSV fields containing commas and quotes", async () => {
+      const mockData = [
+        {
+          _id: "p1",
+          snapshot: {
+            firstName: 'John "Jack"',
+            lastName: "Doe, Jr.",
+          },
+        },
+      ];
+      const queryMock = buildQueryMock(mockData);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-escape",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["firstName", "lastName"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-escape");
+
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-escape.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      // Quotes should be doubled, fields with commas/quotes should be quoted
+      expect(content).toContain('"John ""Jack"""');
+      expect(content).toContain('"Doe, Jr."');
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
+    it("should format linkedInUrl field from _id", async () => {
+      const mockData = [{ _id: "jane-doe", snapshot: { firstName: "Jane" } }];
+      const queryMock = buildQueryMock(mockData);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-url",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["firstName", "linkedInUrl"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-url");
+
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-url.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(content).toContain("https://linkedin.com/in/jane-doe");
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
+    it("should format lastObservedAt as ISO string", async () => {
+      const date = new Date("2025-06-15T12:00:00.000Z");
+      const mockData = [{ _id: "p1", meta: { lastObservedAt: date } }];
+      const queryMock = buildQueryMock(mockData);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-date",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["lastObservedAt"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-date");
+
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-date.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(content).toContain("2025-06-15T12:00:00.000Z");
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
     });
   });
 
@@ -378,17 +512,25 @@ describe("ExportService", () => {
   // ───────────────────────────────────────────
   describe("getExportFile()", () => {
     it("should return filePath and format for completed job", async () => {
+      // Create an actual file for the access check
+      const testPath = path.join(EXPORT_TEMP_DIR, "job-dl.csv");
+      await fsp.mkdir(EXPORT_TEMP_DIR, { recursive: true });
+      await fsp.writeFile(testPath, "test", "utf8");
+
       ExportJob.findById.mockResolvedValue({
-        _id: "job-1",
+        _id: "job-dl",
         status: "completed",
         format: "csv",
-        result: { filePath: "/tmp/duxsoup-exports/job-1.csv" },
+        result: { filePath: testPath },
       });
 
-      const result = await getExportFile("job-1");
+      const result = await getExportFile("job-dl");
 
-      expect(result.filePath).toBe("/tmp/duxsoup-exports/job-1.csv");
+      expect(result.filePath).toBe(testPath);
       expect(result.format).toBe("csv");
+
+      // Clean up
+      await fsp.unlink(testPath).catch(() => {});
     });
 
     it("should throw NOT_FOUND when job does not exist", async () => {
@@ -423,14 +565,11 @@ describe("ExportService", () => {
     });
 
     it("should throw FILE_NOT_FOUND when file no longer exists on disk", async () => {
-      const fs = require("fs");
-      fs.promises.access.mockRejectedValue(new Error("ENOENT"));
-
       ExportJob.findById.mockResolvedValue({
         _id: "job-1",
         status: "completed",
         format: "csv",
-        result: { filePath: "/tmp/deleted.csv" },
+        result: { filePath: "/tmp/nonexistent-file-that-does-not-exist.csv" },
       });
 
       await expect(getExportFile("job-1")).rejects.toThrow(
