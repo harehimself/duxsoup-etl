@@ -147,7 +147,10 @@ describe("ObservationHandler", () => {
         _id: "obs-123",
         event_key: "event-key-abc",
       };
-      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: fakeObservation,
+        lastErrorObject: { upserted: "obs-123" },
+      });
 
       upsertFromObservation.mockResolvedValue({ _id: "person-1" });
       upsertCompanyFromObservation.mockResolvedValue({ _id: "company-1" });
@@ -164,7 +167,12 @@ describe("ObservationHandler", () => {
       expect(config.model.findOneAndUpdate).toHaveBeenCalledWith(
         { event_key: "event-key-abc" },
         { $setOnInsert: expect.any(Object) },
-        { new: true, upsert: true, runValidators: true },
+        {
+          new: true,
+          upsert: true,
+          runValidators: true,
+          includeResultMetadata: true,
+        },
       );
 
       // Phase 2: all three entity upserts called
@@ -280,7 +288,10 @@ describe("ObservationHandler", () => {
       computeEventKey.mockReturnValue("event-key-fail");
 
       const fakeObservation = { _id: "obs-456", event_key: "event-key-fail" };
-      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: fakeObservation,
+        lastErrorObject: { upserted: "obs-456" },
+      });
 
       // Person upsert throws
       const personError = new Error("Identity resolution failed");
@@ -347,7 +358,10 @@ describe("ObservationHandler", () => {
         _id: "obs-789",
         event_key: "event-key-comp-fail",
       };
-      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: fakeObservation,
+        lastErrorObject: { upserted: "obs-789" },
+      });
 
       upsertFromObservation.mockResolvedValue({ _id: "person-1" });
       upsertCompanyFromObservation.mockRejectedValue(
@@ -582,6 +596,60 @@ describe("ObservationHandler", () => {
     });
 
     // ───────────────────────────────────────────
+    // (g) Duplicate via $setOnInsert no-op (no E11000): skip Phase 2
+    // ───────────────────────────────────────────
+    it("should detect duplicate via includeResultMetadata when findOneAndUpdate returns existing doc", async () => {
+      const payload = {
+        userid: "user1",
+        type: "visit",
+        data: {
+          id: "pid.mike-hare",
+          Profile: "https://www.linkedin.com/in/mike-hare",
+        },
+      };
+
+      const { req, res } = buildReqRes(payload);
+      const config = buildConfig();
+
+      validateWebhookPayload.mockReturnValue({
+        isValid: true,
+        error: null,
+        profileData: payload.data,
+      });
+      validateRequiredFields.mockReturnValue({
+        isValid: true,
+        error: null,
+        missingFields: [],
+      });
+      computeEventKey.mockReturnValue("event-key-existing");
+
+      const existingObservation = {
+        _id: "obs-existing",
+        event_key: "event-key-existing",
+      };
+      // No upserted field = document already existed
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: existingObservation,
+        lastErrorObject: { updatedExisting: true },
+      });
+
+      createSuccessResponse.mockReturnValue({ success: true });
+
+      await handleObservation(config, req, res);
+
+      // Entity upserts should NOT be called (duplicate detected)
+      expect(upsertFromObservation).not.toHaveBeenCalled();
+      expect(upsertCompanyFromObservation).not.toHaveBeenCalled();
+      expect(upsertLocationFromObservation).not.toHaveBeenCalled();
+
+      // Response: 200 with duplicate:true
+      expect(res.status).toHaveBeenCalledWith(200);
+      const responseBody = res.json.mock.calls[0][0];
+      expect(responseBody.duplicate).toBe(true);
+      expect(responseBody.people_upsert).toBe(true);
+    });
+
+    // ───────────────────────────────────────────
     // Debounce: rapid-fire duplicate visits
     // ───────────────────────────────────────────
     it("should skip Phase 2 and set debounced:true when shouldSkip returns true", async () => {
@@ -613,7 +681,10 @@ describe("ObservationHandler", () => {
         _id: "obs-debounce",
         event_key: "event-key-debounce",
       };
-      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: fakeObservation,
+        lastErrorObject: { upserted: "obs-debounce" },
+      });
 
       // Debounce returns true — skip Phase 2
       mockShouldSkip.mockReturnValue(true);
@@ -667,7 +738,10 @@ describe("ObservationHandler", () => {
         _id: "obs-no-debounce",
         event_key: "event-key-no-debounce",
       };
-      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: fakeObservation,
+        lastErrorObject: { upserted: "obs-no-debounce" },
+      });
 
       mockShouldSkip.mockReturnValue(false);
 
@@ -721,7 +795,10 @@ describe("ObservationHandler", () => {
         _id: "obs-null-id",
         event_key: "event-key-null-id",
       };
-      config.model.findOneAndUpdate.mockResolvedValue(fakeObservation);
+      config.model.findOneAndUpdate.mockResolvedValue({
+        value: fakeObservation,
+        lastErrorObject: { upserted: "obs-null-id" },
+      });
 
       upsertFromObservation.mockResolvedValue({ _id: "person-1" });
       upsertCompanyFromObservation.mockResolvedValue({ _id: "company-1" });

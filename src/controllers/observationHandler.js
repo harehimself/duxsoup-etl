@@ -80,18 +80,20 @@ async function processObservationPayload(config, payload) {
 
     try {
       // Use event_key for idempotency
-      observation = await config.model.findOneAndUpdate(
+      const result = await config.model.findOneAndUpdate(
         { event_key: eventKey },
         { $setOnInsert: dataToSave },
         {
           new: true,
           upsert: true,
           runValidators: true,
+          includeResultMetadata: true,
         },
       );
 
-      // First insert - not a duplicate
-      isDuplicate = false;
+      observation = result.value;
+      // lastErrorObject.upserted is present only when a new document was inserted
+      isDuplicate = !result.lastErrorObject?.upserted;
 
       logger.info(`${config.type} data processed in MongoDB`, {
         id: observation._id,
