@@ -68,6 +68,9 @@ const locationSchema = new mongoose.Schema(
 
       // Location type: 'city', 'metropolitan', 'unknown'
       locationType: { type: String, maxlength: 50 },
+
+      // Per-field provenance: { fieldName: { value, observedAt, source, observationId } }
+      _meta: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
 
     observations: {

@@ -326,5 +326,123 @@ describe("LocationController", () => {
       expect(result).toBeTruthy();
       expect(existingDoc.save).toHaveBeenCalled();
     });
+
+    // ───────────────────────────────────────────
+    // Provenance: _meta tracked on snapshot fields
+    // ───────────────────────────────────────────
+    it("should store _meta provenance on newly set snapshot fields", async () => {
+      const visitTime = new Date("2024-09-01");
+      const observationDoc = {
+        _id: "obs-prov-loc",
+        rawData: {
+          data: {
+            Location: "Austin, Texas, United States",
+            VisitTime: visitTime,
+          },
+        },
+      };
+
+      resolveLocationIdentity.mockReturnValue({
+        location_id: "austin-texas-united-states",
+        canonical_id: "loc-canonical-atx",
+        aliases: [{ type: "raw", value: "Austin, Texas, United States" }],
+        source: "normalized",
+        primary_id_type: "location",
+        normalized: "Austin, Texas, United States",
+        parsed: {
+          city: "Austin",
+          state: "Texas",
+          country: "United States",
+          locationType: "city_state_country",
+        },
+      });
+
+      const doc = buildLocationDoc({
+        _id: "austin-texas-united-states",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+      Location.findOne.mockResolvedValue(doc);
+      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Location.findById.mockResolvedValue(doc);
+
+      await upsertLocationFromObservation(observationDoc, "visit");
+
+      expect(doc.snapshot._meta.city).toEqual(
+        expect.objectContaining({
+          value: "Austin",
+          source: "visit",
+          observationId: "obs-prov-loc",
+        }),
+      );
+      expect(doc.snapshot._meta.country).toEqual(
+        expect.objectContaining({
+          value: "United States",
+          source: "visit",
+        }),
+      );
+    });
+
+    // ───────────────────────────────────────────
+    // Precedence: visit beats scan
+    // ───────────────────────────────────────────
+    it("should not let a scan overwrite a visit-sourced field", async () => {
+      const observationDoc = {
+        _id: "obs-scan-loc",
+        rawData: {
+          data: {
+            Location: "Denver, Colorado, United States",
+            ScanTime: new Date("2024-10-01"),
+          },
+        },
+      };
+
+      resolveLocationIdentity.mockReturnValue({
+        location_id: "denver-colorado-united-states",
+        canonical_id: "loc-canonical-den",
+        aliases: [{ type: "raw", value: "Denver, Colorado, United States" }],
+        source: "normalized",
+        primary_id_type: "location",
+        normalized: "Denver, Colorado, United States",
+        parsed: {
+          city: "Denver",
+          state: "Colorado",
+          country: "United States",
+          locationType: "city_state_country",
+        },
+      });
+
+      const existingDoc = buildLocationDoc({
+        _id: "denver-colorado-united-states",
+        snapshot: {
+          city: "Denver",
+          state: "Colorado",
+          _meta: {
+            city: {
+              value: "Denver",
+              observedAt: new Date("2024-09-15"),
+              source: "visit",
+              observationId: "obs-visit-loc",
+            },
+            state: {
+              value: "Colorado",
+              observedAt: new Date("2024-09-15"),
+              source: "visit",
+              observationId: "obs-visit-loc",
+            },
+          },
+        },
+        observations: { visits: ["obs-visit-loc"], scans: [] },
+      });
+
+      Location.findOne.mockResolvedValue(existingDoc);
+      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Location.findById.mockResolvedValue(existingDoc);
+
+      await upsertLocationFromObservation(observationDoc, "scan");
+
+      // Visit-sourced values should NOT be overwritten by scan
+      expect(existingDoc.snapshot._meta.city.source).toBe("visit");
+    });
   });
 });

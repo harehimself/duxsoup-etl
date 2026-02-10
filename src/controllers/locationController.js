@@ -3,6 +3,62 @@ const logger = require("../utils/logger");
 const { resolveLocationIdentity } = require("../utils/identityMatcher");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 
+/**
+ * Source precedence: visit > scan (matches person/company controllers)
+ */
+const SOURCE_PRECEDENCE = { visit: 2, scan: 1 };
+
+/**
+ * Determine whether an incoming value should overwrite an existing one.
+ */
+function shouldOverwrite(existingMeta, incomingMeta) {
+  if (
+    !existingMeta ||
+    existingMeta.value === null ||
+    existingMeta.value === undefined
+  ) {
+    return true;
+  }
+
+  const v = incomingMeta.value;
+  if (v === null || v === undefined) return false;
+  if (typeof v === "string" && v.trim() === "") return false;
+
+  const existingP = SOURCE_PRECEDENCE[existingMeta.source] || 0;
+  const incomingP = SOURCE_PRECEDENCE[incomingMeta.source] || 0;
+
+  if (incomingP > existingP) return true;
+  if (incomingP < existingP) return false;
+
+  const existingTime = new Date(existingMeta.observedAt).getTime();
+  const incomingTime = new Date(incomingMeta.observedAt).getTime();
+  return incomingTime >= existingTime;
+}
+
+/**
+ * Apply a snapshot field with provenance tracking (_meta).
+ */
+function applySnapshotField(snapshot, field, value, meta) {
+  const existingMeta = snapshot._meta?.[field];
+  const incomingMeta = { value, ...meta };
+
+  if (!shouldOverwrite(existingMeta, incomingMeta)) {
+    return false;
+  }
+
+  snapshot[field] = value;
+
+  if (!snapshot._meta) snapshot._meta = {};
+  snapshot._meta[field] = {
+    value,
+    observedAt: meta.observedAt,
+    source: meta.source,
+    observationId: meta.observationId,
+  };
+
+  return true;
+}
+
 async function upsertLocationFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
   const webhookData =
@@ -22,6 +78,11 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
   const observedAt =
     webhookData.VisitTime || webhookData.ScanTime || new Date();
   const observationId = observationDoc._id;
+  const observationMeta = {
+    observedAt,
+    source: sourceType,
+    observationId,
+  };
 
   let location = await Location.findOne({
     $or: [
@@ -42,7 +103,6 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
         snapshot: {
           name: identity.normalized,
           normalized: identity.normalized,
-          // Structured location fields from parser
           city: parsed.city || null,
           state: parsed.state || null,
           stateCode: parsed.stateCode || null,
@@ -57,10 +117,9 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
       });
     } catch (err) {
       if (err.code === 11000) {
-        // Race condition: another request inserted this location between our find and create
         location = await Location.findById(identity.location_id);
         if (!location) {
-          throw err; // Unexpected: duplicate key but document not found
+          throw err;
         }
       } else {
         throw err;
@@ -68,33 +127,44 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
     }
   }
 
-  // Always update aliases and snapshot fields for existing locations
+  // Always merge aliases
   {
     const mergedAliases = dedupeAliases([
       ...(location.aliases || []),
       ...(identity.aliases || []),
     ]);
     location.aliases = mergedAliases;
-    location.snapshot = location.snapshot || {};
-    location.snapshot.normalized =
-      identity.normalized || location.snapshot.normalized;
-    location.snapshot.name = identity.normalized || location.snapshot.name;
+  }
 
-    // Update structured fields if parsed data is available
-    if (identity.parsed) {
-      const parsed = identity.parsed;
-      location.snapshot.city = parsed.city || location.snapshot.city;
-      location.snapshot.state = parsed.state || location.snapshot.state;
-      location.snapshot.stateCode =
-        parsed.stateCode || location.snapshot.stateCode;
-      location.snapshot.country = parsed.country || location.snapshot.country;
-      location.snapshot.countryCode =
-        parsed.countryCode || location.snapshot.countryCode;
-      location.snapshot.province =
-        parsed.province || location.snapshot.province;
-      location.snapshot.region = parsed.region || location.snapshot.region;
-      location.snapshot.locationType =
-        parsed.locationType || location.snapshot.locationType || "unknown";
+  // Update snapshot fields with precedence + provenance
+  location.snapshot = location.snapshot || {};
+  applySnapshotField(
+    location.snapshot,
+    "normalized",
+    identity.normalized,
+    observationMeta,
+  );
+  applySnapshotField(
+    location.snapshot,
+    "name",
+    identity.normalized,
+    observationMeta,
+  );
+
+  if (identity.parsed) {
+    const parsed = identity.parsed;
+    const fields = [
+      ["city", parsed.city],
+      ["state", parsed.state],
+      ["stateCode", parsed.stateCode],
+      ["country", parsed.country],
+      ["countryCode", parsed.countryCode],
+      ["province", parsed.province],
+      ["region", parsed.region],
+      ["locationType", parsed.locationType],
+    ];
+    for (const [field, value] of fields) {
+      applySnapshotField(location.snapshot, field, value, observationMeta);
     }
   }
 
