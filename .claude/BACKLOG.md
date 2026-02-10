@@ -56,13 +56,7 @@
 
 - [x] ~~**Clean up export temp files on failure**~~ — Completed, see Completed section.
 
-- [ ] **Split adminRoutes.js into focused route modules** — At 826 lines, `adminRoutes.js` handles merge, rebuild, link, and migrate operations in a single file.
-  - Priority: `low`
-  - Category: `refactor`
-  - Files: `src/routes/adminRoutes.js`
-  - Context: The file mixes merge endpoints, rebuild endpoints, link endpoints, and migration endpoints. Each group has its own middleware and validation logic.
-  - Fix: Split into `mergeRoutes.js`, `rebuildRoutes.js`, `linkRoutes.js`, `migrateRoutes.js` and compose in `adminRoutes.js`.
-  - Acceptance: Each route file is under 250 lines. All existing tests pass. No API path changes.
+- [x] ~~**Split adminRoutes.js into focused route modules**~~ — Completed, see Completed section.
 
 - [ ] **Deduplicate person field normalization into a loop** — `personController.js` has 30+ sequential `normalizeField()` calls that follow an identical pattern and could be driven by a field mapping table.
   - Priority: `low`
@@ -148,6 +142,7 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 
 ## Completed
 
+- [x] **Split adminRoutes.js into focused route modules** — 2026-02-10. Split 829-line monolith into 3 focused sub-routers: `adminLinkingRoutes.js` (check-upgradable, run-linking), `adminRebuildRoutes.js` (rebuild-people, rebuild-people-full), `adminMaintenanceRoutes.js` (drop-id-index, fix-alias-types, inspect-observations). Hub `adminRoutes.js` reduced to 40 lines mounting sub-routers + health + test-notifications. All 772 tests pass. No API path changes.
 - [x] **Add merge safety validation** — 2026-02-09. Added `validateMergeSafety(winner, losers)` method to `identityResolverService.js` with pre-merge checks: observation disparity blockers (0-vs-N and 10x ratio), name contradiction blockers (both first+last differ), partial name mismatch warnings, and company mismatch warnings. Integrated into `mergePeople()` — blocked merges return winner unchanged, warnings attach to Merge audit `metadata.safetyWarnings`. Added `force` bypass via admin routes, `--force` CLI flag in `linkIdentities.js` and `merge-duplicates.js`. `MERGE_OBS_RATIO_THRESHOLD` env-configurable (default 10). 22 new unit tests, 3 new integration tests.
 - [x] **Add branch protection rules to `master`** — 2026-02-09. Enabled branch protection via GitHub API requiring `build-and-test` CI check to pass before merge. Strict mode enabled (branch must be up-to-date with master). Force pushes and branch deletion blocked. Admin enforcement left off to allow emergency hotfixes.
 - [x] **Investigate absence of scan webhook activity** — 2026-02-09. Investigation found scans are actively flowing: 42,926 scans vs 37,274 visits in production MongoDB. Most recent scan created Feb 9 20:38 UTC. The earlier observation of "zero scans" was an artifact of a limited Render log window that happened to contain only visit traffic. Code review confirmed the scan pipeline is fully wired: `POST /api/webhook` correctly routes `type: "scan"` to `handleScan()`, the Scan model is feature-complete with indexes, and no silent filtering exists. No dead letter failures for scan type. No code changes needed.
