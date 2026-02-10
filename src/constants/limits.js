@@ -19,6 +19,11 @@ const MERGE_OBS_RATIO_THRESHOLD = parseInt(
   10,
 );
 
+const ALERT_DEDUP_WINDOW_MS = parseInt(
+  process.env.ALERT_DEDUP_WINDOW_MS || String(6 * 60 * 60 * 1000),
+  10,
+);
+
 const MAX_RETRY_ATTEMPTS = parseInt(
   process.env.MAX_DEAD_LETTER_RETRIES || "10",
   10,
@@ -34,6 +39,7 @@ module.exports = {
   MAX_SKILLS,
   DEBOUNCE_WINDOW_MS,
   MERGE_OBS_RATIO_THRESHOLD,
+  ALERT_DEDUP_WINDOW_MS,
   MAX_RETRY_ATTEMPTS,
   BACKOFF_CAP_MINUTES,
 };

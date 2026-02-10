@@ -1,6 +1,7 @@
 const nodemailer = require("nodemailer");
 const twilio = require("twilio");
 const logger = require("../utils/logger");
+const alertDedup = require("../utils/alertDedup");
 
 /**
  * Notification Service
@@ -156,7 +157,22 @@ async function sendHealthAlerts(report) {
   const results = {
     emailSent: false,
     smsSent: false,
+    suppressed: false,
   };
+
+  // Dedup check: suppress duplicate alerts within the suppression window
+  const hash = alertDedup.computeHash(report);
+  if (alertDedup.isDuplicate(hash)) {
+    logger.info("Alert suppressed (duplicate within window)", {
+      status: report.status,
+      hash: hash.slice(0, 12),
+    });
+    results.suppressed = true;
+    return results;
+  }
+
+  // Record this alert before dispatching
+  alertDedup.record(hash);
 
   // Send email for warnings and critical
   if (report.status === "warning" || report.status === "critical") {
@@ -429,10 +445,15 @@ function _resetTransporter() {
   smtpTransporter = null;
 }
 
+function _resetAlertDedup() {
+  alertDedup._reset();
+}
+
 module.exports = {
   sendHealthAlerts,
   sendHealthEmail,
   sendHealthSMS,
   testNotifications,
   _resetTransporter,
+  _resetAlertDedup,
 };
