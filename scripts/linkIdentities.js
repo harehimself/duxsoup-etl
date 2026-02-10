@@ -34,6 +34,7 @@ function parseArgs() {
     commit: false,
     limit: 100,
     batchSize: 10,
+    force: false,
   };
 
   process.argv.slice(2).forEach(arg => {
@@ -45,6 +46,7 @@ function parseArgs() {
     }
     else if (key === 'limit') args.limit = parseInt(value);
     else if (key === 'batch-size') args.batchSize = parseInt(value);
+    else if (key === 'force') args.force = true;
   });
 
   return args;
@@ -139,6 +141,7 @@ async function linkPerson(urlPerson, identityResolver, stats) {
       {
         reason: 'linking_job',
         automated: true,
+        force: stats._force,
       }
     );
 
@@ -178,6 +181,7 @@ async function runLinkingJob(args) {
     alreadyLinked: 0,
     skipped: 0,
     failed: 0,
+    _force: args.force,
   };
 
   try {

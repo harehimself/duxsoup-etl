@@ -20,6 +20,7 @@ const logger = require('../src/utils/logger');
 const args = process.argv.slice(2);
 const isExecute = args.includes('--execute');
 const isDryRun = args.includes('--dry-run') || !isExecute;
+const isForce = args.includes('--force');
 
 const limitArg = args.find(arg => arg.startsWith('--limit-groups='));
 const limitGroups = limitArg ? parseInt(limitArg.split('=')[1], 10) : null;
@@ -175,6 +176,7 @@ async function run() {
 
     await identityResolverService.mergePeople(winner, losers, {
       reason: 'duplicate_detection',
+      force: isForce,
     });
 
     mergedGroups += 1;

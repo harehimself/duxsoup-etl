@@ -8,6 +8,7 @@ const {
   normalizeToCanonicalCase,
 } = require("../utils/salesNavIdExtractor");
 const logger = require("../utils/logger");
+const { MERGE_OBS_RATIO_THRESHOLD } = require("../constants/limits");
 
 /**
  * Identity Resolver Service
@@ -220,6 +221,100 @@ class IdentityResolverService {
   }
 
   /**
+   * Validate whether a merge is safe to proceed.
+   * Returns { safe, warnings, blockers }.
+   *
+   * Checks:
+   *   BLOCKER: Winner has 0 observations but any loser has >0
+   *   BLOCKER: Any loser has >= MERGE_OBS_RATIO_THRESHOLD x winner's observations
+   *   BLOCKER: Both first AND last name differ (both records fully populated)
+   *   WARNING: Only first OR last name differs
+   *   WARNING: Different currentCompany (not substring match)
+   *
+   * @param {Object} winner - Person document to keep
+   * @param {Array} losers - Person documents to merge and delete
+   * @returns {{ safe: boolean, warnings: string[], blockers: string[] }}
+   */
+  validateMergeSafety(winner, losers) {
+    const warnings = [];
+    const blockers = [];
+
+    const winnerObsCount =
+      (winner.observations?.visits?.length || 0) +
+      (winner.observations?.scans?.length || 0);
+
+    for (const loser of losers) {
+      const loserObsCount =
+        (loser.observations?.visits?.length || 0) +
+        (loser.observations?.scans?.length || 0);
+
+      // Observation disparity: winner has 0, loser has >0
+      if (winnerObsCount === 0 && loserObsCount > 0) {
+        blockers.push(
+          `Winner ${winner._id} has 0 observations but loser ${loser._id} has ${loserObsCount}`,
+        );
+      }
+      // Observation disparity: loser has >= threshold x winner's observations
+      else if (
+        winnerObsCount > 0 &&
+        loserObsCount >= MERGE_OBS_RATIO_THRESHOLD * winnerObsCount
+      ) {
+        blockers.push(
+          `Loser ${loser._id} has ${loserObsCount} observations vs winner ${winner._id} with ${winnerObsCount} (${Math.round(loserObsCount / winnerObsCount)}x ratio, threshold ${MERGE_OBS_RATIO_THRESHOLD}x)`,
+        );
+      }
+
+      // Name comparison
+      const wFirst = (winner.snapshot?.firstName || "").trim().toLowerCase();
+      const wLast = (winner.snapshot?.lastName || "").trim().toLowerCase();
+      const lFirst = (loser.snapshot?.firstName || "").trim().toLowerCase();
+      const lLast = (loser.snapshot?.lastName || "").trim().toLowerCase();
+
+      const firstPopulated = wFirst && lFirst;
+      const lastPopulated = wLast && lLast;
+      const firstDiffers = firstPopulated && wFirst !== lFirst;
+      const lastDiffers = lastPopulated && wLast !== lLast;
+
+      if (firstDiffers && lastDiffers) {
+        blockers.push(
+          `Name contradiction: winner "${winner.snapshot.firstName} ${winner.snapshot.lastName}" vs loser "${loser.snapshot.firstName} ${loser.snapshot.lastName}"`,
+        );
+      } else if (firstDiffers) {
+        warnings.push(
+          `First name mismatch: winner "${winner.snapshot.firstName}" vs loser "${loser.snapshot.firstName}"`,
+        );
+      } else if (lastDiffers) {
+        warnings.push(
+          `Last name mismatch: winner "${winner.snapshot.lastName}" vs loser "${loser.snapshot.lastName}"`,
+        );
+      }
+
+      // Company mismatch
+      const wCompany = (winner.snapshot?.currentCompany || "")
+        .trim()
+        .toLowerCase();
+      const lCompany = (loser.snapshot?.currentCompany || "")
+        .trim()
+        .toLowerCase();
+
+      if (wCompany && lCompany && wCompany !== lCompany) {
+        // Allow substring match (e.g., "Google" and "Google LLC")
+        if (!wCompany.includes(lCompany) && !lCompany.includes(wCompany)) {
+          warnings.push(
+            `Company mismatch: winner "${winner.snapshot.currentCompany}" vs loser "${loser.snapshot.currentCompany}"`,
+          );
+        }
+      }
+    }
+
+    return {
+      safe: blockers.length === 0,
+      warnings,
+      blockers,
+    };
+  }
+
+  /**
    * Determine if canonical_id should be updated to a new value
    * Updates when the new ID is based on a higher-priority identifier
    *
@@ -284,7 +379,7 @@ class IdentityResolverService {
    *
    * @param {Object} winner - Person document to keep
    * @param {Array} losers - Person documents to merge and delete
-   * @param {Object} mergeReason - { reason, sourceObservationId }
+   * @param {Object} mergeReason - { reason, sourceObservationId, force }
    * @returns {Promise<Object>} Updated winner person document
    */
   async mergePeople(winner, losers, mergeReason = {}) {
@@ -298,6 +393,30 @@ class IdentityResolverService {
         loser_ids: losers.map((l) => l._id),
         reason: mergeReason.reason || "alias_conflict",
       });
+
+      // Safety validation (skip if force is set)
+      if (!mergeReason.force) {
+        const safetyResult = this.validateMergeSafety(winner, losers);
+
+        if (safetyResult.blockers.length > 0) {
+          logger.error("Merge blocked by safety validation", {
+            winner_id: winner._id,
+            loser_ids: losers.map((l) => l._id),
+            blockers: safetyResult.blockers,
+            warnings: safetyResult.warnings,
+          });
+          return winner;
+        }
+
+        if (safetyResult.warnings.length > 0) {
+          logger.warn("Merge proceeding with safety warnings", {
+            winner_id: winner._id,
+            loser_ids: losers.map((l) => l._id),
+            warnings: safetyResult.warnings,
+          });
+          mergeReason._safetyWarnings = safetyResult.warnings;
+        }
+      }
 
       // Capture winner state before merge for rollback
       mergeReason._winnerSnapshot = winner.toObject();
@@ -380,7 +499,7 @@ class IdentityResolverService {
 
       // Create merge audit record with rollback snapshots
       const Merge = require("../models/merge");
-      await Merge.create({
+      const mergeAuditData = {
         winner_id: winner._id,
         loser_ids: losers.map((l) => l._id),
         reason: mergeReason.reason || "alias_conflict",
@@ -388,7 +507,13 @@ class IdentityResolverService {
         timestamp: new Date(),
         winnerSnapshotBefore: mergeReason._winnerSnapshot || null,
         loserSnapshots: losers.map((l) => l.toObject()),
-      });
+      };
+      if (mergeReason._safetyWarnings?.length > 0) {
+        mergeAuditData.metadata = {
+          safetyWarnings: mergeReason._safetyWarnings,
+        };
+      }
+      await Merge.create(mergeAuditData);
 
       // Delete loser documents
       const loserIds = losers.map((l) => l._id);

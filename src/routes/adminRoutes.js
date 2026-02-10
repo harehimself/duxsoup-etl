@@ -294,6 +294,7 @@ router.post("/run-linking", async (req, res) => {
 
     // Execute merges (not dry run)
     // identityResolver is already an instance (singleton pattern)
+    const force = req.body.force === true;
     const results = [];
 
     for (const person of upgradablePeople) {
@@ -341,6 +342,7 @@ router.post("/run-linking", async (req, res) => {
             {
               reason: "duplicate_detection",
               automated: true,
+              force,
             },
           );
 
@@ -379,6 +381,7 @@ router.post("/run-linking", async (req, res) => {
             {
               reason: "duplicate_detection",
               automated: true,
+              force,
             },
           );
 

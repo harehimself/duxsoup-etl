@@ -695,4 +695,146 @@ describe("IdentityResolverService", () => {
       );
     });
   });
+
+  describe("mergePeople() safety validation", () => {
+    it("should block merge and return winner unchanged when observation disparity detected", async () => {
+      // Winner has 0 observations, loser has 5
+      const winner = await Person.create({
+        _id: "ACwAAAWinner",
+        person_id: "ACwAAAWinner",
+        canonical_id: canonicalIdFor("salesNavId", "ACwAAAWinner"),
+        aliases: [{ type: "salesNavId", value: "ACwAAAWinner" }],
+        snapshot: { fullName: "Alice Test" },
+        observations: { visits: [], scans: [] },
+      });
+
+      const loserVisits = Array.from(
+        { length: 5 },
+        () => new mongoose.Types.ObjectId(),
+      );
+      const loser = await Person.create({
+        _id: "linkedin.com/in/alice-test",
+        person_id: "linkedin.com/in/alice-test",
+        canonical_id: canonicalIdFor("publicUrl", "linkedin.com/in/alice-test"),
+        aliases: [{ type: "publicUrl", value: "linkedin.com/in/alice-test" }],
+        snapshot: { fullName: "Alice Test" },
+        observations: { visits: loserVisits, scans: [] },
+      });
+
+      const result = await identityResolverService.mergePeople(
+        winner,
+        [loser],
+        {
+          reason: "alias_conflict",
+        },
+      );
+
+      // Winner returned unchanged
+      expect(result._id).toBe("ACwAAAWinner");
+      expect(result.aliases).toHaveLength(1);
+
+      // Loser NOT deleted
+      const loserStillExists = await Person.findById(
+        "linkedin.com/in/alice-test",
+      );
+      expect(loserStillExists).toBeTruthy();
+
+      // No merge audit record created
+      const mergeRecord = await Merge.findOne({ winner_id: "ACwAAAWinner" });
+      expect(mergeRecord).toBeNull();
+    });
+
+    it("should proceed with merge when force is set despite blockers", async () => {
+      // Winner has 0 observations, loser has 5 — would normally block
+      const winner = await Person.create({
+        _id: "ACwAAAForceWin",
+        person_id: "ACwAAAForceWin",
+        canonical_id: canonicalIdFor("salesNavId", "ACwAAAForceWin"),
+        aliases: [{ type: "salesNavId", value: "ACwAAAForceWin" }],
+        snapshot: { fullName: "Bob Force" },
+        observations: { visits: [], scans: [] },
+      });
+
+      const loserVisits = Array.from(
+        { length: 5 },
+        () => new mongoose.Types.ObjectId(),
+      );
+      const loser = await Person.create({
+        _id: "linkedin.com/in/bob-force",
+        person_id: "linkedin.com/in/bob-force",
+        canonical_id: canonicalIdFor("publicUrl", "linkedin.com/in/bob-force"),
+        aliases: [{ type: "publicUrl", value: "linkedin.com/in/bob-force" }],
+        snapshot: { fullName: "Bob Force" },
+        observations: { visits: loserVisits, scans: [] },
+      });
+
+      const result = await identityResolverService.mergePeople(
+        winner,
+        [loser],
+        {
+          reason: "alias_conflict",
+          force: true,
+        },
+      );
+
+      // Merge proceeded
+      expect(result._id).toBe("ACwAAAForceWin");
+      expect(result.aliases).toHaveLength(2);
+
+      // Loser deleted
+      const loserDeleted = await Person.findById("linkedin.com/in/bob-force");
+      expect(loserDeleted).toBeNull();
+
+      // Merge audit record created
+      const mergeRecord = await Merge.findOne({ winner_id: "ACwAAAForceWin" });
+      expect(mergeRecord).toBeTruthy();
+    });
+
+    it("should attach safety warnings to merge audit metadata", async () => {
+      // Winner and loser have different companies — warning, not blocker
+      const winner = await Person.create({
+        _id: "ACwAAAWarnWin",
+        person_id: "ACwAAAWarnWin",
+        canonical_id: canonicalIdFor("salesNavId", "ACwAAAWarnWin"),
+        aliases: [{ type: "salesNavId", value: "ACwAAAWarnWin" }],
+        snapshot: { fullName: "Carol Warn", currentCompany: "Acme Corp" },
+        observations: { visits: [new mongoose.Types.ObjectId()], scans: [] },
+      });
+
+      const loser = await Person.create({
+        _id: "linkedin.com/in/carol-warn",
+        person_id: "linkedin.com/in/carol-warn",
+        canonical_id: canonicalIdFor("publicUrl", "linkedin.com/in/carol-warn"),
+        aliases: [{ type: "publicUrl", value: "linkedin.com/in/carol-warn" }],
+        snapshot: { fullName: "Carol Warn", currentCompany: "Globex Inc" },
+        observations: { visits: [new mongoose.Types.ObjectId()], scans: [] },
+      });
+
+      const result = await identityResolverService.mergePeople(
+        winner,
+        [loser],
+        {
+          reason: "alias_conflict",
+        },
+      );
+
+      // Merge proceeded (only warning, no blocker)
+      expect(result._id).toBe("ACwAAAWarnWin");
+      expect(result.aliases).toHaveLength(2);
+
+      // Loser deleted
+      const loserDeleted = await Person.findById("linkedin.com/in/carol-warn");
+      expect(loserDeleted).toBeNull();
+
+      // Merge audit record has safety warnings in metadata
+      const mergeRecord = await Merge.findOne({ winner_id: "ACwAAAWarnWin" });
+      expect(mergeRecord).toBeTruthy();
+      expect(mergeRecord.metadata).toBeTruthy();
+      expect(mergeRecord.metadata.safetyWarnings).toBeTruthy();
+      expect(mergeRecord.metadata.safetyWarnings.length).toBeGreaterThan(0);
+      expect(mergeRecord.metadata.safetyWarnings[0]).toContain(
+        "Company mismatch",
+      );
+    });
+  });
 });
