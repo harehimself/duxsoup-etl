@@ -67,17 +67,17 @@
   - Category: `observability`
   - Impact: Enables monitoring dashboards and alerting on processing degradation.
 
-- [ ] **Add data freshness alerting** — No alert fires when webhooks stop arriving. Add a scheduled job checking "time since last observation" and alerting (via existing notification service) when it exceeds a configurable threshold (default 6 hours). Would catch DuxSoup outages, webhook config drift, or Render ingress issues.
+- [x] **Add data freshness alerting** — No alert fires when webhooks stop arriving. Add a scheduled job checking "time since last observation" and alerting (via existing notification service) when it exceeds a configurable threshold (default 6 hours). Would catch DuxSoup outages, webhook config drift, or Render ingress issues.
   - Priority: `medium`
   - Category: `reliability`
   - Impact: Detects silent data pipeline failures before they become stale-data problems.
 
-- [ ] **Bulk alias lookup endpoint** — `GET /api/people/by-alias/:value` handles one alias at a time. Add `POST /api/people/by-aliases` accepting an array of alias values and returning matched people in a single response. Reduces N+1 API calls for CRM sync use cases.
+- [x] **Bulk alias lookup endpoint** — `GET /api/people/by-alias/:value` handles one alias at a time. Add `POST /api/people/by-aliases` accepting an array of alias values and returning matched people in a single response. Reduces N+1 API calls for CRM sync use cases.
   - Priority: `medium`
   - Category: `feature`
   - Impact: Enables efficient batch lookups for integrations.
 
-- [ ] **Configurable Winston log level via env var** — No `LOG_LEVEL` environment variable exists. All log levels are emitted in production. Add `LOG_LEVEL` (default `info` in production, `debug` in development) to reduce noise without code changes. Particularly useful after fixing the VisitTime schema issue to verify logs are clean.
+- [x] **Configurable Winston log level via env var** — No `LOG_LEVEL` environment variable exists. All log levels are emitted in production. Add `LOG_LEVEL` (default `info` in production, `debug` in development) to reduce noise without code changes. Particularly useful after fixing the VisitTime schema issue to verify logs are clean.
   - Priority: `medium`
   - Category: `observability`
   - Impact: Operational control over log verbosity without redeployment.
@@ -88,7 +88,7 @@
   - Impact: Eliminates startup warning, enables browser-based API access to Swagger UI.
   - Discovered: 2026-02-10, Render log review.
 
-- [ ] **Add per-type webhook freshness monitoring (visit vs scan)** — Current data freshness alerting (backlog item) would check overall "time since last observation." Extend to monitor visit and scan types independently. Recent log windows show 100% visit traffic despite scans being active in the DB (42,926 scans). Per-type monitoring would detect if one pipeline silently stops while the other masks the gap.
+- [x] **Add per-type webhook freshness monitoring (visit vs scan)** — Current data freshness alerting (backlog item) would check overall "time since last observation." Extend to monitor visit and scan types independently. Recent log windows show 100% visit traffic despite scans being active in the DB (42,926 scans). Per-type monitoring would detect if one pipeline silently stops while the other masks the gap.
   - Priority: `medium`
   - Category: `observability`
   - Impact: Detects single-pipeline failures that overall freshness monitoring would miss.
@@ -199,6 +199,10 @@
 
 ## Completed
 
+- [x] **Configurable Winston log level via env var** — 2026-02-10. Added `LOG_LEVEL` env var override to `src/utils/logger.js`. Defaults to `info` in production, `debug` in development; any valid Winston level can be set via env var without redeployment. 4 new tests.
+- [x] **Bulk alias lookup endpoint** — 2026-02-10. Added `POST /api/people/by-aliases` accepting `{ values: string[] }` (max 50, deduped). Single `$in` query on `aliases.value` multikey index. Returns `{ success, total, found, notFound, results: [{ value, found, person }] }`. Added `findPeopleByAliases` to `personReadService.js`, `getPersonsByAliases` to `personReadController.js`. 13 new tests (4 service + 9 controller).
+- [x] **Add data freshness alerting** — 2026-02-10. Added `checkDataFreshness()` to health check job, monitoring visit and scan pipelines independently. Queries most recent Visit/Scan records in parallel. Fires `stale_visits`/`stale_scans` warnings when age exceeds `DATA_FRESHNESS_THRESHOLD_HOURS` (default 6h, env-configurable). Also fires `no_visits`/`no_scans` warnings when no records exist. Covers both "data freshness alerting" and "per-type webhook freshness monitoring" backlog items. 8 new tests.
+- [x] **Add per-type webhook freshness monitoring (visit vs scan)** — 2026-02-10. Implemented as part of data freshness alerting above.
 - [x] **Add webhook throughput metrics endpoint** — 2026-02-10. Added `GET /api/health/throughput` with real-time processing stats across 1m/5m/15m/1h windows. Created `src/utils/throughputTracker.js` using circular buffer of 3600 per-second buckets (~300KB memory). Tracks total, success, failure, debounced, duplicate, phase2Failure counts, per-type breakdown, rate/min, success rate, and avg latency. Instrumented `observationHandler.js` with `finally`-block recording on every code path. Uses `metricsCache` with 30s TTL for near-real-time data. 17 new tests.
 - [x] **Add company/location export endpoints** — 2026-02-10. Extended streaming export infrastructure to support companies and locations. Added `entityType` field to ExportJob model. Created `COMPANY_FIELD_MAPPING`/`LOCATION_FIELD_MAPPING` with entity-specific defaults. Added `ENTITY_CONFIG` registry mapping entity types to models, fields, and ID formatters. Refactored `exportController.js` with `createExportHandler(entityType, format)` factory pattern. Added 4 new routes: `POST /api/export/{companies,locations}/{csv,json}`. Uses `checkForDangerousOperators` for entity-agnostic filter validation. 39 new tests.
 - [x] **Add export job cleanup scheduler** — 2026-02-10. Added `src/workers/jobs/exportCleanup.js` that deletes export temp files older than `EXPORT_TTL_HOURS` (default 24h). Handles missing directory, skips subdirectories, isolates per-file errors. Added Job 5 to scheduler running every 6 hours (`0 */6 * * *`). 6 new tests.

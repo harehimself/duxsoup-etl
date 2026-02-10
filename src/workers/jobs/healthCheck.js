@@ -1,6 +1,9 @@
 const Person = require("../../models/person");
 const DeadLetter = require("../../models/deadLetter");
+const Visit = require("../../models/visit");
+const Scan = require("../../models/scan");
 const logger = require("../../utils/logger");
+const { DATA_FRESHNESS_THRESHOLD_HOURS } = require("../../constants/limits");
 
 /**
  * Health Check Job
@@ -40,6 +43,9 @@ async function runHealthCheck() {
 
     // Check 4: Permanently failed dead letters
     await checkPermanentlyFailedDeadLetters(report);
+
+    // Check 5: Data freshness (per-type webhook monitoring)
+    await checkDataFreshness(report);
 
     // Determine overall status
     if (report.criticalIssues.length > 0) {
@@ -195,6 +201,76 @@ async function checkPermanentlyFailedDeadLetters(report) {
 
   logger.debug("Permanently failed dead letters check", {
     permanentlyFailedCount,
+  });
+}
+
+/**
+ * Check data freshness for visits and scans independently
+ *
+ * @param {Object} report - Health report to update
+ */
+async function checkDataFreshness(report) {
+  const [latestVisit, latestScan] = await Promise.all([
+    Visit.findOne().sort({ VisitTime: -1 }).select("VisitTime").lean(),
+    Scan.findOne().sort({ ScanTime: -1 }).select("ScanTime").lean(),
+  ]);
+
+  const now = new Date();
+  const thresholdMs = DATA_FRESHNESS_THRESHOLD_HOURS * 60 * 60 * 1000;
+
+  report.metrics.dataFreshnessThresholdHours = DATA_FRESHNESS_THRESHOLD_HOURS;
+
+  if (latestVisit && latestVisit.VisitTime) {
+    const visitAge = now - new Date(latestVisit.VisitTime);
+    report.metrics.lastVisitTime = latestVisit.VisitTime;
+    report.metrics.visitAgeHours = +(visitAge / (60 * 60 * 1000)).toFixed(1);
+
+    if (visitAge > thresholdMs) {
+      report.warnings.push({
+        type: "stale_visits",
+        severity: "warning",
+        message: `No visits received in ${report.metrics.visitAgeHours} hours (threshold: ${DATA_FRESHNESS_THRESHOLD_HOURS}h)`,
+        recommendation:
+          "Check DuxSoup visit automation and webhook configuration",
+      });
+    }
+  } else {
+    report.warnings.push({
+      type: "no_visits",
+      severity: "warning",
+      message: "No visit records found in the database",
+      recommendation: "Verify DuxSoup is configured and sending visit webhooks",
+    });
+  }
+
+  if (latestScan && latestScan.ScanTime) {
+    const scanAge = now - new Date(latestScan.ScanTime);
+    report.metrics.lastScanTime = latestScan.ScanTime;
+    report.metrics.scanAgeHours = +(scanAge / (60 * 60 * 1000)).toFixed(1);
+
+    if (scanAge > thresholdMs) {
+      report.warnings.push({
+        type: "stale_scans",
+        severity: "warning",
+        message: `No scans received in ${report.metrics.scanAgeHours} hours (threshold: ${DATA_FRESHNESS_THRESHOLD_HOURS}h)`,
+        recommendation:
+          "Check DuxSoup scan automation and webhook configuration",
+      });
+    }
+  } else {
+    report.warnings.push({
+      type: "no_scans",
+      severity: "warning",
+      message: "No scan records found in the database",
+      recommendation: "Verify DuxSoup is configured and sending scan webhooks",
+    });
+  }
+
+  logger.debug("Data freshness check", {
+    lastVisitTime: report.metrics.lastVisitTime,
+    lastScanTime: report.metrics.lastScanTime,
+    visitAgeHours: report.metrics.visitAgeHours,
+    scanAgeHours: report.metrics.scanAgeHours,
   });
 }
 

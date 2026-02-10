@@ -173,6 +173,7 @@ See `src/models/` for full schemas.
 ### Read APIs
 - `GET /api/people/:id` - Get person by ID
 - `GET /api/people/by-alias/:value` - Get person by any alias
+- `POST /api/people/by-aliases` - Bulk lookup people by alias values (body: `{ values: string[] }`)
 - `GET /api/companies/:id` - Get company by ID
 - `GET /api/companies/by-alias/:value` - Get company by any alias
 - `GET /api/locations/:id` - Get location by ID
@@ -345,6 +346,8 @@ PORT=3000                          # Server port
 ALLOWED_ORIGINS=http://localhost   # CORS origins (comma-separated)
 ENABLE_SCHEDULER=true              # Enable background jobs
 CANONICAL_ID_NAMESPACE=...         # UUID namespace for canonical IDs
+LOG_LEVEL=info                     # Winston log level (error/warn/info/debug)
+DATA_FRESHNESS_THRESHOLD_HOURS=6   # Hours before stale data warning fires
 ```
 
 ## Webhook Security

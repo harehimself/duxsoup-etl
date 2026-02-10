@@ -23,6 +23,7 @@ const {
 const {
   getPersonById,
   getPersonByAlias,
+  getPersonsByAliases,
 } = require("../controllers/personReadController");
 const {
   getCompanyById,
@@ -117,6 +118,7 @@ router.get(
 // Person read endpoints
 router.get("/people/:id", readRateLimiter, getPersonById);
 router.get("/people/by-alias/:value", readRateLimiter, getPersonByAlias);
+router.post("/people/by-aliases", readRateLimiter, getPersonsByAliases);
 
 // Company read endpoints
 router.get("/companies/:id", readRateLimiter, getCompanyById);

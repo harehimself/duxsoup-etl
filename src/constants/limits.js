@@ -45,6 +45,11 @@ const MAX_METRICS_CACHE_SIZE = parseInt(
   10,
 );
 
+const DATA_FRESHNESS_THRESHOLD_HOURS = parseInt(
+  process.env.DATA_FRESHNESS_THRESHOLD_HOURS || "6",
+  10,
+);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
@@ -57,4 +62,5 @@ module.exports = {
   MAX_BATCH_SIZE,
   MAX_DEBOUNCE_CACHE_SIZE,
   MAX_METRICS_CACHE_SIZE,
+  DATA_FRESHNESS_THRESHOLD_HOURS,
 };
