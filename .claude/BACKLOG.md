@@ -38,22 +38,11 @@
 
 - [x] ~~**Adopt semantic versioning with tagged releases**~~ — Completed, see Completed section.
 
-- [ ] **Add branch protection rules to `master`** — Commits have been pushed directly to master that broke CI (Feb 5 package-lock.json sync), then immediately fixed. No branch protection enforces CI status checks.
-  - Priority: `medium`
-  - Category: `reliability`
-  - Context: Direct pushes to master bypass CI. A broken commit was deployed on Feb 5 before the fix landed. Branch protection would enforce green CI before merge, preventing production breakage.
-  - Fix: GitHub Settings > Branches > Branch protection rule: require status checks to pass, optionally require PR review.
-  - Acceptance: Direct pushes to master that fail CI are blocked. PRs require green CI before merge.
+- [x] ~~**Add branch protection rules to `master`**~~ — Completed, see Completed section.
 
 - [x] ~~**Debounce rapid-fire duplicate visits for same profile**~~ — Completed, see Completed section.
 
-- [ ] **Investigate absence of scan webhook activity** — Recent Render logs show 100% visit type with zero scans. If scan webhooks are expected from DuxSoup, the scan pipeline may be misconfigured or disabled on the DuxSoup side.
-  - Priority: `medium`
-  - Category: `investigation`
-  - Files: `src/controllers/scanController.js`, `src/models/scan.js`
-  - Context: The codebase has full scan handling (`scanController.js`, `Scan` model) but no scan traffic has been observed in the recent log window. This could be normal (scans not configured) or could indicate a silent failure.
-  - Fix: Check DuxSoup configuration to determine if scan webhooks are enabled. If not expected, document that scan handling is retained for future use.
-  - Acceptance: Confirmed whether scans are expected. If not, document that scan handling is retained for future use.
+- [x] ~~**Investigate absence of scan webhook activity**~~ — Completed, see Completed section.
 
 - [x] ~~**Add request timeout middleware**~~ — Completed, see Completed section.
 
@@ -160,6 +149,8 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 ## Completed
 
 - [x] **Add merge safety validation** — 2026-02-09. Added `validateMergeSafety(winner, losers)` method to `identityResolverService.js` with pre-merge checks: observation disparity blockers (0-vs-N and 10x ratio), name contradiction blockers (both first+last differ), partial name mismatch warnings, and company mismatch warnings. Integrated into `mergePeople()` — blocked merges return winner unchanged, warnings attach to Merge audit `metadata.safetyWarnings`. Added `force` bypass via admin routes, `--force` CLI flag in `linkIdentities.js` and `merge-duplicates.js`. `MERGE_OBS_RATIO_THRESHOLD` env-configurable (default 10). 22 new unit tests, 3 new integration tests.
+- [x] **Add branch protection rules to `master`** — 2026-02-09. Enabled branch protection via GitHub API requiring `build-and-test` CI check to pass before merge. Strict mode enabled (branch must be up-to-date with master). Force pushes and branch deletion blocked. Admin enforcement left off to allow emergency hotfixes.
+- [x] **Investigate absence of scan webhook activity** — 2026-02-09. Investigation found scans are actively flowing: 42,926 scans vs 37,274 visits in production MongoDB. Most recent scan created Feb 9 20:38 UTC. The earlier observation of "zero scans" was an artifact of a limited Render log window that happened to contain only visit traffic. Code review confirmed the scan pipeline is fully wired: `POST /api/webhook` correctly routes `type: "scan"` to `handleScan()`, the Scan model is feature-complete with indexes, and no silent filtering exists. No dead letter failures for scan type. No code changes needed.
 - [x] **Webhook payload schema validation** — 2026-02-09. Added JSON Schema validation (ajv) for incoming DuxSoup webhooks in warn-only mode. Validates envelope structure, visit data fields, scan data fields, and extended data (positions, schools, skills) against known schemas. Detects two categories of drift: type violations (known field has unexpected type, logged as warning) and unknown fields (new fields DuxSoup added, logged as info). Integrated into `observationHandler.js` before existing validation — never blocks webhook processing. Schemas defined in `webhookSchemas.js`, validator in `webhookSchemaValidator.js`. 41 new unit tests.
 - [x] **Lateral move detection in change service** — 2026-02-09. Added `lateral_move` change type to detect company switches at the same seniority level (e.g., VP at Google → VP at Meta). Uses `titleParser.parseTitle()` to compare seniority ranks. Lateral move records include full enrichment (fromCompanyId, toCompanyId, fromTitle, toTitle, seniority tier, tenure, recentJobChange flag). Recorded alongside `company_change` for backward compatibility. Added `fromTitle`, `toTitle`, `seniority`, `seniorityRank` fields to Change schema. 8 new unit tests.
 - [x] **Role deduplication during person upsert** — 2026-02-09. Replaced naive `title|company|startDate` dedup key with `findMatchingRole()` using case/whitespace-normalized comparison and multi-dimensional matching. When startDate is null, uses isCurrent + location + description as secondary discriminators to avoid collapsing genuinely distinct undated roles. Added `mergeRoleFields()` to backfill empty fields on existing matched roles (companyId, location, description, dates). Removed unused `_roleKey` variable. 25 new unit tests covering null startDate collision, text normalization, field merging, and current-role matching.
