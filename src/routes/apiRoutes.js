@@ -87,25 +87,10 @@ router.get("/test", (req, res) => {
 
 // Version endpoint to verify deployed code
 router.get("/version", (req, res) => {
-  const { exec } = require("child_process");
-  exec("git rev-parse --short HEAD", (error, stdout, _stderr) => {
-    if (error) {
-      return res.json({
-        version: "unknown",
-        error: error.message,
-        regex_test: {
-          ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACwAAA-test"),
-          ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACoAAA-test"),
-        },
-      });
-    }
-    res.json({
-      commit: stdout.trim(),
-      regex_test: {
-        ACwAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACwAAA-test"),
-        ACoAAA: /A[Cc][owA][AAA][A-Za-z0-9_-]+/.test("ACoAAA-test"),
-      },
-    });
+  res.json({
+    version: require("../../package.json").version,
+    commit: process.env.GIT_COMMIT || "unknown",
+    node: process.version,
   });
 });
 
