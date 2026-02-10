@@ -216,6 +216,55 @@ function normalizeField(snapshot, fieldPath, incomingValue, observationMeta) {
 }
 
 /**
+ * Field mappings for webhook-to-snapshot normalization.
+ * Each entry maps a snapshot field to one or more webhook source keys,
+ * with an optional transform function applied to the raw value.
+ *
+ * Complex fields (birthday, fullName, title parsing, company URL,
+ * structured location) are handled inline after this loop.
+ */
+const FIELD_MAPPINGS = [
+  { field: "firstName", source: "First Name" },
+  { field: "middleName", source: "Middle Name" },
+  { field: "lastName", source: "Last Name" },
+  { field: "currentTitle", source: "Title" },
+  { field: "currentCompany", source: "Company" },
+  { field: "currentCompanyId", source: "CompanyID" },
+  { field: "currentCompanyProfile", source: "CompanyProfile" },
+  { field: "location", source: "Location" },
+  { field: "industry", source: "Industry" },
+  { field: "connections", source: "Connections", transform: parseConnections },
+  { field: "summary", source: "Summary" },
+  {
+    field: "degree",
+    source: ["Degree", "Connection Degree"],
+    transform: parseDegree,
+  },
+  { field: "email", source: "Email" },
+  { field: "phone", source: "Phone" },
+  { field: "twitter", source: "Twitter" },
+  { field: "profilePicture", source: "Picture" },
+  { field: "thumbnail", source: "Thumbnail" },
+  { field: "personalWebsite", source: "PersonalWebsite" },
+  { field: "companyWebsite", source: "CompanyWebsite" },
+];
+
+/**
+ * Location sub-fields parsed from the raw Location string.
+ * Each name maps directly to a property on the parseLocation() result.
+ */
+const LOCATION_FIELDS = [
+  "city",
+  "state",
+  "stateCode",
+  "country",
+  "countryCode",
+  "province",
+  "region",
+  "locationType",
+];
+
+/**
  * Compute derived metrics from roles timeline
  *
  * @param {Array} roles - Array of role objects
@@ -713,25 +762,24 @@ async function upsertFromObservation(observationDoc, sourceType) {
       ? structuredClone(person.snapshot.toObject())
       : null;
 
-    // Normalize basic fields
-    normalizeField(
-      person.snapshot,
-      "firstName",
-      webhookData["First Name"],
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "middleName",
-      webhookData["Middle Name"],
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "lastName",
-      webhookData["Last Name"],
-      observationMeta,
-    );
+    // Normalize mapped fields (simple webhook key → snapshot field)
+    for (const { field, source, transform } of FIELD_MAPPINGS) {
+      let value;
+      if (Array.isArray(source)) {
+        for (const key of source) {
+          if (webhookData[key] != null) {
+            value = webhookData[key];
+            break;
+          }
+        }
+      } else {
+        value = webhookData[source];
+      }
+      if (transform) {
+        value = transform(value);
+      }
+      normalizeField(person.snapshot, field, value, observationMeta);
+    }
 
     // Birthday: reject year-less strings to avoid fabricated 2001 dates
     const birthdayResult = parseBirthdayDate(webhookData.Birthday);
@@ -768,13 +816,6 @@ async function upsertFromObservation(observationDoc, sourceType) {
       normalizeField(person.snapshot, "fullName", fullName, observationMeta);
     }
 
-    normalizeField(
-      person.snapshot,
-      "currentTitle",
-      webhookData.Title,
-      observationMeta,
-    );
-
     // Enrich with parsed title (seniority + department)
     if (person.snapshot.currentTitle) {
       const parsed = parseTitle(person.snapshot.currentTitle);
@@ -799,25 +840,6 @@ async function upsertFromObservation(observationDoc, sourceType) {
         clearDerivedField(person.snapshot, "parsedDepartment", observationMeta);
       }
     }
-
-    normalizeField(
-      person.snapshot,
-      "currentCompany",
-      webhookData.Company,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "currentCompanyId",
-      webhookData.CompanyID,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "currentCompanyProfile",
-      webhookData.CompanyProfile,
-      observationMeta,
-    );
 
     // Compute currentCompanyUrl from currentCompanyId (priority 1)
     if (person.snapshot.currentCompanyId) {
@@ -844,138 +866,18 @@ async function upsertFromObservation(observationDoc, sourceType) {
       }
     }
 
-    normalizeField(
-      person.snapshot,
-      "location",
-      webhookData.Location,
-      observationMeta,
-    );
-
     // Parse and normalize structured location fields
     if (webhookData.Location) {
       const parsedLocation = parseLocation(webhookData.Location);
-      normalizeField(
-        person.snapshot,
-        "city",
-        parsedLocation.city,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "state",
-        parsedLocation.state,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "stateCode",
-        parsedLocation.stateCode,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "country",
-        parsedLocation.country,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "countryCode",
-        parsedLocation.countryCode,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "province",
-        parsedLocation.province,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "region",
-        parsedLocation.region,
-        observationMeta,
-      );
-      normalizeField(
-        person.snapshot,
-        "locationType",
-        parsedLocation.locationType,
-        observationMeta,
-      );
+      for (const field of LOCATION_FIELDS) {
+        normalizeField(
+          person.snapshot,
+          field,
+          parsedLocation[field],
+          observationMeta,
+        );
+      }
     }
-
-    normalizeField(
-      person.snapshot,
-      "industry",
-      webhookData.Industry,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "connections",
-      parseConnections(webhookData.Connections),
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "summary",
-      webhookData.Summary,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "degree",
-      parseDegree(webhookData.Degree || webhookData["Connection Degree"]),
-      observationMeta,
-    );
-
-    // Contact fields
-    normalizeField(
-      person.snapshot,
-      "email",
-      webhookData.Email,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "phone",
-      webhookData.Phone,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "twitter",
-      webhookData.Twitter,
-      observationMeta,
-    );
-
-    // Profile images
-    normalizeField(
-      person.snapshot,
-      "profilePicture",
-      webhookData.Picture,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "thumbnail",
-      webhookData.Thumbnail,
-      observationMeta,
-    );
-
-    // Websites
-    normalizeField(
-      person.snapshot,
-      "personalWebsite",
-      webhookData.PersonalWebsite,
-      observationMeta,
-    );
-    normalizeField(
-      person.snapshot,
-      "companyWebsite",
-      webhookData.CompanyWebsite,
-      observationMeta,
-    );
 
     // Step 7: Update roles timeline
     if (!person.snapshot.roles) {
@@ -1054,4 +956,6 @@ module.exports = {
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
   mergeRoleFields, // Export for testing
+  FIELD_MAPPINGS, // Export for testing
+  LOCATION_FIELDS, // Export for testing
 };

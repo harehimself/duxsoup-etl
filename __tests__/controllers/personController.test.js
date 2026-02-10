@@ -10,6 +10,9 @@ const {
   normalizeRoleText,
   findMatchingRole,
   mergeRoleFields,
+  normalizeField,
+  FIELD_MAPPINGS,
+  LOCATION_FIELDS,
 } = require("../../src/controllers/personController");
 const logger = require("../../src/utils/logger");
 
@@ -745,6 +748,147 @@ describe("PersonController", () => {
       });
 
       expect(merged).toBe(false);
+    });
+  });
+
+  describe("FIELD_MAPPINGS", () => {
+    const EXPECTED_FIELDS = [
+      "firstName",
+      "middleName",
+      "lastName",
+      "currentTitle",
+      "currentCompany",
+      "currentCompanyId",
+      "currentCompanyProfile",
+      "location",
+      "industry",
+      "connections",
+      "summary",
+      "degree",
+      "email",
+      "phone",
+      "twitter",
+      "profilePicture",
+      "thumbnail",
+      "personalWebsite",
+      "companyWebsite",
+    ];
+
+    it("should contain all expected snapshot fields", () => {
+      const mappedFields = FIELD_MAPPINGS.map((m) => m.field);
+      for (const field of EXPECTED_FIELDS) {
+        expect(mappedFields).toContain(field);
+      }
+    });
+
+    it("should have no duplicate field names", () => {
+      const fields = FIELD_MAPPINGS.map((m) => m.field);
+      expect(new Set(fields).size).toBe(fields.length);
+    });
+
+    it("should have a string or array source for every mapping", () => {
+      for (const mapping of FIELD_MAPPINGS) {
+        const validSource =
+          typeof mapping.source === "string" || Array.isArray(mapping.source);
+        expect(validSource).toBe(true);
+      }
+    });
+
+    it("should apply transform for connections field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "connections");
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("500+")).toBe(500);
+      expect(mapping.transform(null)).toBeNull();
+    });
+
+    it("should apply transform for degree field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "degree");
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("2nd")).toBe(2);
+      expect(mapping.transform(null)).toBeNull();
+    });
+
+    it("should use fallback sources for degree field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "degree");
+      expect(Array.isArray(mapping.source)).toBe(true);
+      expect(mapping.source).toEqual(["Degree", "Connection Degree"]);
+    });
+
+    it("should resolve first non-null value from fallback sources", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      // Simulate the loop logic for degree with first source present
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "degree");
+      const webhookData = { Degree: "1st" };
+      let value;
+      for (const key of mapping.source) {
+        if (webhookData[key] != null) {
+          value = webhookData[key];
+          break;
+        }
+      }
+      value = mapping.transform(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+      expect(snapshot.degree).toBe(1);
+    });
+
+    it("should resolve fallback source when primary is missing", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "degree");
+      const webhookData = { "Connection Degree": "3rd" };
+      let value;
+      for (const key of mapping.source) {
+        if (webhookData[key] != null) {
+          value = webhookData[key];
+          break;
+        }
+      }
+      value = mapping.transform(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+      expect(snapshot.degree).toBe(3);
+    });
+  });
+
+  describe("LOCATION_FIELDS", () => {
+    const EXPECTED_LOCATION_FIELDS = [
+      "city",
+      "state",
+      "stateCode",
+      "country",
+      "countryCode",
+      "province",
+      "region",
+      "locationType",
+    ];
+
+    it("should contain all expected location sub-fields", () => {
+      for (const field of EXPECTED_LOCATION_FIELDS) {
+        expect(LOCATION_FIELDS).toContain(field);
+      }
+    });
+
+    it("should have no duplicate field names", () => {
+      expect(new Set(LOCATION_FIELDS).size).toBe(LOCATION_FIELDS.length);
+    });
+
+    it("should match the parseLocation() result shape", () => {
+      // parseLocation returns an object with these exact keys
+      const { parseLocation } = require("../../src/utils/location-parser");
+      const result = parseLocation("San Francisco, California, United States");
+      for (const field of LOCATION_FIELDS) {
+        expect(field in result).toBe(true);
+      }
     });
   });
 });

@@ -58,25 +58,13 @@
 
 - [x] ~~**Split adminRoutes.js into focused route modules**~~ — Completed, see Completed section.
 
-- [ ] **Deduplicate person field normalization into a loop** — `personController.js` has 30+ sequential `normalizeField()` calls that follow an identical pattern and could be driven by a field mapping table.
-  - Priority: `low`
-  - Category: `refactor`
-  - Files: `src/controllers/personController.js:451-713`
-  - Context: Each field update is a separate `normalizeField(snapshot, '_meta', 'fieldName', value, source, observedAt, observationId)` call. A mapping array like `[{ field: 'firstName', source: 'First Name' }, ...]` would reduce ~260 lines to ~30.
-  - Fix: Create `FIELD_MAPPINGS` array and iterate with a loop.
-  - Acceptance: Same snapshot output for identical inputs. Existing tests pass. File reduced by 200+ lines.
+- [x] ~~**Deduplicate person field normalization into a loop**~~ — Completed, see Completed section.
 
 - [x] ~~**Reuse SMTP transporter in notification service**~~ — Completed, see Completed section.
 
 - [x] ~~**Add request timeout middleware**~~ — Completed, see Completed section.
 
-- [ ] **Add exponential backoff for stuck dead letter replays** — Dead letter replay processes up to 100 pending records hourly but doesn't increase delay for records that repeatedly fail.
-  - Priority: `low`
-  - Category: `reliability`
-  - Files: `src/workers/scheduler.js`, `src/models/deadLetter.js`
-  - Context: A record that fails 50 times will be retried every hour indefinitely. The `replay_attempts` counter is tracked but not used for backoff or max-retry decisions.
-  - Fix: Skip records where `replay_attempts > MAX_RETRIES` (e.g., 10). Add exponential backoff based on attempt count. Mark records as `permanently_failed` after max retries.
-  - Acceptance: Records with 10+ failures are skipped. `permanently_failed` status added to DeadLetter enum. Unit test confirms backoff logic.
+- [x] ~~**Add exponential backoff for stuck dead letter replays**~~ — Completed, see Completed section.
 
 - [x] ~~**Webhook payload schema validation**~~ — Completed, see Completed section.
 
@@ -143,6 +131,8 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 ## Completed
 
 - [x] **Split adminRoutes.js into focused route modules** — 2026-02-10. Split 829-line monolith into 3 focused sub-routers: `adminLinkingRoutes.js` (check-upgradable, run-linking), `adminRebuildRoutes.js` (rebuild-people, rebuild-people-full), `adminMaintenanceRoutes.js` (drop-id-index, fix-alias-types, inspect-observations). Hub `adminRoutes.js` reduced to 40 lines mounting sub-routers + health + test-notifications. All 772 tests pass. No API path changes.
+- [x] **Deduplicate person field normalization into a loop** — 2026-02-09. Replaced 27 sequential `normalizeField()` calls (19 direct field mappings + 8 location sub-fields) with data-driven `FIELD_MAPPINGS` array and `LOCATION_FIELDS` array iterated by loops. Supports optional `transform` functions (parseConnections, parseDegree) and fallback source keys (array of webhook keys). Complex fields (birthday, fullName, title parsing, company URL) remain inline. Reduced `upsertFromObservation()` normalization section from ~260 lines to ~110. 11 new unit tests verifying mapping completeness, no duplicates, transforms, fallback resolution, and location field coverage.
+- [x] **Add exponential backoff for stuck dead letter replays** — 2026-02-09. Found already implemented: `permanently_failed` status in DeadLetter enum, `MAX_RETRY_ATTEMPTS = 10` with env override in `src/constants/limits.js`, exponential backoff (2m → 4m → 8m → ... → 720m cap) in `src/utils/backoff.js`, `markReplayFailed()` transitions to `permanently_failed` at 10 attempts, `findEligibleForReplay()` / `countEligibleForReplay()` skip ineligible records, scheduler uses backoff-aware eligibility check. 6 backoff unit tests + 8 dead letter model tests.
 - [x] **Add merge safety validation** — 2026-02-09. Added `validateMergeSafety(winner, losers)` method to `identityResolverService.js` with pre-merge checks: observation disparity blockers (0-vs-N and 10x ratio), name contradiction blockers (both first+last differ), partial name mismatch warnings, and company mismatch warnings. Integrated into `mergePeople()` — blocked merges return winner unchanged, warnings attach to Merge audit `metadata.safetyWarnings`. Added `force` bypass via admin routes, `--force` CLI flag in `linkIdentities.js` and `merge-duplicates.js`. `MERGE_OBS_RATIO_THRESHOLD` env-configurable (default 10). 22 new unit tests, 3 new integration tests.
 - [x] **Add branch protection rules to `master`** — 2026-02-09. Enabled branch protection via GitHub API requiring `build-and-test` CI check to pass before merge. Strict mode enabled (branch must be up-to-date with master). Force pushes and branch deletion blocked. Admin enforcement left off to allow emergency hotfixes.
 - [x] **Investigate absence of scan webhook activity** — 2026-02-09. Investigation found scans are actively flowing: 42,926 scans vs 37,274 visits in production MongoDB. Most recent scan created Feb 9 20:38 UTC. The earlier observation of "zero scans" was an artifact of a limited Render log window that happened to contain only visit traffic. Code review confirmed the scan pipeline is fully wired: `POST /api/webhook` correctly routes `type: "scan"` to `handleScan()`, the Scan model is feature-complete with indexes, and no silent filtering exists. No dead letter failures for scan type. No code changes needed.
