@@ -4,6 +4,8 @@
  * No external dependencies — uses a plain Map with expiry timestamps.
  */
 
+const { MAX_METRICS_CACHE_SIZE } = require("../constants/limits");
+
 const DEFAULT_TTL_MS =
   parseInt(process.env.HEALTH_CACHE_TTL_MS, 10) || 5 * 60 * 1000; // 5 minutes
 
@@ -28,6 +30,18 @@ async function getOrFetch(key, fetchFn, ttlMs = DEFAULT_TTL_MS) {
   const data = await fetchFn();
 
   if (ttlMs > 0) {
+    // Evict expired entries if at capacity
+    if (store.size >= MAX_METRICS_CACHE_SIZE) {
+      const now = Date.now();
+      for (const [k, v] of store) {
+        if (v.expiresAt <= now) store.delete(k);
+      }
+      // If still at capacity after purging expired, evict oldest
+      if (store.size >= MAX_METRICS_CACHE_SIZE) {
+        const oldest = store.keys().next().value;
+        store.delete(oldest);
+      }
+    }
     store.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
 
