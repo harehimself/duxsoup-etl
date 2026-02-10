@@ -12,6 +12,12 @@ const SOURCE_PRECEDENCE = { visit: 2, scan: 1 };
  * Determine whether an incoming value should overwrite an existing one.
  */
 function shouldOverwrite(existingMeta, incomingMeta) {
+  // Never overwrite with empty/null/blank — check BEFORE missing-meta guard
+  // to prevent erasing existing data on legacy records that lack _meta
+  const v = incomingMeta.value;
+  if (v === null || v === undefined) return false;
+  if (typeof v === "string" && v.trim() === "") return false;
+
   if (
     !existingMeta ||
     existingMeta.value === null ||
@@ -19,10 +25,6 @@ function shouldOverwrite(existingMeta, incomingMeta) {
   ) {
     return true;
   }
-
-  const v = incomingMeta.value;
-  if (v === null || v === undefined) return false;
-  if (typeof v === "string" && v.trim() === "") return false;
 
   const existingP = SOURCE_PRECEDENCE[existingMeta.source] || 0;
   const incomingP = SOURCE_PRECEDENCE[incomingMeta.source] || 0;
@@ -59,6 +61,24 @@ function applySnapshotField(snapshot, field, value, meta) {
   return true;
 }
 
+/**
+ * Deep-clone a snapshot object, preserving Date and ObjectId types.
+ * Avoids Mongoose dirty-tracking side-effects during local computation.
+ */
+function cloneSnapshot(snapshot) {
+  if (!snapshot) return {};
+  const raw =
+    typeof snapshot.toObject === "function" ? snapshot.toObject() : snapshot;
+  const clone = { ...raw };
+  if (raw._meta && typeof raw._meta === "object") {
+    clone._meta = {};
+    for (const [key, val] of Object.entries(raw._meta)) {
+      clone._meta[key] = { ...val };
+    }
+  }
+  return clone;
+}
+
 async function upsertLocationFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
   const webhookData =
@@ -84,6 +104,7 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
     observationId,
   };
 
+  // Step 1: Find or create the base document
   let location = await Location.findOne({
     $or: [
       { _id: identity.location_id },
@@ -127,29 +148,20 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
     }
   }
 
-  // Always merge aliases
-  {
-    const mergedAliases = dedupeAliases([
-      ...(location.aliases || []),
-      ...(identity.aliases || []),
-    ]);
-    location.aliases = mergedAliases;
-  }
+  // Step 2: Compute all changes locally
+  const mergedAliases = dedupeAliases([
+    ...(location.aliases || []),
+    ...(identity.aliases || []),
+  ]);
 
-  // Update snapshot fields with precedence + provenance
-  location.snapshot = location.snapshot || {};
+  const snapshot = cloneSnapshot(location.snapshot);
   applySnapshotField(
-    location.snapshot,
+    snapshot,
     "normalized",
     identity.normalized,
     observationMeta,
   );
-  applySnapshotField(
-    location.snapshot,
-    "name",
-    identity.normalized,
-    observationMeta,
-  );
+  applySnapshotField(snapshot, "name", identity.normalized, observationMeta);
 
   if (identity.parsed) {
     const parsed = identity.parsed;
@@ -164,42 +176,54 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
       ["locationType", parsed.locationType],
     ];
     for (const [field, value] of fields) {
-      applySnapshotField(location.snapshot, field, value, observationMeta);
+      applySnapshotField(snapshot, field, value, observationMeta);
     }
   }
 
-  // Use $addToSet for atomic uniqueness on observation references
-  const observationField =
+  // Pre-compute observation count (avoids needing a separate reload)
+  const existingObs =
+    sourceType === "visit"
+      ? location.observations?.visits || []
+      : location.observations?.scans || [];
+  const isNewObs = !existingObs.some(
+    (id) => String(id) === String(observationId),
+  );
+  const observationsCount =
+    (location.observations?.visits?.length || 0) +
+    (location.observations?.scans?.length || 0) +
+    (isNewObs ? 1 : 0);
+
+  // Step 3: Single atomic update (eliminates find-modify-save race condition)
+  const obsField =
     sourceType === "visit" ? "observations.visits" : "observations.scans";
-  await Location.updateOne(
+
+  const updated = await Location.findOneAndUpdate(
     { _id: location._id },
-    { $addToSet: { [observationField]: observationId } },
+    {
+      $set: {
+        aliases: mergedAliases,
+        snapshot,
+        "meta.lastObservedAt": observedAt,
+        "meta.lastObservation": {
+          type: sourceType,
+          id: observationId,
+          observedAt: observedAt,
+        },
+        "meta.observationsCount": observationsCount,
+      },
+      $addToSet: { [obsField]: observationId },
+    },
+    { new: true },
   );
 
-  // Reload to get updated observations count
-  location = await Location.findById(location._id);
-
-  location.meta = location.meta || {};
-  location.meta.lastObservedAt = observedAt;
-  location.meta.lastObservation = {
-    type: sourceType,
-    id: observationId,
-    observedAt: observedAt,
-  };
-  location.meta.observationsCount =
-    (location.observations.visits.length || 0) +
-    (location.observations.scans.length || 0);
-
-  await location.save();
-
   logger.info("Upserted location from observation", {
-    location_id: location._id,
-    canonical_id: location.canonical_id,
+    location_id: updated?._id,
+    canonical_id: updated?.canonical_id,
     observation_id: observationId,
     sourceType,
   });
 
-  return location;
+  return updated;
 }
 
 module.exports = {

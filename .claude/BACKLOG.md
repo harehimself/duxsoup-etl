@@ -12,83 +12,13 @@
 
 ### High Priority
 
-- [ ] **Remove `child_process.exec` from `/api/version` endpoint** — `src/routes/apiRoutes.js:90-91` shells out to `git rev-parse --short HEAD` on every request. This is a command injection risk (even though no user input flows in today) and fails in Docker/production where git may not be installed. Replace with a build-time `GIT_COMMIT` env var or read from a generated `version.json`.
-  - Priority: `high`
-  - Category: `security`
-  - Impact: Eliminates a shell exec in the request path and a potential attack surface.
-
-- [ ] **Remove unused `csv-writer` dependency** — `csv-writer` is still listed in `package.json` dependencies but has zero imports anywhere in the codebase after the streaming export rewrite. Dead dependency increases install size and audit surface.
-  - Priority: `high`
-  - Category: `tech-debt`
-  - Impact: Smaller `node_modules`, cleaner dependency tree.
-
-- [ ] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() → modify in JS → save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
-  - Priority: `high`
-  - Category: `bug`
-  - Impact: Prevents data loss from concurrent webhook processing of the same company/location.
+_All high-priority items completed — see Completed section below._
 
 ### Medium Priority
 
-- [ ] **Add provenance tracking (`_meta`) to company snapshots** — Person snapshots track per-field provenance (`_meta.fieldName.observedAt`, `.source`, `.observationId`) but company snapshots use a simple `applySnapshotValue()` with no metadata. This means there's no way to audit when or from which observation a company field was last updated.
-  - Priority: `medium`
-  - Category: `feature`
-  - Impact: Parity with person model, enables debugging "where did this company name come from?"
-
-- [ ] **Add provenance tracking (`_meta`) to location snapshots** — Same gap as company: location snapshots have no per-field provenance. The location controller blindly overwrites fields with `parsed.X || location.snapshot.X`.
-  - Priority: `medium`
-  - Category: `feature`
-  - Impact: Audit trail for location data sources.
-
-- [ ] **Company controller: apply source precedence rules (visit > scan)** — `companyController.js` applies snapshot values unconditionally (any non-empty value overwrites). Unlike the person controller, there's no visit-beats-scan or newer-beats-older logic. A stale scan could overwrite a fresh visit's company name.
-  - Priority: `medium`
-  - Category: `bug`
-  - Impact: Ensures company snapshots follow the same precedence rules as person snapshots.
-
-- [ ] **Read endpoints missing rate limiting** — `GET /api/people/:id` and `GET /api/people/by-alias/:value` (and their company/location counterparts at `apiRoutes.js:131-140`) are not wrapped in `readRateLimiter`. All other read endpoints have rate limiting applied. An attacker could enumerate all person records at unrestricted speed.
-  - Priority: `medium`
-  - Category: `security`
-  - Impact: Closes a rate-limiting gap for entity lookup endpoints.
-
-- [ ] **Scheduler `stopScheduler()` does not actually cancel cron jobs** — `src/workers/scheduler.js:204-213` sets `schedulerStarted = false` but doesn't call `task.stop()` on any cron task. The comment says "Tasks will naturally stop when process exits" but during graceful shutdown there's a window where jobs could fire after `stopScheduler()` is called but before `process.exit()`.
-  - Priority: `medium`
-  - Category: `bug`
-  - Impact: Prevents orphaned cron jobs from running during shutdown, especially dead letter replays that touch the database.
-
-- [ ] **`isDuplicate` detection is unreliable in `observationHandler.js`** — `isDuplicate` is set to `false` after a successful `findOneAndUpdate` upsert (`observationHandler.js:94`), but `findOneAndUpdate` with `$setOnInsert` returns the existing document on conflict rather than throwing E11000. The flag is only set to `true` in the E11000 catch branch. This means re-processed webhooks silently pass as "new" and trigger redundant Phase 2 upserts.
-  - Priority: `medium`
-  - Category: `bug`
-  - Impact: Reduces unnecessary Phase 2 work and provides accurate duplicate metrics.
+_All medium-priority items completed — see Completed section below._
 
 ### Low Priority / Tech Debt
-
-- [ ] **Add integration tests for batch webhook endpoint** — The batch endpoint (`batchWebhookHandler.js`) has unit tests but no integration tests hitting a real MongoDB instance. The existing integration test suite (`api.integration.test.js`) doesn't cover `POST /api/webhook/batch`.
-  - Priority: `low`
-  - Category: `testing`
-  - Impact: Validates batch processing end-to-end with real database interactions.
-
-- [ ] **Add integration tests for company and location upsert** — No integration tests exist for `companyController.js` or `locationController.js`. These are Phase 2 upserts that run on every webhook but are only covered by the person controller integration tests indirectly.
-  - Priority: `low`
-  - Category: `testing`
-  - Impact: Catches regressions in company/location identity resolution and snapshot updates.
-
-- [ ] **Debounce cache has no upper bound** — `src/utils/upsertDebounce.js` uses an unbounded `Map` with lazy cleanup on each `shouldSkip()` call. Under sustained high volume (thousands of unique profiles), the cache grows without limit until entries expire. Add a max-size eviction policy or periodic sweep.
-  - Priority: `low`
-  - Category: `reliability`
-  - Impact: Prevents unbounded memory growth under high webhook volume.
-
-- [ ] **Metrics cache has no upper bound** — `src/utils/metricsCache.js` (used by health endpoints) similarly has no cap on the number of cached keys. While the current key set is small and fixed, there's no guard against future misuse.
-  - Priority: `low`
-  - Category: `tech-debt`
-  - Impact: Defensive coding against future cache key proliferation.
-
-- [ ] **Health check `searchPeople` does separate `countDocuments` for total** — `src/services/searchService.js:78-80` runs `Person.countDocuments({ $text: ... })` as a separate query after the main search. For large collections this is expensive. Consider using `$facet` in an aggregation pipeline to get results + count in one query, or return an estimated count.
-  - Priority: `low`
-  - Category: `performance`
-  - Impact: Reduces MongoDB load for search queries by ~50%.
-
-- [ ] **Export service still requires `csv-writer` in `package.json`** — The streaming export rewrite replaced `csv-writer` usage with built-in `escapeCsvField()`, but the dependency was never removed from `package.json`. (Same item as the high-priority removal above — listed here for cross-reference.)
-  - Priority: `low`
-  - Category: `tech-debt`
 
 - [ ] **Version endpoint contains hardcoded regex test output** — `src/routes/apiRoutes.js:96-106` returns `regex_test` debug output with hardcoded Sales Nav ID pattern checks in every `/api/version` response. This was likely a debugging aid that should be removed before it leaks internal implementation details.
   - Priority: `low`
@@ -146,6 +76,16 @@
 
 ## Completed
 
+- [x] **Integration tests for batch webhook and entity upsert** — 2026-02-10, PR #100, commit `24c9e05`. Added integration tests covering batch webhook endpoint and company/location upsert flows against real MongoDB.
+- [x] **Add source precedence and provenance tracking to location snapshots** — 2026-02-10, PR #99, commit `ed0af90`. Location controller now uses `shouldOverwrite()` with visit > scan precedence and per-field `_meta` provenance tracking, matching person/company patterns.
+- [x] **Add source precedence and provenance tracking to company snapshots** — 2026-02-10, PR #98, commit `69e9cff`. Company controller refactored with `shouldOverwrite()`, `applySnapshotField()`, and per-field `_meta` provenance. Visit > scan precedence enforced.
+- [x] **Parallelize search results and count queries** — 2026-02-10, PR #97, commit `4695d7b`. Search endpoint now runs find and countDocuments in parallel via `Promise.all`.
+- [x] **Add max size bounds to debounce and metrics caches** — 2026-02-10, PR #96, commit `ce1a0b8`. Both caches now have configurable upper bounds with eviction policies.
+- [x] **Fix duplicate observation detection via includeResultMetadata** — 2026-02-10, PR #95, commit `83a272f`. `isDuplicate` now correctly detected using `includeResultMetadata` on `findOneAndUpdate`.
+- [x] **Fix stopScheduler() to actually cancel cron jobs** — 2026-02-10, PR #94, commit `9201b96`. `stopScheduler()` now calls `task.stop()` on all active cron tasks.
+- [x] **Add rate limiting to entity read endpoints** — 2026-02-10, PR #93, commit `781cdf3`. Applied `readRateLimiter` to GET endpoints for people, companies, and locations by ID and alias.
+- [x] **Remove unused csv-writer dependency** — 2026-02-10, PR #92, commit `d5e9f99`. Removed `csv-writer` from `package.json` dependencies.
+- [x] **Remove child_process.exec from /api/version endpoint** — 2026-02-10, PR #91, commit `c5d4f4a`. Replaced `child_process.exec('git rev-parse')` with build-time `GIT_COMMIT` env var.
 - [x] **Streaming export for large datasets** — 2026-02-10. Replaced in-memory `Person.find().lean().exec()` with MongoDB cursor streaming piped through Node.js Transform streams. CSV and JSON generation now use `stream.pipeline()` with backpressure support: cursor → row-counter/limit-enforcer → format transform → file write stream. Removed `csv-writer` dependency for CSV generation in favor of built-in `escapeCsvField()`. Row limit (100K) enforced during streaming instead of after full load. Empty cursors produce valid empty files (`[]` for JSON). 24 unit tests (17 for processExportJob streaming, 4 for createExportJob, 3 for getExportFile).
 - [x] **Batch webhook processing endpoint** — 2026-02-09. Added `POST /api/webhook/batch` accepting an array of payloads (max 50, env-configurable `MAX_BATCH_SIZE`). Extracted `processObservationPayload()` from `observationHandler.js` for reuse by both single and batch endpoints. Sequential processing, per-item error isolation, summary response with succeeded/failed counts. 120s timeout, `webhookRateLimiter` applied. Exported `getVisitConfig()`/`getScanConfig()` config factories. 12 new unit tests.
 - [x] **Alert deduplication in notification service** — 2026-02-09, commit `5c1911c`. Added deduplication to suppress repeated health notifications within a configurable window.

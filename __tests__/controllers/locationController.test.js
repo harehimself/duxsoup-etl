@@ -9,7 +9,7 @@ jest.mock("../../src/models/location", () => ({
   findOne: jest.fn(),
   findById: jest.fn(),
   create: jest.fn(),
-  updateOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
 }));
 
 jest.mock("../../src/utils/identityMatcher", () => ({
@@ -38,7 +38,6 @@ function buildLocationDoc(fields = {}) {
     snapshot: fields.snapshot || {},
     observations: fields.observations || { visits: [], scans: [] },
     meta: fields.meta || {},
-    save: jest.fn().mockResolvedValue(undefined),
     ...fields,
   };
   return doc;
@@ -46,6 +45,7 @@ function buildLocationDoc(fields = {}) {
 
 describe("LocationController", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     dedupeAliases.mockImplementation((arr) => arr);
   });
 
@@ -109,8 +109,13 @@ describe("LocationController", () => {
         },
       });
       Location.create.mockResolvedValue(createdDoc);
-      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Location.findById.mockResolvedValue(createdDoc);
+
+      const updatedDoc = buildLocationDoc({
+        _id: "san-francisco-california-united-states",
+        canonical_id: "loc-canonical-sf",
+        observations: { visits: ["obs-loc-1"], scans: [] },
+      });
+      Location.findOneAndUpdate.mockResolvedValue(updatedDoc);
 
       const result = await upsertLocationFromObservation(
         observationDoc,
@@ -131,8 +136,16 @@ describe("LocationController", () => {
       expect(createCall.snapshot.state).toBe("California");
       expect(createCall.snapshot.country).toBe("United States");
 
+      // Atomic update used
+      expect(Location.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: "san-francisco-california-united-states" },
+        expect.objectContaining({
+          $addToSet: { "observations.visits": "obs-loc-1" },
+        }),
+        { new: true },
+      );
+
       expect(result).toBeTruthy();
-      expect(createdDoc.save).toHaveBeenCalled();
     });
 
     // ───────────────────────────────────────────
@@ -186,25 +199,27 @@ describe("LocationController", () => {
       });
 
       Location.findOne.mockResolvedValue(existingDoc);
-      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
 
-      const reloadedDoc = buildLocationDoc({
+      const updatedDoc = buildLocationDoc({
         ...existingDoc,
         observations: { visits: ["obs-loc-1"], scans: ["obs-loc-2"] },
+        meta: { observationsCount: 2 },
       });
-      Location.findById.mockResolvedValue(reloadedDoc);
+      Location.findOneAndUpdate.mockResolvedValue(updatedDoc);
 
       await upsertLocationFromObservation(observationDoc, "scan");
 
-      // Observation linked via $addToSet
-      expect(Location.updateOne).toHaveBeenCalledWith(
+      // Observation linked via $addToSet in atomic update
+      expect(Location.findOneAndUpdate).toHaveBeenCalledWith(
         { _id: "san-francisco-california-united-states" },
-        { $addToSet: { "observations.scans": "obs-loc-2" } },
+        expect.objectContaining({
+          $addToSet: { "observations.scans": "obs-loc-2" },
+          $set: expect.objectContaining({
+            "meta.observationsCount": 2,
+          }),
+        }),
+        { new: true },
       );
-
-      // Meta updated
-      expect(reloadedDoc.meta.observationsCount).toBe(2);
-      expect(reloadedDoc.save).toHaveBeenCalled();
     });
 
     // ───────────────────────────────────────────
@@ -313,7 +328,7 @@ describe("LocationController", () => {
         observations: { visits: [], scans: [] },
       });
       Location.findById.mockResolvedValue(existingDoc);
-      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      Location.findOneAndUpdate.mockResolvedValue(existingDoc);
 
       const result = await upsertLocationFromObservation(
         observationDoc,
@@ -323,8 +338,8 @@ describe("LocationController", () => {
       expect(Location.findById).toHaveBeenCalledWith(
         "new-york-new-york-united-states",
       );
+      expect(Location.findOneAndUpdate).toHaveBeenCalled();
       expect(result).toBeTruthy();
-      expect(existingDoc.save).toHaveBeenCalled();
     });
 
     // ───────────────────────────────────────────
@@ -363,19 +378,22 @@ describe("LocationController", () => {
         observations: { visits: [], scans: [] },
       });
       Location.findOne.mockResolvedValue(doc);
-      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Location.findById.mockResolvedValue(doc);
+      Location.findOneAndUpdate.mockResolvedValue(doc);
 
       await upsertLocationFromObservation(observationDoc, "visit");
 
-      expect(doc.snapshot._meta.city).toEqual(
+      // Check the snapshot sent to findOneAndUpdate includes _meta provenance
+      const updateArg = Location.findOneAndUpdate.mock.calls[0][1];
+      const snapshot = updateArg.$set.snapshot;
+
+      expect(snapshot._meta.city).toEqual(
         expect.objectContaining({
           value: "Austin",
           source: "visit",
           observationId: "obs-prov-loc",
         }),
       );
-      expect(doc.snapshot._meta.country).toEqual(
+      expect(snapshot._meta.country).toEqual(
         expect.objectContaining({
           value: "United States",
           source: "visit",
@@ -436,13 +454,145 @@ describe("LocationController", () => {
       });
 
       Location.findOne.mockResolvedValue(existingDoc);
-      Location.updateOne.mockResolvedValue({ modifiedCount: 1 });
-      Location.findById.mockResolvedValue(existingDoc);
+      Location.findOneAndUpdate.mockResolvedValue(existingDoc);
 
       await upsertLocationFromObservation(observationDoc, "scan");
 
       // Visit-sourced values should NOT be overwritten by scan
-      expect(existingDoc.snapshot._meta.city.source).toBe("visit");
+      const updateArg = Location.findOneAndUpdate.mock.calls[0][1];
+      expect(updateArg.$set.snapshot._meta.city.source).toBe("visit");
+    });
+
+    // ───────────────────────────────────────────
+    // Legacy records: null parsed fields should not erase existing data
+    // ───────────────────────────────────────────
+    it("should not erase existing fields when incoming parsed value is null (legacy record without _meta)", async () => {
+      const observationDoc = {
+        _id: "obs-legacy-loc",
+        rawData: {
+          data: {
+            Location: "Denver, Colorado",
+            VisitTime: new Date("2024-11-01"),
+          },
+        },
+      };
+
+      resolveLocationIdentity.mockReturnValue({
+        location_id: "denver-colorado",
+        canonical_id: "loc-canonical-den2",
+        aliases: [{ type: "raw", value: "Denver, Colorado" }],
+        source: "normalized",
+        primary_id_type: "location",
+        normalized: "Denver, Colorado",
+        parsed: {
+          city: "Denver",
+          state: "Colorado",
+          stateCode: null, // Parser couldn't determine stateCode
+          country: null, // Parser couldn't determine country
+          countryCode: null,
+          province: null,
+          region: null,
+          locationType: "city",
+        },
+      });
+
+      // Legacy record: has snapshot data but no _meta
+      const existingDoc = buildLocationDoc({
+        _id: "denver-colorado",
+        snapshot: {
+          city: "Denver",
+          state: "Colorado",
+          stateCode: "CO",
+          country: "United States",
+          countryCode: "US",
+          // No _meta — legacy record created before provenance tracking
+        },
+        observations: { visits: [], scans: [] },
+      });
+
+      Location.findOne.mockResolvedValue(existingDoc);
+      Location.findOneAndUpdate.mockResolvedValue(existingDoc);
+
+      await upsertLocationFromObservation(observationDoc, "visit");
+
+      const updateArg = Location.findOneAndUpdate.mock.calls[0][1];
+      const snapshot = updateArg.$set.snapshot;
+
+      // Null parsed fields should NOT erase existing values
+      expect(snapshot.stateCode).toBe("CO");
+      expect(snapshot.country).toBe("United States");
+      expect(snapshot.countryCode).toBe("US");
+
+      // Non-null parsed fields should be applied
+      expect(snapshot.city).toBe("Denver");
+      expect(snapshot.state).toBe("Colorado");
+    });
+
+    // ───────────────────────────────────────────
+    // Atomic update: no separate save() call
+    // ───────────────────────────────────────────
+    it("should use findOneAndUpdate instead of separate updateOne+findById+save", async () => {
+      const observationDoc = {
+        _id: "obs-atomic-loc",
+        rawData: {
+          data: {
+            Location: "Boston, Massachusetts, United States",
+            VisitTime: new Date("2024-12-01"),
+          },
+        },
+      };
+
+      resolveLocationIdentity.mockReturnValue({
+        location_id: "boston-massachusetts-united-states",
+        canonical_id: "loc-canonical-bos",
+        aliases: [
+          { type: "raw", value: "Boston, Massachusetts, United States" },
+        ],
+        source: "normalized",
+        primary_id_type: "location",
+        normalized: "Boston, Massachusetts, United States",
+        parsed: {
+          city: "Boston",
+          state: "Massachusetts",
+          country: "United States",
+          locationType: "city_state_country",
+        },
+      });
+
+      const existingDoc = buildLocationDoc({
+        _id: "boston-massachusetts-united-states",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+      Location.findOne.mockResolvedValue(existingDoc);
+
+      const updatedDoc = buildLocationDoc({
+        _id: "boston-massachusetts-united-states",
+        observations: { visits: ["obs-atomic-loc"], scans: [] },
+      });
+      Location.findOneAndUpdate.mockResolvedValue(updatedDoc);
+
+      await upsertLocationFromObservation(observationDoc, "visit");
+
+      // findOneAndUpdate is called with $set and $addToSet in a single operation
+      expect(Location.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      const [filter, update, opts] = Location.findOneAndUpdate.mock.calls[0];
+
+      expect(filter).toEqual({
+        _id: "boston-massachusetts-united-states",
+      });
+      expect(update.$set).toBeDefined();
+      expect(update.$addToSet).toEqual({
+        "observations.visits": "obs-atomic-loc",
+      });
+      expect(opts).toEqual({ new: true });
+
+      // Verify $set includes all required fields
+      expect(update.$set.aliases).toBeDefined();
+      expect(update.$set.snapshot).toBeDefined();
+      expect(update.$set["meta.lastObservedAt"]).toBeDefined();
+      expect(update.$set["meta.lastObservation"]).toBeDefined();
+      expect(update.$set["meta.observationsCount"]).toBe(1);
     });
   });
 });
