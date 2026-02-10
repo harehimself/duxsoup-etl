@@ -12,20 +12,11 @@
 
 ### High Priority
 
-- [ ] **Remove `child_process.exec` from `/api/version` endpoint** — `src/routes/apiRoutes.js:90-91` shells out to `git rev-parse --short HEAD` on every request. This is a command injection risk (even though no user input flows in today) and fails in Docker/production where git may not be installed. Replace with a build-time `GIT_COMMIT` env var or read from a generated `version.json`.
-  - Priority: `high`
-  - Category: `security`
-  - Impact: Eliminates a shell exec in the request path and a potential attack surface.
+- [x] **Remove `child_process.exec` from `/api/version` endpoint** — Already resolved. The endpoint now reads from `process.env.GIT_COMMIT || "unknown"` with no shell exec.
 
-- [ ] **Remove unused `csv-writer` dependency** — `csv-writer` is still listed in `package.json` dependencies but has zero imports anywhere in the codebase after the streaming export rewrite. Dead dependency increases install size and audit surface.
-  - Priority: `high`
-  - Category: `tech-debt`
-  - Impact: Smaller `node_modules`, cleaner dependency tree.
+- [x] **Remove unused `csv-writer` dependency** — Already removed during streaming export rewrite (PR #89). No action needed.
 
-- [ ] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() → modify in JS → save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
-  - Priority: `high`
-  - Category: `bug`
-  - Impact: Prevents data loss from concurrent webhook processing of the same company/location.
+- [x] **Company/location controllers: eliminate find-modify-save race condition** — 2026-02-10, commit `f677e54`. Replaced multi-step find→mutate→updateOne→findById→save with two atomic `findOneAndUpdate` operations: (1) upsert with `$setOnInsert` for find-or-create, (2) single `$set` + `$addToSet` for all updates. Eliminates E11000 race, separate reload, and non-atomic `save()`. 19 updated unit tests.
 
 ### Medium Priority
 
@@ -86,14 +77,9 @@
   - Category: `performance`
   - Impact: Reduces MongoDB load for search queries by ~50%.
 
-- [ ] **Export service still requires `csv-writer` in `package.json`** — The streaming export rewrite replaced `csv-writer` usage with built-in `escapeCsvField()`, but the dependency was never removed from `package.json`. (Same item as the high-priority removal above — listed here for cross-reference.)
-  - Priority: `low`
-  - Category: `tech-debt`
+- [x] **Export service still requires `csv-writer` in `package.json`** — Already removed during streaming export rewrite (PR #89). Cross-ref with high-priority item above.
 
-- [ ] **Version endpoint contains hardcoded regex test output** — `src/routes/apiRoutes.js:96-106` returns `regex_test` debug output with hardcoded Sales Nav ID pattern checks in every `/api/version` response. This was likely a debugging aid that should be removed before it leaks internal implementation details.
-  - Priority: `low`
-  - Category: `cleanup`
-  - Impact: Cleaner API responses, no internal implementation leakage.
+- [x] **Version endpoint contains hardcoded regex test output** — Already resolved. The debug regex_test output has been removed.
 
 ---
 
