@@ -12,88 +12,131 @@
 
 ### High Priority
 
-- [ ] **Remove `child_process.exec` from `/api/version` endpoint** — `src/routes/apiRoutes.js:90-91` shells out to `git rev-parse --short HEAD` on every request. This is a command injection risk (even though no user input flows in today) and fails in Docker/production where git may not be installed. Replace with a build-time `GIT_COMMIT` env var or read from a generated `version.json`.
+- [ ] **Fix ajv version mismatch and 8 failing tests** — `package.json` declares `ajv@^8.17.1` but lockfile has `6.12.6` installed. The ajv v6 error format differs from v8, causing all 8 tests in `webhookSchemaValidator.test.js` to fail (error messages show `"dataundefined"` instead of field paths like `"data/VisitTime"`). Run `npm install ajv@latest` to sync, then fix assertions.
   - Priority: `high`
-  - Category: `security`
-  - Impact: Eliminates a shell exec in the request path and a potential attack surface.
+  - Category: `bug`
+  - Impact: 8 failing tests on master. Blocks CI trustworthiness.
 
-- [ ] **Remove unused `csv-writer` dependency** — `csv-writer` is still listed in `package.json` dependencies but has zero imports anywhere in the codebase after the streaming export rewrite. Dead dependency increases install size and audit surface.
+- [ ] **Fix VisitTime schema to accept number or string** — 100% of production webhooks trigger a schema validation warning because DuxSoup sends `VisitTime` as a Unix timestamp (number), but `webhookSchemas.js` expects a string. Update the schema to accept `oneOf: [string, number]` or auto-coerce numbers to ISO date strings. This is the single largest source of log noise in production.
   - Priority: `high`
-  - Category: `tech-debt`
-  - Impact: Smaller `node_modules`, cleaner dependency tree.
+  - Category: `bug`
+  - Impact: Eliminates all current production schema warnings, restoring clean logs for real issue detection.
 
-- [ ] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() → modify in JS → save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
+- [ ] **Company/location controllers: eliminate find-modify-save race condition** — Both `companyController.js` and `locationController.js` use a pattern of `findOne() -> modify in JS -> save()`, with a separate `updateOne($addToSet)` in between. Under concurrent webhooks for the same entity, the second `save()` can overwrite changes from a parallel request. Refactor to use atomic `findOneAndUpdate` with `$set`/`$addToSet` in a single operation.
   - Priority: `high`
   - Category: `bug`
   - Impact: Prevents data loss from concurrent webhook processing of the same company/location.
 
+- [ ] **Remove `playground-1.mongodb.js` and `.history/` from repo** — Development artifacts committed to the repository. `playground-1.mongodb.js` is a MongoDB playground file and `.history/` contains VSCode local history. Add both to `.gitignore` and remove from tracking.
+  - Priority: `high`
+  - Category: `cleanup`
+  - Impact: Cleaner repo, no development artifacts in production.
+
+- [ ] **Fix dead letter replay loop for education cast-to-string errors** — 44+ production errors from DuxSoup rich objects (`{text, textDirection, attributesV2}`) in education fields. The `coerceToString()` fix (commit `389d315`) handles new webhooks, but 11+ dead letter records created before the fix keep replaying and failing with the same validation error. Investigate whether `replayDeadLetters` re-fetches the original observation or uses cached payload. If re-fetch, the replay code path may not apply `coerceToString()`. These records will cycle through retries until `permanently_failed` at 10 attempts, wasting resources.
+  - Priority: `high`
+  - Category: `bug`
+  - Impact: Eliminates 55+ recurring errors (44 upsert + 11 replay) and stops wasted retry cycles.
+  - Discovered: 2026-02-10, Render log review.
+
+- [ ] **Fix identity resolution for international/locale-suffixed LinkedIn URLs** — 18 production errors from URLs like `linkedin.com/in/flávia-silva/en` being used as person `_id`. Despite the percent-encoding fix (commit `196`), decoded international characters in profiles with `/en` locale suffixes pass through as person IDs. Also seeing fragments `j` and `fl` leak through extraction, suggesting the URL-to-username parser truncates at certain characters. Review `salesNavIdExtractor.js` and `identityMatcher.js` for these edge cases.
+  - Priority: `high`
+  - Category: `bug`
+  - Impact: Eliminates 18+ recurring identity resolution errors and prevents bad person records.
+  - Discovered: 2026-02-10, Render log review.
+
+- [ ] **Purge permanently-stuck dead letters with validation errors** — 19 dead letter entries are cycling through retries for unfixable Mongoose validation failures (education cast errors, invalid `_id` format). Even after code fixes for new webhooks, these stale records will keep failing. Add a maintenance script or admin endpoint to mark dead letters as `permanently_failed` when the error type is a schema validation failure (not a transient DB/connection error).
+  - Priority: `high`
+  - Category: `reliability`
+  - Impact: Stops wasted retry cycles and cleans up dead letter queue for accurate monitoring.
+  - Discovered: 2026-02-10, Render log review.
+
 ### Medium Priority
 
-- [ ] **Add provenance tracking (`_meta`) to company snapshots** — Person snapshots track per-field provenance (`_meta.fieldName.observedAt`, `.source`, `.observationId`) but company snapshots use a simple `applySnapshotValue()` with no metadata. This means there's no way to audit when or from which observation a company field was last updated.
+- [ ] **Add export job cleanup scheduler** — `EXPORT_TTL_HOURS` (default 24h) is defined in `exportService.js` but there is no background job to actually delete expired export files from `/tmp/duxsoup-exports`. Stale files accumulate on disk indefinitely. Add a scheduled job to the scheduler that prunes files older than `EXPORT_TTL_HOURS`.
+  - Priority: `medium`
+  - Category: `reliability`
+  - Impact: Prevents disk space exhaustion from accumulated export files.
+
+- [ ] **Add company/location export endpoints** — Only people can be exported via `POST /api/export/people/csv` and `/json`. Companies and locations have read/query APIs but no export capability. Add `POST /api/export/companies/{csv,json}` and `POST /api/export/locations/{csv,json}` using the same streaming export infrastructure.
   - Priority: `medium`
   - Category: `feature`
-  - Impact: Parity with person model, enables debugging "where did this company name come from?"
+  - Impact: Enables bulk data extraction for all entity types.
 
-- [ ] **Add provenance tracking (`_meta`) to location snapshots** — Same gap as company: location snapshots have no per-field provenance. The location controller blindly overwrites fields with `parsed.X || location.snapshot.X`.
+- [ ] **Add webhook throughput metrics endpoint** — No endpoint exposes processing latency, throughput rate, or error rates over time. Add `GET /api/health/throughput` returning recent processing stats (webhooks/min, avg latency, debounce rate, Phase 2 success rate) using in-memory counters with rolling windows.
+  - Priority: `medium`
+  - Category: `observability`
+  - Impact: Enables monitoring dashboards and alerting on processing degradation.
+
+- [ ] **Add data freshness alerting** — No alert fires when webhooks stop arriving. Add a scheduled job checking "time since last observation" and alerting (via existing notification service) when it exceeds a configurable threshold (default 6 hours). Would catch DuxSoup outages, webhook config drift, or Render ingress issues.
+  - Priority: `medium`
+  - Category: `reliability`
+  - Impact: Detects silent data pipeline failures before they become stale-data problems.
+
+- [ ] **Bulk alias lookup endpoint** — `GET /api/people/by-alias/:value` handles one alias at a time. Add `POST /api/people/by-aliases` accepting an array of alias values and returning matched people in a single response. Reduces N+1 API calls for CRM sync use cases.
   - Priority: `medium`
   - Category: `feature`
-  - Impact: Audit trail for location data sources.
+  - Impact: Enables efficient batch lookups for integrations.
 
-- [ ] **Company controller: apply source precedence rules (visit > scan)** — `companyController.js` applies snapshot values unconditionally (any non-empty value overwrites). Unlike the person controller, there's no visit-beats-scan or newer-beats-older logic. A stale scan could overwrite a fresh visit's company name.
+- [ ] **Configurable Winston log level via env var** — No `LOG_LEVEL` environment variable exists. All log levels are emitted in production. Add `LOG_LEVEL` (default `info` in production, `debug` in development) to reduce noise without code changes. Particularly useful after fixing the VisitTime schema issue to verify logs are clean.
   - Priority: `medium`
-  - Category: `bug`
-  - Impact: Ensures company snapshots follow the same precedence rules as person snapshots.
+  - Category: `observability`
+  - Impact: Operational control over log verbosity without redeployment.
 
-- [ ] **Read endpoints missing rate limiting** — `GET /api/people/:id` and `GET /api/people/by-alias/:value` (and their company/location counterparts at `apiRoutes.js:131-140`) are not wrapped in `readRateLimiter`. All other read endpoints have rate limiting applied. An attacker could enumerate all person records at unrestricted speed.
+- [ ] **Set `ALLOWED_ORIGINS` environment variable on Render** — Fires a warning on every deploy/restart: "ALLOWED_ORIGINS not set - CORS will reject all cross-origin browser requests." While server-to-server webhooks are unaffected, any browser-based API consumers (Swagger UI at `/api/docs`, future dashboards) are blocked by CORS. Set to `https://duxsoup.onrender.com` at minimum.
   - Priority: `medium`
-  - Category: `security`
-  - Impact: Closes a rate-limiting gap for entity lookup endpoints.
+  - Category: `config`
+  - Impact: Eliminates startup warning, enables browser-based API access to Swagger UI.
+  - Discovered: 2026-02-10, Render log review.
 
-- [ ] **Scheduler `stopScheduler()` does not actually cancel cron jobs** — `src/workers/scheduler.js:204-213` sets `schedulerStarted = false` but doesn't call `task.stop()` on any cron task. The comment says "Tasks will naturally stop when process exits" but during graceful shutdown there's a window where jobs could fire after `stopScheduler()` is called but before `process.exit()`.
+- [ ] **Add per-type webhook freshness monitoring (visit vs scan)** — Current data freshness alerting (backlog item) would check overall "time since last observation." Extend to monitor visit and scan types independently. Recent log windows show 100% visit traffic despite scans being active in the DB (42,926 scans). Per-type monitoring would detect if one pipeline silently stops while the other masks the gap.
   - Priority: `medium`
-  - Category: `bug`
-  - Impact: Prevents orphaned cron jobs from running during shutdown, especially dead letter replays that touch the database.
-
-- [ ] **`isDuplicate` detection is unreliable in `observationHandler.js`** — `isDuplicate` is set to `false` after a successful `findOneAndUpdate` upsert (`observationHandler.js:94`), but `findOneAndUpdate` with `$setOnInsert` returns the existing document on conflict rather than throwing E11000. The flag is only set to `true` in the E11000 catch branch. This means re-processed webhooks silently pass as "new" and trigger redundant Phase 2 upserts.
-  - Priority: `medium`
-  - Category: `bug`
-  - Impact: Reduces unnecessary Phase 2 work and provides accurate duplicate metrics.
+  - Category: `observability`
+  - Impact: Detects single-pipeline failures that overall freshness monitoring would miss.
+  - Discovered: 2026-02-10, Render log review.
 
 ### Low Priority / Tech Debt
 
-- [ ] **Add integration tests for batch webhook endpoint** — The batch endpoint (`batchWebhookHandler.js`) has unit tests but no integration tests hitting a real MongoDB instance. The existing integration test suite (`api.integration.test.js`) doesn't cover `POST /api/webhook/batch`.
+- [ ] **Expand health endpoint test coverage** — Only `healthController.cache.test.js` and `healthController.dataQuality.test.js` exist. Missing tests for `/api/health/dashboard`, `/api/health/parity`, `/api/health/coverage-breakdown`, `/api/health/metrics`, and other health routes.
   - Priority: `low`
   - Category: `testing`
-  - Impact: Validates batch processing end-to-end with real database interactions.
+  - Impact: Catches regressions in health monitoring endpoints.
 
-- [ ] **Add integration tests for company and location upsert** — No integration tests exist for `companyController.js` or `locationController.js`. These are Phase 2 upserts that run on every webhook but are only covered by the person controller integration tests indirectly.
+- [ ] **Add export stream integration tests** — Export service has unit tests but no integration tests verifying cursor -> transform -> file pipeline with real MongoDB data. Should test CSV/JSON generation end-to-end, row limits, empty results, and error handling during streaming.
   - Priority: `low`
   - Category: `testing`
-  - Impact: Catches regressions in company/location identity resolution and snapshot updates.
+  - Impact: Validates export pipeline with real database interactions.
 
-- [ ] **Debounce cache has no upper bound** — `src/utils/upsertDebounce.js` uses an unbounded `Map` with lazy cleanup on each `shouldSkip()` call. Under sustained high volume (thousands of unique profiles), the cache grows without limit until entries expire. Add a max-size eviction policy or periodic sweep.
+- [ ] **Add query/search integration tests** — `queryBuilder.test.js` covers unit logic but complex MongoDB aggregations (text search with facets, seniority filtering, pagination) lack integration-level validation against a real database.
+  - Priority: `low`
+  - Category: `testing`
+  - Impact: Catches aggregation pipeline regressions.
+
+- [ ] **Update mongoose 9.1.6 -> 9.2.0** — Minor patch available. Run `npm update mongoose` and verify all tests pass.
+  - Priority: `low`
+  - Category: `deps`
+  - Impact: Bug fixes, minor improvements.
+
+- [ ] **Update nodemailer 8.0.0 -> 8.0.1** — Patch available (was previously bumped via Dependabot PR #80 but lockfile may have drifted).
+  - Priority: `low`
+  - Category: `deps`
+  - Impact: Bug fixes.
+
+- [ ] **Surface capacity-limit warnings to webhook response** — When `MAX_ROLES`/`MAX_EDUCATION`/`MAX_SKILLS` caps are hit, new entries are silently dropped with only a log warning. Consider adding a `warnings` array to the webhook response or recording in the dead letter queue so data loss is detectable by the caller or during monitoring.
   - Priority: `low`
   - Category: `reliability`
-  - Impact: Prevents unbounded memory growth under high webhook volume.
+  - Impact: Makes data truncation visible rather than silent.
 
-- [ ] **Metrics cache has no upper bound** — `src/utils/metricsCache.js` (used by health endpoints) similarly has no cap on the number of cached keys. While the current key set is small and fixed, there's no guard against future misuse.
+- [ ] **Add error classification to dead letter records** — Dead letters store the raw error message but don't categorize errors. Adding a `errorClass` field (`transient` vs `permanent`) would enable smarter replay (skip `ValidationError` patterns, only retry transient failures like timeouts/connection errors) and better monitoring of true failure rates vs known-bad data.
   - Priority: `low`
-  - Category: `tech-debt`
-  - Impact: Defensive coding against future cache key proliferation.
+  - Category: `reliability`
+  - Impact: Smarter dead letter replay, cleaner error metrics.
+  - Discovered: 2026-02-10, Render log review.
 
-- [ ] **Health check `searchPeople` does separate `countDocuments` for total** — `src/services/searchService.js:78-80` runs `Person.countDocuments({ $text: ... })` as a separate query after the main search. For large collections this is expensive. Consider using `$facet` in an aggregation pipeline to get results + count in one query, or return an estimated count.
+- [ ] **Reduce rapid-fire deploy noise from auto-deploy** — When multiple PRs merge in rapid succession (e.g., 5 merges within 2 minutes on Feb 10), Render triggers 5 deploys, 4 of which are immediately canceled. Consider adding a deploy cooldown via Render blueprint settings, or batching PR merges to reduce wasted build minutes on the Starter plan.
   - Priority: `low`
-  - Category: `performance`
-  - Impact: Reduces MongoDB load for search queries by ~50%.
-
-- [ ] **Export service still requires `csv-writer` in `package.json`** — The streaming export rewrite replaced `csv-writer` usage with built-in `escapeCsvField()`, but the dependency was never removed from `package.json`. (Same item as the high-priority removal above — listed here for cross-reference.)
-  - Priority: `low`
-  - Category: `tech-debt`
-
-- [ ] **Version endpoint contains hardcoded regex test output** — `src/routes/apiRoutes.js:96-106` returns `regex_test` debug output with hardcoded Sales Nav ID pattern checks in every `/api/version` response. This was likely a debugging aid that should be removed before it leaks internal implementation details.
-  - Priority: `low`
-  - Category: `cleanup`
-  - Impact: Cleaner API responses, no internal implementation leakage.
+  - Category: `ops`
+  - Impact: Fewer wasted deploys, cleaner deploy history.
+  - Discovered: 2026-02-10, Render deploy history review.
 
 ---
 
@@ -136,6 +179,16 @@
   - Category: `testing`
   - Impact: Ensures API documentation stays accurate.
 
+- [ ] **Person merge REST endpoint** — Merging people currently requires admin scripts or direct DB access. A `POST /api/admin/merge` endpoint would enable ops workflows without SSH. Should support dry-run mode and safety validation.
+  - Priority: `backlog`
+  - Category: `feature`
+  - Impact: Enables merge operations through the API.
+
+- [ ] **GraphQL API layer** — As the read API surface grows (people, companies, locations, changes, seniority), a GraphQL layer could reduce over-fetching and simplify client integrations. Would sit alongside REST, not replace it.
+  - Priority: `backlog`
+  - Category: `feature`
+  - Impact: Flexible querying for frontend/integration consumers.
+
 ---
 
 ## Icebox
@@ -146,18 +199,33 @@
 
 ## Completed
 
-- [x] **Streaming export for large datasets** — 2026-02-10. Replaced in-memory `Person.find().lean().exec()` with MongoDB cursor streaming piped through Node.js Transform streams. CSV and JSON generation now use `stream.pipeline()` with backpressure support: cursor → row-counter/limit-enforcer → format transform → file write stream. Removed `csv-writer` dependency for CSV generation in favor of built-in `escapeCsvField()`. Row limit (100K) enforced during streaming instead of after full load. Empty cursors produce valid empty files (`[]` for JSON). 24 unit tests (17 for processExportJob streaming, 4 for createExportJob, 3 for getExportFile).
+- [x] **Remove `child_process.exec` from `/api/version` endpoint** — 2026-02-10, PR #91. Replaced shell exec with build-time `GIT_COMMIT` env var. Also removed hardcoded regex test debug output from the version response.
+- [x] **Remove unused `csv-writer` dependency** — 2026-02-10, PR #92. Removed from `package.json` after the streaming export rewrite made it unnecessary.
+- [x] **Add provenance tracking (`_meta`) to company snapshots** — 2026-02-10, PR #98. Company snapshots now track per-field provenance with `_meta` metadata matching the person model pattern.
+- [x] **Add provenance tracking (`_meta`) to location snapshots** — 2026-02-10, PR #99. Location snapshots now track per-field provenance.
+- [x] **Company controller: apply source precedence rules (visit > scan)** — 2026-02-10, PR #98. Company snapshots now follow the same visit-beats-scan, newer-beats-older precedence rules as person snapshots.
+- [x] **Read endpoints missing rate limiting** — 2026-02-10, PR #93. Applied `readRateLimiter` to `GET /api/people/:id`, `/by-alias/:value`, and their company/location counterparts.
+- [x] **Scheduler `stopScheduler()` does not actually cancel cron jobs** — 2026-02-10, PR #94. Now calls `task.stop()` on all cron tasks during shutdown.
+- [x] **`isDuplicate` detection is unreliable in `observationHandler.js`** — 2026-02-10, PR #95. Uses `includeResultMetadata` to detect whether `findOneAndUpdate` created a new document or matched an existing one.
+- [x] **Add integration tests for batch webhook endpoint** — 2026-02-10, PR #100. Integration tests for batch webhook processing and company/location entity upsert.
+- [x] **Add integration tests for company and location upsert** — 2026-02-10, PR #100. Same PR as batch integration tests.
+- [x] **Debounce cache has no upper bound** — 2026-02-10, PR #96. Added max-size bounds to both debounce and metrics caches.
+- [x] **Metrics cache has no upper bound** — 2026-02-10, PR #96. Same PR as debounce cache bounds.
+- [x] **Health check `searchPeople` does separate `countDocuments` for total** — 2026-02-10, PR #97. Parallelized search results and count queries.
+- [x] **Export service still requires `csv-writer` in `package.json`** — 2026-02-10, PR #92. Same as csv-writer removal above.
+- [x] **Version endpoint contains hardcoded regex test output** — 2026-02-10, PR #91. Same as exec removal above — debug output removed.
+- [x] **Streaming export for large datasets** — 2026-02-10. Replaced in-memory `Person.find().lean().exec()` with MongoDB cursor streaming piped through Node.js Transform streams. CSV and JSON generation now use `stream.pipeline()` with backpressure support: cursor -> row-counter/limit-enforcer -> format transform -> file write stream. Removed `csv-writer` dependency for CSV generation in favor of built-in `escapeCsvField()`. Row limit (100K) enforced during streaming instead of after full load. Empty cursors produce valid empty files (`[]` for JSON). 24 unit tests (17 for processExportJob streaming, 4 for createExportJob, 3 for getExportFile).
 - [x] **Batch webhook processing endpoint** — 2026-02-09. Added `POST /api/webhook/batch` accepting an array of payloads (max 50, env-configurable `MAX_BATCH_SIZE`). Extracted `processObservationPayload()` from `observationHandler.js` for reuse by both single and batch endpoints. Sequential processing, per-item error isolation, summary response with succeeded/failed counts. 120s timeout, `webhookRateLimiter` applied. Exported `getVisitConfig()`/`getScanConfig()` config factories. 12 new unit tests.
 - [x] **Alert deduplication in notification service** — 2026-02-09, commit `5c1911c`. Added deduplication to suppress repeated health notifications within a configurable window.
 - [x] **Data quality dashboard** — 2026-02-09. Added `GET /api/health/quality` endpoint with 4 parallel aggregation pipelines: identity resolution coverage (salesNavId/numericId/stableId/canonicalId), alias type distribution, enrichment depth (roles/education/skills/email/phone), and freshness buckets (7d/30d/90d). Excludes merged records. Uses metricsCache with 5-minute TTL. 11 new unit tests.
 - [x] **Split adminRoutes.js into focused route modules** — 2026-02-10. Split 829-line monolith into 3 focused sub-routers: `adminLinkingRoutes.js` (check-upgradable, run-linking), `adminRebuildRoutes.js` (rebuild-people, rebuild-people-full), `adminMaintenanceRoutes.js` (drop-id-index, fix-alias-types, inspect-observations). Hub `adminRoutes.js` reduced to 40 lines mounting sub-routers + health + test-notifications. All 772 tests pass. No API path changes.
 - [x] **Deduplicate person field normalization into a loop** — 2026-02-09. Replaced 27 sequential `normalizeField()` calls (19 direct field mappings + 8 location sub-fields) with data-driven `FIELD_MAPPINGS` array and `LOCATION_FIELDS` array iterated by loops. Supports optional `transform` functions (parseConnections, parseDegree) and fallback source keys (array of webhook keys). Complex fields (birthday, fullName, title parsing, company URL) remain inline. Reduced `upsertFromObservation()` normalization section from ~260 lines to ~110. 11 new unit tests verifying mapping completeness, no duplicates, transforms, fallback resolution, and location field coverage.
-- [x] **Add exponential backoff for stuck dead letter replays** — 2026-02-09. Found already implemented: `permanently_failed` status in DeadLetter enum, `MAX_RETRY_ATTEMPTS = 10` with env override in `src/constants/limits.js`, exponential backoff (2m → 4m → 8m → ... → 720m cap) in `src/utils/backoff.js`, `markReplayFailed()` transitions to `permanently_failed` at 10 attempts, `findEligibleForReplay()` / `countEligibleForReplay()` skip ineligible records, scheduler uses backoff-aware eligibility check. 6 backoff unit tests + 8 dead letter model tests.
-- [x] **Add merge safety validation** — 2026-02-09. Added `validateMergeSafety(winner, losers)` method to `identityResolverService.js` with pre-merge checks: observation disparity blockers (0-vs-N and 10x ratio), name contradiction blockers (both first+last differ), partial name mismatch warnings, and company mismatch warnings. Integrated into `mergePeople()` — blocked merges return winner unchanged, warnings attach to Merge audit `metadata.safetyWarnings`. Added `force` bypass via admin routes, `--force` CLI flag in `linkIdentities.js` and `merge-duplicates.js`. `MERGE_OBS_RATIO_THRESHOLD` env-configurable (default 10). 22 new unit tests, 3 new integration tests.
+- [x] **Add exponential backoff for stuck dead letter replays** — 2026-02-09. Found already implemented: `permanently_failed` status in DeadLetter enum, `MAX_RETRY_ATTEMPTS = 10` with env override in `src/constants/limits.js`, exponential backoff (2m -> 4m -> 8m -> ... -> 720m cap) in `src/utils/backoff.js`, `markReplayFailed()` transitions to `permanently_failed` at 10 attempts, `findEligibleForReplay()` / `countEligibleForReplay()` skip ineligible records, scheduler uses backoff-aware eligibility check. 6 backoff unit tests + 8 dead letter model tests.
+- [x] **Add merge safety validation** — 2026-02-09. Added `validateMergeSafety(winner, losers)` method to `identityResolverService.js` with pre-merge checks: observation disparity blockers (0-vs-N and 10x ratio), name contradiction blockers (both first+last differ), partial name mismatch warnings, and company mismatch warnings. Integrated into `mergePeople()` -- blocked merges return winner unchanged, warnings attach to Merge audit `metadata.safetyWarnings`. Added `force` bypass via admin routes, `--force` CLI flag in `linkIdentities.js` and `merge-duplicates.js`. `MERGE_OBS_RATIO_THRESHOLD` env-configurable (default 10). 22 new unit tests, 3 new integration tests.
 - [x] **Add branch protection rules to `master`** — 2026-02-09. Enabled branch protection via GitHub API requiring `build-and-test` CI check to pass before merge. Strict mode enabled (branch must be up-to-date with master). Force pushes and branch deletion blocked. Admin enforcement left off to allow emergency hotfixes.
 - [x] **Investigate absence of scan webhook activity** — 2026-02-09. Investigation found scans are actively flowing: 42,926 scans vs 37,274 visits in production MongoDB. Most recent scan created Feb 9 20:38 UTC. The earlier observation of "zero scans" was an artifact of a limited Render log window that happened to contain only visit traffic. Code review confirmed the scan pipeline is fully wired: `POST /api/webhook` correctly routes `type: "scan"` to `handleScan()`, the Scan model is feature-complete with indexes, and no silent filtering exists. No dead letter failures for scan type. No code changes needed.
-- [x] **Webhook payload schema validation** — 2026-02-09. Added JSON Schema validation (ajv) for incoming DuxSoup webhooks in warn-only mode. Validates envelope structure, visit data fields, scan data fields, and extended data (positions, schools, skills) against known schemas. Detects two categories of drift: type violations (known field has unexpected type, logged as warning) and unknown fields (new fields DuxSoup added, logged as info). Integrated into `observationHandler.js` before existing validation — never blocks webhook processing. Schemas defined in `webhookSchemas.js`, validator in `webhookSchemaValidator.js`. 41 new unit tests.
-- [x] **Lateral move detection in change service** — 2026-02-09. Added `lateral_move` change type to detect company switches at the same seniority level (e.g., VP at Google → VP at Meta). Uses `titleParser.parseTitle()` to compare seniority ranks. Lateral move records include full enrichment (fromCompanyId, toCompanyId, fromTitle, toTitle, seniority tier, tenure, recentJobChange flag). Recorded alongside `company_change` for backward compatibility. Added `fromTitle`, `toTitle`, `seniority`, `seniorityRank` fields to Change schema. 8 new unit tests.
+- [x] **Webhook payload schema validation** — 2026-02-09. Added JSON Schema validation (ajv) for incoming DuxSoup webhooks in warn-only mode. Validates envelope structure, visit data fields, scan data fields, and extended data (positions, schools, skills) against known schemas. Detects two categories of drift: type violations (known field has unexpected type, logged as warning) and unknown fields (new fields DuxSoup added, logged as info). Integrated into `observationHandler.js` before existing validation -- never blocks webhook processing. Schemas defined in `webhookSchemas.js`, validator in `webhookSchemaValidator.js`. 41 new unit tests.
+- [x] **Lateral move detection in change service** — 2026-02-09. Added `lateral_move` change type to detect company switches at the same seniority level (e.g., VP at Google -> VP at Meta). Uses `titleParser.parseTitle()` to compare seniority ranks. Lateral move records include full enrichment (fromCompanyId, toCompanyId, fromTitle, toTitle, seniority tier, tenure, recentJobChange flag). Recorded alongside `company_change` for backward compatibility. Added `fromTitle`, `toTitle`, `seniority`, `seniorityRank` fields to Change schema. 8 new unit tests.
 - [x] **Role deduplication during person upsert** — 2026-02-09. Replaced naive `title|company|startDate` dedup key with `findMatchingRole()` using case/whitespace-normalized comparison and multi-dimensional matching. When startDate is null, uses isCurrent + location + description as secondary discriminators to avoid collapsing genuinely distinct undated roles. Added `mergeRoleFields()` to backfill empty fields on existing matched roles (companyId, location, description, dates). Removed unused `_roleKey` variable. 25 new unit tests covering null startDate collision, text normalization, field merging, and current-role matching.
 - [x] **Add request timeout middleware** — 2026-02-09. Created `src/middleware/requestTimeout.js` factory returning Express middleware that sends 503 after configurable deadline. Applied: 5s for `/health`, 30s default for `/api`, 120s for `/api/export`. Timer cleared on `res.close`. 5 new unit tests.
 - [x] **Reuse SMTP transporter in notification service** — 2026-02-09. Replaced per-send `nodemailer.createTransport()` with lazy-initialized module-level singleton via `getTransporter()`. Exposed `_resetTransporter()` for testing. 2 new unit tests confirm single instance across multiple sends.
@@ -184,7 +252,7 @@
 - [x] **`findSalesNavIdDuplicates` misses persons with multiple salesNavId aliases** — 2026-02-07, branch `claude/review-backlog-D0qNE`, commit `46b93ff`. Renamed `extractSalesNavIdFromPersonRecord()` to `extractSalesNavIdsFromPersonRecord()` to return array of ALL salesNavIds. Updated `findSalesNavIdDuplicates()` to add merged persons to multiple groups. Added test case for multi-alias scenario.
 - [x] **Dead letter alerting integration test** — 2026-02-07, branch `claude/dead-letter-alerting-test-VVEmP`. 17 integration tests covering threshold boundaries, alert routing (email for warning+critical, SMS for critical only), notification failure resilience, and health check error handling.
 - [x] **API documentation (OpenAPI/Swagger)** — 2026-02-07, branch `claude/add-openapi-docs-zGEre`. Added OpenAPI 3.0 spec (`src/openapi.js`) covering all 40+ endpoints with schemas, examples, and rate-limit annotations. Swagger UI served at `/api/docs`, raw spec at `/api/docs/openapi.json`.
-- [x] **Dependency audit** — 2026-02-07, branch `claude/dependency-audit-security-7jUZc`. Full `npm audit` pass: 0 vulnerabilities. Updated patch deps (dotenv 17.2.4, mongoose 9.1.6, twilio 5.12.1), major deps (nodemailer 8.0.0, eslint 10.0.0, @eslint/js 10.0.1). Fixed ESLint 10 `no-useless-assignment` lint error. Deprecated transitive deps (scmp, inflight, glob@7) not actionable — upstream in twilio and jest.
+- [x] **Dependency audit** — 2026-02-07, branch `claude/dependency-audit-security-7jUZc`. Full `npm audit` pass: 0 vulnerabilities. Updated patch deps (dotenv 17.2.4, mongoose 9.1.6, twilio 5.12.1), major deps (nodemailer 8.0.0, eslint 10.0.0, @eslint/js 10.0.1). Fixed ESLint 10 `no-useless-assignment` lint error. Deprecated transitive deps (scmp, inflight, glob@7) not actionable -- upstream in twilio and jest.
 - [x] **Parallelize CSV enrichment row processing** — 2026-02-07, branch `claude/parallelize-csv-enrichment-pyx6D`. Replaced sequential `for...of` loop with worker-pool `processWithConcurrency()` (default 10). Added `--concurrency` CLI flag. 5 new unit tests.
 - [x] **CSV enrichment: create new person records** — 2026-02-06. Implemented `createPersonFromCsv()` with full snapshot, aliases, `_meta` provenance, derived metrics, E11000 race-condition handling. 19 unit tests.
 - [x] **Birthday field: reject year-less date strings** — 2026-02-06, branch `claude/birthday-field-date-validation-7Kjts`. Added `containsYear()` and `parseBirthdayDate()` to date-parser.js; added `birthdayRaw` field to Person model.
@@ -199,10 +267,10 @@
 - [x] **Replace uuid with crypto.randomUUID()** — 2026-02-05, `c6e494e`
 - [x] **Audit and label TODO comments** — 2026-02-04, branch `claude/audit-todo-comments-jrdRA`
 - [x] **Graceful shutdown handler (SIGTERM/SIGINT)** — Already implemented in `src/index.js:212-241`
-- [x] **Remove webhook auth** — DuxSoup cannot send credentials — `8e9bcb0`
-- [x] **Trust proxy for Render** — Correct client IP behind reverse proxy — `288feb5`
+- [x] **Remove webhook auth** — DuxSoup cannot send credentials -- `8e9bcb0`
+- [x] **Trust proxy for Render** — Correct client IP behind reverse proxy -- `288feb5`
 - [x] **Query param secret for webhook providers** — `49b7474`
 - [x] **Express 5 sanitize compatibility** — PR #57, `79535e9`
-- [x] **Remove accumulated bloat** — 65 unused scripts, 38 stale docs — `525d110`
+- [x] **Remove accumulated bloat** — 65 unused scripts, 38 stale docs -- `525d110`
 - [x] **Security hardening and test coverage** — `8db738d`
 - [x] **Fail-closed webhook auth and admin route protection** — `bbf480d`
