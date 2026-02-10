@@ -60,19 +60,24 @@ function mapVisitData(profileData, payload, eventKey) {
 }
 
 /**
+ * Returns visit-specific configuration for the observation handler.
+ */
+function getVisitConfig() {
+  return {
+    model: Visit,
+    type: "visit",
+    timeField: "VisitTime",
+    requiredFields: ["VisitTime", "Degree", "First Name"],
+    dataMapper: mapVisitData,
+  };
+}
+
+/**
  * Visit webhook handler
  * Uses shared observation handler with visit-specific configuration
  */
 const handleVisit = async (req, res) => {
-  const config = {
-    model: Visit,
-    type: 'visit',
-    timeField: 'VisitTime',
-    requiredFields: ["VisitTime", "Degree", "First Name"],
-    dataMapper: mapVisitData,
-  };
-
-  return handleObservation(config, req, res);
+  return handleObservation(getVisitConfig(), req, res);
 };
 
-module.exports = { handleVisit };
+module.exports = { handleVisit, getVisitConfig };

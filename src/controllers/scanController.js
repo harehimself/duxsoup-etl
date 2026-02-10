@@ -49,19 +49,24 @@ function mapScanData(profileData, payload, eventKey) {
 }
 
 /**
- * Scan webhook handler
- * Uses shared observation handler with scan-specific configuration
+ * Returns scan-specific configuration for the observation handler.
  */
-const handleScan = async (req, res) => {
-  const config = {
+function getScanConfig() {
+  return {
     model: Scan,
     type: "scan",
     timeField: "ScanTime",
     requiredFields: ["ScanTime", "First Name", "Last Name"],
     dataMapper: mapScanData,
   };
+}
 
-  return handleObservation(config, req, res);
+/**
+ * Scan webhook handler
+ * Uses shared observation handler with scan-specific configuration
+ */
+const handleScan = async (req, res) => {
+  return handleObservation(getScanConfig(), req, res);
 };
 
-module.exports = { handleScan };
+module.exports = { handleScan, getScanConfig };

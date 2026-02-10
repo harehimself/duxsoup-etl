@@ -33,6 +33,8 @@ const BACKOFF_CAP_MINUTES = parseInt(
   10,
 );
 
+const MAX_BATCH_SIZE = parseInt(process.env.MAX_BATCH_SIZE || "50", 10);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
@@ -42,4 +44,5 @@ module.exports = {
   ALERT_DEDUP_WINDOW_MS,
   MAX_RETRY_ATTEMPTS,
   BACKOFF_CAP_MINUTES,
+  MAX_BATCH_SIZE,
 };

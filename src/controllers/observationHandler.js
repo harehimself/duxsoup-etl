@@ -17,18 +17,13 @@ const { resolvePersonIdentity } = require("../utils/identityMatcher");
 const { shouldSkip } = require("../utils/upsertDebounce");
 
 /**
- * Generic observation handler for Visit and Scan webhooks
- * Eliminates 500 lines of duplicate code between controllers
+ * Core observation processing logic, independent of Express req/res.
  *
- * @param {Object} config - Type-specific configuration
- * @param {Object} config.model - Mongoose model (Visit or Scan)
- * @param {string} config.type - Observation type ('visit' or 'scan')
- * @param {string} config.timeField - Time field name in webhook ('VisitTime' or 'ScanTime')
- * @param {Array<string>} config.requiredFields - Required fields for validation
- * @param {Function} config.dataMapper - Function to map profileData to observation document
+ * @param {Object} config - Type-specific configuration (model, type, timeField, requiredFields, dataMapper)
+ * @param {Object} payload - Raw webhook payload (the request body)
+ * @returns {Promise<{success: boolean, status: number, data?: Object, error?: string, message?: string}>}
  */
-async function handleObservation(config, req, res) {
-  const payload = req.body;
+async function processObservationPayload(config, payload) {
   const envConfig = getConfig();
 
   // Schema drift detection (warn-only, never blocks processing)
@@ -38,7 +33,12 @@ async function handleObservation(config, req, res) {
     // Validate webhook payload structure
     const payloadValidation = validateWebhookPayload(payload, config.type);
     if (!payloadValidation.isValid) {
-      return res.status(400).json(createErrorResponse(payloadValidation.error));
+      return {
+        success: false,
+        status: 400,
+        error: payloadValidation.error,
+        data: createErrorResponse(payloadValidation.error),
+      };
     }
 
     const profileData = payloadValidation.profileData;
@@ -56,12 +56,15 @@ async function handleObservation(config, req, res) {
     );
 
     if (!fieldsValidation.isValid) {
-      return res.status(400).json(
-        createErrorResponse(fieldsValidation.error, {
+      return {
+        success: false,
+        status: 400,
+        error: fieldsValidation.error,
+        data: createErrorResponse(fieldsValidation.error, {
           missingFields: fieldsValidation.missingFields,
           required: config.requiredFields,
         }),
-      );
+      };
     }
 
     // Compute idempotency key (Guardrail: prevents duplicate observations)
@@ -121,7 +124,12 @@ async function handleObservation(config, req, res) {
           logger.error(`E11000 but cannot find ${config.type} by event_key`, {
             event_key: eventKey,
           });
-          return res.status(500).json({ error: "Duplicate detection failed" });
+          return {
+            success: false,
+            status: 500,
+            error: "Duplicate detection failed",
+            data: { error: "Duplicate detection failed" },
+          };
         }
       } else {
         // Other DB error - fail the webhook
@@ -131,7 +139,12 @@ async function handleObservation(config, req, res) {
           profileData.id,
           envConfig.isProduction,
         );
-        return res.status(500).json(errorResponse);
+        return {
+          success: false,
+          status: 500,
+          error: errorResponse.error || "Database error",
+          data: errorResponse,
+        };
       }
     }
 
@@ -232,7 +245,7 @@ async function handleObservation(config, req, res) {
       } // end !debounced
     }
 
-    // Always return success if legacy write succeeded
+    // Build success response
     const response = createSuccessResponse(
       config.type,
       observation,
@@ -244,7 +257,7 @@ async function handleObservation(config, req, res) {
     response.duplicate = isDuplicate;
     response.debounced = debounced;
 
-    res.status(200).json(response);
+    return { success: true, status: 200, data: response };
   } catch (error) {
     logger.error(`Error processing ${config.type} data:`, {
       error: error.message,
@@ -261,8 +274,29 @@ async function handleObservation(config, req, res) {
       errorResponse.stack = error.stack;
     }
 
-    res.status(500).json(errorResponse);
+    return {
+      success: false,
+      status: 500,
+      error: errorResponse.error,
+      data: errorResponse,
+    };
   }
 }
 
-module.exports = { handleObservation };
+/**
+ * Generic observation handler for Visit and Scan webhooks
+ * Eliminates 500 lines of duplicate code between controllers
+ *
+ * @param {Object} config - Type-specific configuration
+ * @param {Object} config.model - Mongoose model (Visit or Scan)
+ * @param {string} config.type - Observation type ('visit' or 'scan')
+ * @param {string} config.timeField - Time field name in webhook ('VisitTime' or 'ScanTime')
+ * @param {Array<string>} config.requiredFields - Required fields for validation
+ * @param {Function} config.dataMapper - Function to map profileData to observation document
+ */
+async function handleObservation(config, req, res) {
+  const result = await processObservationPayload(config, req.body);
+  res.status(result.status).json(result.data);
+}
+
+module.exports = { handleObservation, processObservationPayload };

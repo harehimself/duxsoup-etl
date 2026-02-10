@@ -4,6 +4,7 @@ const logger = require("../utils/logger");
 const requestTimeout = require("../middleware/requestTimeout");
 const { handleVisit } = require("../controllers/visitController");
 const { handleScan } = require("../controllers/scanController");
+const { handleBatchWebhook } = require("../controllers/batchWebhookHandler");
 const webhookAuth = require("../middleware/webhookAuth");
 const {
   getIngestionHealth,
@@ -164,6 +165,14 @@ router.post("/webhook", webhookRateLimiter, (req, res) => {
     });
   }
 });
+
+// Batch webhook endpoint (rate limited, longer timeout for bulk processing)
+router.post(
+  "/webhook/batch",
+  webhookRateLimiter,
+  requestTimeout(120000),
+  handleBatchWebhook,
+);
 
 // Admin endpoints (one-time migrations, etc.)
 router.use("/admin", webhookAuth, adminRateLimiter, adminRoutes);

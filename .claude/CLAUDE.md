@@ -154,6 +154,7 @@ See `src/models/` for full schemas.
 
 ### Webhook Ingestion
 - `POST /api/webhook` - Main entry point (routes to visit/scan handler)
+- `POST /api/webhook/batch` - Batch processing (array of payloads, max 50)
 
 ### Health & Metrics
 - `GET /health` - Basic health check (always 200)
