@@ -399,6 +399,34 @@ describe("ExportService", () => {
       await fsp.unlink(filePath).catch(() => {});
     });
 
+    it("should write CSV header even when cursor returns zero documents", async () => {
+      const queryMock = buildQueryMock([]);
+      Person.find.mockReturnValue(queryMock);
+
+      const jobDoc = {
+        _id: "job-empty-csv",
+        format: "csv",
+        status: "pending",
+        filters: {},
+        fields: ["firstName", "lastName", "email"],
+        save: jest.fn().mockResolvedValue(undefined),
+      };
+      ExportJob.findById.mockResolvedValue(jobDoc);
+
+      await processExportJob("job-empty-csv");
+
+      expect(jobDoc.status).toBe("completed");
+      expect(jobDoc.result.rowCount).toBe(0);
+
+      // Verify file contains header row but no data rows
+      const filePath = path.join(EXPORT_TEMP_DIR, "job-empty-csv.csv");
+      const content = await fsp.readFile(filePath, "utf8");
+      expect(content).toBe("firstName,lastName,email\n");
+
+      // Clean up
+      await fsp.unlink(filePath).catch(() => {});
+    });
+
     it("should escape CSV fields containing commas and quotes", async () => {
       const mockData = [
         {
