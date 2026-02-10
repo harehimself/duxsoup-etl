@@ -1,17 +1,22 @@
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs").promises;
-const { createObjectCsvWriter } = require("csv-writer");
+const { createWriteStream } = require("fs");
+const { Transform, pipeline } = require("stream");
+const { promisify } = require("util");
 const Person = require("../models/person");
 const ExportJob = require("../models/exportJob");
 const { validateQuery } = require("../utils/queryValidation");
 const logger = require("../utils/logger");
 const { AppError } = require("../utils/errors");
 
+const pipelineAsync = promisify(pipeline);
+
 /**
  * Export Service
  *
- * Handles async export of people data to CSV/JSON
+ * Handles async export of people data to CSV/JSON using streaming
+ * to avoid loading entire datasets into memory.
  */
 
 // Export configuration
@@ -110,7 +115,7 @@ async function createExportJob(params) {
 }
 
 /**
- * Process an export job (execute the export)
+ * Process an export job using streaming to avoid memory issues
  *
  * @param {String} jobId - Export job ID
  * @returns {Promise<Object>} Updated export job
@@ -129,6 +134,9 @@ async function processExportJob(jobId) {
     );
   }
 
+  const ext = job.format === "csv" ? "csv" : "json";
+  const filePath = path.join(EXPORT_TEMP_DIR, `${jobId}.${ext}`);
+
   try {
     // Update status to processing
     job.status = "processing";
@@ -140,24 +148,14 @@ async function processExportJob(jobId) {
     // Ensure export directory exists
     await fs.mkdir(EXPORT_TEMP_DIR, { recursive: true });
 
-    // Query data
-    const data = await queryDataForExport(job.filters, job.fields);
-
-    // Check row limit
-    if (data.length > EXPORT_MAX_ROWS) {
-      throw new AppError(
-        "EXPORT_TOO_LARGE",
-        `Export exceeds maximum row limit (${EXPORT_MAX_ROWS}). Use more specific filters.`,
-      );
-    }
-
-    // Generate export file
-    let filePath;
-    if (job.format === "csv") {
-      filePath = await generateCsv(jobId, data, job.fields);
-    } else if (job.format === "json") {
-      filePath = await generateJson(jobId, data);
-    }
+    // Stream data from cursor through transform to file
+    const cursor = createExportCursor(job.filters, job.fields);
+    const rowCount = await streamToFile(
+      cursor,
+      filePath,
+      job.format,
+      job.fields,
+    );
 
     // Get file stats
     const stats = await fs.stat(filePath);
@@ -168,7 +166,7 @@ async function processExportJob(jobId) {
     job.result = {
       filePath,
       fileSize: stats.size,
-      rowCount: data.length,
+      rowCount,
       downloadUrl: `/api/export/download/${jobId}`,
     };
 
@@ -176,7 +174,7 @@ async function processExportJob(jobId) {
 
     logger.info("Export job completed", {
       jobId,
-      rowCount: data.length,
+      rowCount,
       fileSize: stats.size,
     });
 
@@ -203,13 +201,11 @@ async function processExportJob(jobId) {
   } finally {
     // Clean up temp file on failure
     if (job.status === "failed") {
-      const ext = job.format === "csv" ? "csv" : "json";
-      const tempPath = path.join(EXPORT_TEMP_DIR, `${jobId}.${ext}`);
       try {
-        await fs.unlink(tempPath);
+        await fs.unlink(filePath);
         logger.info("Cleaned up temp file for failed export", {
           jobId,
-          tempPath,
+          tempPath: filePath,
         });
       } catch (_unlinkErr) {
         // File may not exist if failure occurred before writing — ignore
@@ -219,13 +215,15 @@ async function processExportJob(jobId) {
 }
 
 /**
- * Query data for export
+ * Create a MongoDB cursor for export data
+ *
+ * Returns a streaming cursor instead of loading all documents into memory.
  *
  * @param {Object} filters - MongoDB filters
  * @param {Array<String>} fields - Fields to include
- * @returns {Promise<Array>} Query results
+ * @returns {Cursor} Mongoose cursor (readable stream in object mode)
  */
-async function queryDataForExport(filters, fields) {
+function createExportCursor(filters, fields) {
   // Build projection from field names
   const projection = {};
   for (const field of fields) {
@@ -238,93 +236,147 @@ async function queryDataForExport(filters, fields) {
   // Always include _id for linkedInUrl
   projection._id = 1;
 
-  // Query database
-  const results = await Person.find(filters)
-    .select(projection)
-    .limit(EXPORT_MAX_ROWS + 1) // Query one extra to detect over-limit
-    .lean()
-    .exec();
-
-  return results;
+  return Person.find(filters).select(projection).lean().cursor();
 }
 
 /**
- * Generate CSV file
+ * Stream cursor data through a format transform to a file
  *
- * @param {String} jobId - Job ID
- * @param {Array} data - Data to export
- * @param {Array<String>} fields - Fields to include
- * @returns {Promise<String>} File path
+ * @param {Cursor} cursor - MongoDB cursor (readable stream)
+ * @param {String} filePath - Output file path
+ * @param {String} format - Export format (csv or json)
+ * @param {Array<String>} fields - Fields to include (for CSV)
+ * @returns {Promise<Number>} Row count
  */
-async function generateCsv(jobId, data, fields) {
-  const filePath = path.join(EXPORT_TEMP_DIR, `${jobId}.csv`);
+async function streamToFile(cursor, filePath, format, fields) {
+  let rowCount = 0;
 
-  // Build CSV header
-  const header = fields.map((field) => ({
-    id: field,
-    title: field,
-  }));
-
-  // Create CSV writer
-  const csvWriter = createObjectCsvWriter({
-    path: filePath,
-    header,
-  });
-
-  // Transform data (flatten nested fields)
-  const records = data.map((doc) => {
-    const record = {};
-    for (const field of fields) {
-      const dbPath = FIELD_MAPPING[field];
-      if (dbPath) {
-        // Handle special cases
-        if (field === "linkedInUrl") {
-          // Convert _id to LinkedIn URL
-          record[field] = formatLinkedInUrl(doc._id);
-        } else if (field === "lastObservedAt") {
-          // Format date
-          const date = getNestedValue(doc, dbPath);
-          record[field] = date ? new Date(date).toISOString() : "";
-        } else {
-          record[field] = getNestedValue(doc, dbPath) || "";
-        }
+  // Row counter + limit enforcer (object mode in, object mode out)
+  const rowCounter = new Transform({
+    objectMode: true,
+    transform(doc, _encoding, callback) {
+      rowCount++;
+      if (rowCount > EXPORT_MAX_ROWS) {
+        callback(
+          new AppError(
+            "EXPORT_TOO_LARGE",
+            `Export exceeds maximum row limit (${EXPORT_MAX_ROWS}). Use more specific filters.`,
+          ),
+        );
+        return;
       }
-    }
-    return record;
+      this.push(doc);
+      callback();
+    },
   });
 
-  // Write CSV
-  await csvWriter.writeRecords(records);
+  // Format-specific transform (object mode in, string/buffer out)
+  const formatTransform =
+    format === "csv" ? createCsvTransform(fields) : createJsonTransform();
 
-  logger.info("CSV file generated", {
-    jobId,
-    filePath,
-    rowCount: records.length,
-  });
+  const fileStream = createWriteStream(filePath, { encoding: "utf8" });
 
-  return filePath;
+  await pipelineAsync(cursor, rowCounter, formatTransform, fileStream);
+
+  return rowCount;
 }
 
 /**
- * Generate JSON file
+ * Create a Transform stream that converts documents to CSV rows
  *
- * @param {String} jobId - Job ID
- * @param {Array} data - Data to export
- * @returns {Promise<String>} File path
+ * @param {Array<String>} fields - Fields to include as CSV columns
+ * @returns {Transform} Transform stream (object mode in, string out)
  */
-async function generateJson(jobId, data) {
-  const filePath = path.join(EXPORT_TEMP_DIR, `${jobId}.json`);
+function createCsvTransform(fields) {
+  let headerWritten = false;
 
-  // Write JSON (pretty-printed)
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+  return new Transform({
+    objectMode: true,
+    writableObjectMode: true,
+    readableObjectMode: false,
+    transform(doc, _encoding, callback) {
+      try {
+        // Write header row on first document
+        if (!headerWritten) {
+          this.push(fields.map(escapeCsvField).join(",") + "\n");
+          headerWritten = true;
+        }
 
-  logger.info("JSON file generated", {
-    jobId,
-    filePath,
-    rowCount: data.length,
+        // Extract field values from document
+        const values = fields.map((field) => {
+          const dbPath = FIELD_MAPPING[field];
+          if (!dbPath) return "";
+          if (field === "linkedInUrl") {
+            return formatLinkedInUrl(doc._id);
+          }
+          if (field === "lastObservedAt") {
+            const date = getNestedValue(doc, dbPath);
+            return date ? new Date(date).toISOString() : "";
+          }
+          return getNestedValue(doc, dbPath) || "";
+        });
+
+        this.push(values.map(escapeCsvField).join(",") + "\n");
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
   });
+}
 
-  return filePath;
+/**
+ * Create a Transform stream that converts documents to a JSON array
+ *
+ * @returns {Transform} Transform stream (object mode in, string out)
+ */
+function createJsonTransform() {
+  let isFirst = true;
+
+  return new Transform({
+    objectMode: true,
+    writableObjectMode: true,
+    readableObjectMode: false,
+    transform(doc, _encoding, callback) {
+      try {
+        if (isFirst) {
+          this.push("[\n");
+          isFirst = false;
+        } else {
+          this.push(",\n");
+        }
+        this.push(JSON.stringify(doc, null, 2));
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
+    flush(callback) {
+      // Close the JSON array
+      this.push(isFirst ? "[]" : "\n]");
+      callback();
+    },
+  });
+}
+
+/**
+ * Escape a value for safe CSV output
+ *
+ * @param {*} value - Value to escape
+ * @returns {String} Escaped CSV field
+ */
+function escapeCsvField(value) {
+  if (value == null) return "";
+  const str = String(value);
+  if (
+    str.includes(",") ||
+    str.includes('"') ||
+    str.includes("\n") ||
+    str.includes("\r")
+  ) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
 }
 
 /**
@@ -389,11 +441,11 @@ async function getExportFile(jobId) {
  * Helper: Get nested value from object using dot notation
  *
  * @param {Object} obj - Object
- * @param {String} path - Dot-notation path (e.g., "snapshot.firstName")
+ * @param {String} dotPath - Dot-notation path (e.g., "snapshot.firstName")
  * @returns {*} Value at path
  */
-function getNestedValue(obj, path) {
-  const keys = path.split(".");
+function getNestedValue(obj, dotPath) {
+  const keys = dotPath.split(".");
   let value = obj;
 
   for (const key of keys) {

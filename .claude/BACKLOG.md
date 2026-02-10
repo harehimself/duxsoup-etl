@@ -90,10 +90,7 @@
   - Category: `feature`
   - Impact: Reduces HTTP overhead for bulk imports. DuxSoup may not use it, but internal tools and CSV importers would benefit from a batch API.
 
-- [ ] **Streaming export for large datasets** — Current export loads all matching documents into memory before writing CSV/JSON. For 100K+ person exports, this will hit memory limits.
-  - Priority: `backlog`
-  - Category: `performance`
-  - Impact: Enables exports of the full database without OOM risk. Use MongoDB cursor streaming + Node.js Transform stream.
+- [x] ~~**Streaming export for large datasets**~~ — Completed, see Completed section.
 
 - [x] ~~**API documentation (OpenAPI/Swagger)**~~ — Completed, see Completed section.
 
@@ -124,6 +121,7 @@ _(Role deduplication, merge safety validation, and webhook payload schema valida
 
 ## Completed
 
+- [x] **Streaming export for large datasets** — 2026-02-10. Replaced in-memory `Person.find().lean().exec()` with MongoDB cursor streaming piped through Node.js Transform streams. CSV and JSON generation now use `stream.pipeline()` with backpressure support: cursor → row-counter/limit-enforcer → format transform → file write stream. Removed `csv-writer` dependency for CSV generation in favor of built-in `escapeCsvField()`. Row limit (100K) enforced during streaming instead of after full load. Empty cursors produce valid empty files (`[]` for JSON). 24 unit tests (17 for processExportJob streaming, 4 for createExportJob, 3 for getExportFile).
 - [x] **Alert deduplication in notification service** — 2026-02-09, commit `5c1911c`. Added deduplication to suppress repeated health notifications within a configurable window.
 - [x] **Data quality dashboard** — 2026-02-09. Added `GET /api/health/quality` endpoint with 4 parallel aggregation pipelines: identity resolution coverage (salesNavId/numericId/stableId/canonicalId), alias type distribution, enrichment depth (roles/education/skills/email/phone), and freshness buckets (7d/30d/90d). Excludes merged records. Uses metricsCache with 5-minute TTL. 11 new unit tests.
 - [x] **Split adminRoutes.js into focused route modules** — 2026-02-10. Split 829-line monolith into 3 focused sub-routers: `adminLinkingRoutes.js` (check-upgradable, run-linking), `adminRebuildRoutes.js` (rebuild-people, rebuild-people-full), `adminMaintenanceRoutes.js` (drop-id-index, fix-alias-types, inspect-observations). Hub `adminRoutes.js` reduced to 40 lines mounting sub-routers + health + test-notifications. All 772 tests pass. No API path changes.
