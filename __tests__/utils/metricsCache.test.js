@@ -149,6 +149,38 @@ describe("MetricsCache", () => {
       expect(getStats().size).toBeLessThanOrEqual(3);
       expect(getStats().keys).toContain("d");
     });
+
+    it("should not evict when concurrent calls populate the same key at capacity", async () => {
+      const fetchFn = jest.fn().mockResolvedValue("data");
+
+      // Fill cache to capacity (MAX_METRICS_CACHE_SIZE = 3)
+      await getOrFetch("a", fetchFn, 60000);
+      await getOrFetch("b", fetchFn, 60000);
+      await getOrFetch("c", fetchFn, 60000);
+      expect(getStats().size).toBe(3);
+
+      // Two concurrent misses on the same NEW key — both call fetchFn,
+      // but only the first should trigger eviction.
+      const slow = jest.fn(
+        () => new Promise((r) => setTimeout(() => r("slow"), 50)),
+      );
+      const fast = jest.fn(
+        () => new Promise((r) => setTimeout(() => r("fast"), 5)),
+      );
+
+      await Promise.all([
+        getOrFetch("d", slow, 60000),
+        getOrFetch("d", fast, 60000),
+      ]);
+
+      // Cache must still be at capacity — not one fewer
+      expect(getStats().size).toBe(3);
+      // All pre-existing keys except possibly "a" (oldest) should survive;
+      // "b" and "c" must not be collateral damage from a second eviction
+      expect(getStats().keys).toContain("b");
+      expect(getStats().keys).toContain("c");
+      expect(getStats().keys).toContain("d");
+    });
   });
 
   describe("getStats()", () => {
