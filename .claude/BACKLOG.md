@@ -44,7 +44,7 @@
   - Impact: Eliminates 18+ recurring identity resolution errors and prevents bad person records.
   - Discovered: 2026-02-10, Render log review.
 
-- [ ] **Purge permanently-stuck dead letters with validation errors** — 19 dead letter entries are cycling through retries for unfixable Mongoose validation failures (education cast errors, invalid `_id` format). Even after code fixes for new webhooks, these stale records will keep failing. Add a maintenance script or admin endpoint to mark dead letters as `permanently_failed` when the error type is a schema validation failure (not a transient DB/connection error).
+- [x] **Purge permanently-stuck dead letters with validation errors** — 19 dead letter entries are cycling through retries for unfixable Mongoose validation failures (education cast errors, invalid `_id` format). Even after code fixes for new webhooks, these stale records will keep failing. Add a maintenance script or admin endpoint to mark dead letters as `permanently_failed` when the error type is a schema validation failure (not a transient DB/connection error).
   - Priority: `high`
   - Category: `reliability`
   - Impact: Stops wasted retry cycles and cleans up dead letter queue for accurate monitoring.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Purge permanently-stuck dead letters with validation errors** — 2026-02-10. Added `scripts/purgeStuckDeadLetters.js` with `isPermanentError()` classifier matching 7 permanent error patterns (CastError, ValidationError, invalid _id, E11000, etc.). Dry-run by default, `--commit` to execute. Skips transient errors (timeouts, connection failures). Falls back to `last_replay_error` when `error.message` is absent. 16 unit tests. All 858 tests pass.
 - [x] **Remove `playground-1.mongodb.js` and `.history/` from repo** — 2026-02-10. Investigation found files exist locally but were never committed — `.gitignore` already had patterns for both (`playground-*.mongodb.js` and `.history/`). No git changes needed.
 - [x] **Fix VisitTime/ScanTime schema to accept number or string** — 2026-02-10. DuxSoup sends timestamps as Unix numbers but schema only allowed strings, causing 100% of webhooks to trigger validation warnings. Updated `webhookSchemas.js` to accept `['string', 'number']` for both `VisitTime` and `ScanTime`. Flipped test from "detect number as error" to "accept number". Added ScanTime number test. All 842 tests pass.
 - [x] **Fix ajv version mismatch and 8 failing tests** — 2026-02-10. Lockfile had ajv 6.12.6 despite `package.json` declaring `^8.17.1`. ajv v6 uses `dataPath` while the validator code uses v8's `instancePath`, causing all 8 type-error tests to produce `"dataundefined"` paths. Fixed by running `npm install ajv@latest` to sync to v8.17.1. All 841 tests pass.
