@@ -176,39 +176,39 @@
 > New items to consider. Move to Active Sprint when prioritized.
 
 - [ ] **Snapshot versioning with lightweight change timeline API** — Person and company snapshots are mutated in-place with no version history. Add versioning to enable historical analysis and easier debugging of precedence behavior. Could be implemented as a separate `PersonHistory` collection with snapshot-per-observation or periodic snapshots, plus a timeline query API.
-  - Priority: `backlog`
+  - Priority: `low`
   - Category: `feature`
   - Impact: Enables temporal queries ("who changed jobs in Q1"), audit trails, rollback of bad data, and precedence debugging.
 
 - [ ] **Structured log forwarding to external aggregation** — Logs are well-structured JSON but there's no external aggregation beyond Render's 30-day window. Consider forwarding to a log aggregation service (Datadog, Logtail, Betterstack) for alerts, dashboards, and historical analysis.
-  - Priority: `backlog`
+  - Priority: `low`
   - Category: `observability`
   - Impact: Persistent log history, real-time alerting on error spikes, operational dashboards beyond Render's built-in viewer.
 
 - [ ] **Webhook replay from dead letters should also upsert company/location** — When `replayDeadLetters.js` replays a failed observation, it calls `upsertFromObservation()` for the person but does not replay `upsertCompanyFromObservation()` or `upsertLocationFromObservation()`. If the original Phase 2 company/location upsert also failed, replay won't recover those entities.
-  - Priority: `backlog`
+  - Priority: `medium`
   - Category: `feature`
   - Impact: Complete recovery of all entity types during dead letter replay.
 
 
 - [ ] **Add webhook delivery acknowledgment/retry protocol** — DuxSoup fires webhooks without delivery guarantees. If the server returns 5xx or times out, DuxSoup may not retry. Consider adding a webhook receipt log and a reconciliation job that compares DuxSoup's expected delivery count against received webhooks.
-  - Priority: `backlog`
+  - Priority: `low`
   - Category: `reliability`
   - Impact: Detects silent webhook data loss.
 
 
 - [ ] **Person merge REST endpoint** — Merging people currently requires admin scripts or direct DB access. A `POST /api/admin/merge` endpoint would enable ops workflows without SSH. Should support dry-run mode and safety validation.
-  - Priority: `backlog`
+  - Priority: `medium`
   - Category: `feature`
   - Impact: Enables merge operations through the API.
 
 - [ ] **GraphQL read layer pilot for composite profile views** — As the read API surface grows (people, companies, locations, changes, seniority), a GraphQL layer could reduce over-fetching and simplify client integrations. Useful once REST read complexity materially increases for consumers. Would sit alongside REST, not replace it.
-  - Priority: `backlog`
+  - Priority: `low`
   - Category: `feature`
   - Impact: Flexible querying for frontend/integration consumers.
 
 - [ ] **Idempotency hash migration plan (SHA-1 to SHA-256) with dual-write period** — `event_key` is computed with SHA1 (`src/utils/eventKey.js`), which is cryptographically weak. Current use is non-crypto-critical, but migration improves long-term robustness. Plan a dual-write period where both hashes are checked for deduplication before fully cutting over.
-  - Priority: `backlog`
+  - Priority: `low`
   - Category: `security hardening`
   - Impact: Stronger collision resistance for idempotency keys with zero-downtime migration.
 
