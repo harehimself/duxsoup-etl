@@ -62,6 +62,48 @@
 
 ### Medium Priority
 
+- [ ] **Trim and collapse whitespace on all snapshot string fields** — The `FIELD_MAPPINGS` loop in `personController.js` passes raw DuxSoup values through to snapshot fields without trimming. Fields affected: `firstName`, `middleName`, `lastName`, `currentTitle`, `currentCompany`, `location`, `industry`, `summary`, `email`, `phone`, `twitter`. DuxSoup scrapes raw LinkedIn HTML, so leading/trailing whitespace and collapsed multi-spaces are common. Add a default `trim()` transform to the field mapping loop and a `collapseWhitespace()` (replace `\s+` with single space) for multi-word text fields. Apply at Phase 2 only — observations should keep raw data for audit. Also trim role `title`, `companyName`, `location`, `description` in `updateRolesTimeline()` before storage (currently only normalized for comparison via `normalizeRoleText()`). Include a backfill script to clean existing records.
+  - Priority: `medium`
+  - Category: `data quality`
+  - Impact: Eliminates whitespace inconsistencies across all snapshot fields. Improves exact-match queries, faceting, deduplication, and downstream CRM sync.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Case-insensitive skill deduplication** — `updateSkills()` in `personController.js` uses `new Set()` with exact string matching, so "JavaScript" and "javascript" are stored as separate entries. Normalize comparison with `.toLowerCase().trim()` while preserving first-seen casing in the stored value. Include a backfill script to deduplicate existing skill arrays.
+  - Priority: `medium`
+  - Category: `data quality`
+  - Impact: Eliminates duplicate skills caused by casing differences. Improves skill-based filtering and search accuracy.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Normalize email addresses on person snapshot** — Email is passed through as-is from DuxSoup with no lowercasing, trimming, or format validation. "John@Gmail.com" and "john@gmail.com" appear as different values. Add a `normalizeEmail` transform: `trim().toLowerCase()` with optional RFC 5322 regex validation in warn-only mode (log invalid formats, don't reject the webhook). Include a backfill script to normalize existing email values.
+  - Priority: `medium`
+  - Category: `data quality`
+  - Impact: Enables reliable email-based deduplication and CRM matching. Surfaces invalid email data for cleanup.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Case-insensitive education deduplication** — `updateEducation()` in `personController.js` compares `school`, `degree`, and `field` with strict `===` equality. "MIT" vs "mit" or " Harvard University" vs "Harvard University" create duplicate entries. Normalize comparison values with `.toLowerCase().trim()` while storing original casing. Include a backfill script to merge duplicate education entries.
+  - Priority: `medium`
+  - Category: `data quality`
+  - Impact: Eliminates duplicate education entries caused by casing and whitespace differences.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Company name normalization utility** — Company names in person snapshots and the companies collection have no normalization. "Microsoft", " Microsoft ", "Microsoft Corporation", and "microsoft" are treated as different entities. Add a `normalizeCompanyName()` utility that trims, collapses whitespace, and optionally strips common suffixes (Inc., LLC, Ltd., Corp., Co.) for canonical matching. Apply during company identity resolution and person snapshot upsert.
+  - Priority: `medium`
+  - Category: `data quality`
+  - Impact: Improves company-based grouping, deduplication, and cross-entity linking accuracy.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Data cleanliness metrics endpoint** — Health endpoints don't expose field-level quality metrics. Add `GET /api/health/data-cleanliness` that samples person records and reports: % of names with leading/trailing whitespace, % of emails failing format validation, % of skill arrays with case-insensitive duplicates, % of education arrays with trimming-sensitive duplicates, % of records missing key fields (email, phone, title). Uses `metricsCache` with 10-minute TTL.
+  - Priority: `medium`
+  - Category: `observability / data quality`
+  - Impact: Makes data quality issues measurable and trackable over time. Validates effectiveness of cleansing improvements.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Phone number normalization** — Phone stored as raw string with no formatting. "+1 (555) 123-4567", "5551234567", "555-123-4567" are all different values for the same number. Add a `normalizePhone()` utility that strips non-digit characters (except leading `+`) and stores a normalized form. Keep raw value in `_meta` provenance for audit. Include a backfill script.
+  - Priority: `medium`
+  - Category: `data quality`
+  - Impact: Enables reliable phone-based deduplication and CRM matching.
+  - Discovered: 2026-02-11, data cleansing review.
+
 - [ ] **Expose webhook processing warnings in API responses and persisted telemetry** — Capacity-limit drops (`MAX_ROLES`/`MAX_EDUCATION`/`MAX_SKILLS`) and soft errors are currently only logged. Return structured `warnings[]` in webhook responses and persist warning counters for visibility in monitoring.
   - Priority: `medium`
   - Category: `feature`
@@ -135,6 +177,30 @@
   - Discovered: 2026-02-10, Render log review.
 
 ### Low Priority / Tech Debt
+
+- [ ] **Twitter handle normalization** — Twitter field stored as-is from DuxSoup. Could be "@handle", "handle", or "https://twitter.com/handle". Add a `normalizeTwitter()` transform that extracts the bare handle (strip `@` prefix, extract username from URL). Store normalized handle in snapshot, raw value in `_meta`.
+  - Priority: `low`
+  - Category: `data quality`
+  - Impact: Consistent Twitter handle format for downstream integrations.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **URL validation on profile picture, thumbnail, and website fields** — `profilePicture`, `thumbnail`, `personalWebsite`, `companyWebsite` have maxlength constraints but no URL format validation. Non-URLs are accepted silently. Add a lightweight URL validation guard (check for `http`/`https` scheme) similar to the existing guard in `normalizeUrl()`. Log invalid values as warnings, store null instead.
+  - Priority: `low`
+  - Category: `data quality`
+  - Impact: Prevents non-URL strings from polluting snapshot fields used by downstream consumers.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Strip HTML tags from summary and description fields** — `summary` (up to 5000 chars) and role `description` fields are stored without any HTML tag stripping. LinkedIn data occasionally includes HTML artifacts from scraping. Add a `stripHtmlTags()` utility (simple regex: `/<[^>]*>/g`) applied to summary and role description fields during snapshot upsert.
+  - Priority: `low`
+  - Category: `data quality`
+  - Impact: Cleaner text fields for display and search. Mitigates potential XSS if data is rendered in a browser.
+  - Discovered: 2026-02-11, data cleansing review.
+
+- [ ] **Industry field standardization** — `industry` is a free-form string. "Information Technology", "IT", "information technology", "Technology" all refer to similar categories. Create an industry normalization map (similar to `US_STATES` in location-parser) mapping common variations to canonical LinkedIn industry values. Store original in `_meta`, normalized value in snapshot. Include a backfill script.
+  - Priority: `low`
+  - Category: `data quality`
+  - Impact: Enables reliable industry-based filtering, faceting, and analytics.
+  - Discovered: 2026-02-11, data cleansing review.
 
 - [x] **Expand health endpoint test coverage** — Only `healthController.cache.test.js` and `healthController.dataQuality.test.js` exist. Missing tests for `/api/health/dashboard`, `/api/health/parity`, `/api/health/coverage-breakdown`, `/api/health/metrics`, and other health routes.
   - Priority: `low`
@@ -216,13 +282,13 @@
 
 ## Recommended Next-Sprint Pack
 
-> If capacity is limited, execute this 5-item pack first. This mix best reduces incident risk while preserving development velocity.
+> If capacity is limited, execute this 5-item pack first. This mix delivers the highest-ROI data quality improvements alongside operational reliability.
 
 1. ~~**Replay parity test + fix**~~ — Done (2026-02-11).
 2. ~~**OpenAPI drift test gate**~~ — Done (2026-02-11).
-3. **Identity fuzz corpus tests** — Query/search integration tests with edge-case identity data (existing low priority item).
-4. **Deploy batching/cooldown policy** — Reduce canceled Render deploys (new high priority item).
-5. **Warning telemetry in webhook responses** — Expose structured `warnings[]` in responses (new medium priority item).
+3. **Trim and collapse whitespace on all snapshot string fields** — Single highest-impact cleansing fix: ~20-line change to the FIELD_MAPPINGS loop cleans 17+ fields.
+4. **Case-insensitive skill dedup + email normalization** — Two quick wins that can land together. Fixes the most visible data duplication issues.
+5. **Data cleanliness metrics endpoint** — Provides before/after measurement for all cleansing work. Ship early to track improvement.
 
 ---
 
