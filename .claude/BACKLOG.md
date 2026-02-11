@@ -50,7 +50,47 @@
   - Impact: Stops wasted retry cycles and cleans up dead letter queue for accurate monitoring.
   - Discovered: 2026-02-10, Render log review.
 
+- [ ] **Add deployment batching/cooldown policy to reduce canceled Render deploys** — Frequent merge bursts create canceled deploy churn (e.g., 5 merges within 2 minutes triggers 5 deploys, 4 canceled). Introduce merge windows or deploy queue/cooldown policy to batch deploys.
+  - Priority: `high`
+  - Category: `reliability / platform efficiency`
+  - Impact: Eliminates wasted build minutes and deploy churn on the Starter plan.
+
+- [ ] **Add route-to-OpenAPI conformance tests in CI (hard failure on drift)** — API surface is expanding rapidly. Add a CI test that validates registered Express routes against the OpenAPI spec in `src/openapi.js`, failing the build on any drift. Protects client integrations from undocumented breaking changes.
+  - Priority: `high`
+  - Category: `bug prevention`
+  - Impact: Prevents API surface drift; catches missing/mismatched routes before merge.
+
 ### Medium Priority
+
+- [ ] **Expose webhook processing warnings in API responses and persisted telemetry** — Capacity-limit drops (`MAX_ROLES`/`MAX_EDUCATION`/`MAX_SKILLS`) and soft errors are currently only logged. Return structured `warnings[]` in webhook responses and persist warning counters for visibility in monitoring.
+  - Priority: `medium`
+  - Category: `feature`
+  - Impact: Makes data truncation and soft errors visible to callers and monitoring dashboards.
+
+- [ ] **Introduce durable metrics sink (Redis/Postgres) for throughput tracker snapshots** — In-memory rolling metrics (`throughputTracker.js`) reset on restarts/deploys. Persist key aggregates for continuity and trend analysis across deploys.
+  - Priority: `medium`
+  - Category: `feature / reliability`
+  - Impact: Metrics survive restarts; enables historical trend analysis.
+
+- [ ] **Add admin-safe correction APIs with audit trail** — Add `PATCH /api/people/:id` (and optional company/location variants) for manual snapshot corrections with full audit trail. Reduces direct DB edits and improves operational governance.
+  - Priority: `medium`
+  - Category: `feature`
+  - Impact: Enables ops corrections without SSH/database access.
+
+- [ ] **Implement replay impact dashboard (before/after entity counts and failure reasons)** — Replay scripts exist but provide no visibility on recovery effectiveness. Add a dashboard or API endpoint showing before/after entity counts and recurring root causes per replay run.
+  - Priority: `medium`
+  - Category: `feature / observability`
+  - Impact: Visibility on recovery effectiveness and recurring failure root causes.
+
+- [ ] **Add configurable circuit breaker for external notification channels (email/SMS)** — Prevent alert storms or provider-side failures from amplifying incidents. Add circuit breaker pattern to notification service with configurable thresholds and recovery windows.
+  - Priority: `medium`
+  - Category: `reliability`
+  - Impact: Prevents cascading failures from notification provider outages.
+
+- [ ] **Add query/search integration benchmark suite with representative datasets** — Query complexity is rising; establish guardrails for latency and pagination behavior. Create a benchmark suite with representative datasets to catch performance regressions.
+  - Priority: `medium`
+  - Category: `performance`
+  - Impact: Establishes latency baselines and catches query performance regressions.
 
 - [x] **Add export job cleanup scheduler** — `EXPORT_TTL_HOURS` (default 24h) is defined in `exportService.js` but there is no background job to actually delete expired export files from `/tmp/duxsoup-exports`. Stale files accumulate on disk indefinitely. Add a scheduled job to the scheduler that prunes files older than `EXPORT_TTL_HOURS`.
   - Priority: `medium`
@@ -121,10 +161,6 @@
   - Category: `deps`
   - Impact: Bug fixes.
 
-- [ ] **Surface capacity-limit warnings to webhook response** — When `MAX_ROLES`/`MAX_EDUCATION`/`MAX_SKILLS` caps are hit, new entries are silently dropped with only a log warning. Consider adding a `warnings` array to the webhook response or recording in the dead letter queue so data loss is detectable by the caller or during monitoring.
-  - Priority: `low`
-  - Category: `reliability`
-  - Impact: Makes data truncation visible rather than silent.
 
 - [x] **Add error classification to dead letter records** — Dead letters store the raw error message but don't categorize errors. Adding a `errorClass` field (`transient` vs `permanent`) would enable smarter replay (skip `ValidationError` patterns, only retry transient failures like timeouts/connection errors) and better monitoring of true failure rates vs known-bad data.
   - Priority: `low`
@@ -132,11 +168,6 @@
   - Impact: Smarter dead letter replay, cleaner error metrics.
   - Discovered: 2026-02-10, Render log review.
 
-- [ ] **Reduce rapid-fire deploy noise from auto-deploy** — When multiple PRs merge in rapid succession (e.g., 5 merges within 2 minutes on Feb 10), Render triggers 5 deploys, 4 of which are immediately canceled. Consider adding a deploy cooldown via Render blueprint settings, or batching PR merges to reduce wasted build minutes on the Starter plan.
-  - Priority: `low`
-  - Category: `ops`
-  - Impact: Fewer wasted deploys, cleaner deploy history.
-  - Discovered: 2026-02-10, Render deploy history review.
 
 ---
 
@@ -144,10 +175,10 @@
 
 > New items to consider. Move to Active Sprint when prioritized.
 
-- [ ] **Snapshot versioning / change history** — Person and company snapshots are mutated in-place with no version history. There's no way to see what a person's profile looked like 30 days ago.
+- [ ] **Snapshot versioning with lightweight change timeline API** — Person and company snapshots are mutated in-place with no version history. Add versioning to enable historical analysis and easier debugging of precedence behavior. Could be implemented as a separate `PersonHistory` collection with snapshot-per-observation or periodic snapshots, plus a timeline query API.
   - Priority: `backlog`
   - Category: `feature`
-  - Impact: Enables temporal queries ("who changed jobs in Q1"), audit trails, and rollback of bad data. Could be implemented as a separate `PersonHistory` collection with snapshot-per-observation or periodic snapshots.
+  - Impact: Enables temporal queries ("who changed jobs in Q1"), audit trails, rollback of bad data, and precedence debugging.
 
 - [ ] **Structured log forwarding to external aggregation** — Logs are well-structured JSON but there's no external aggregation beyond Render's 30-day window. Consider forwarding to a log aggregation service (Datadog, Logtail, Betterstack) for alerts, dashboards, and historical analysis.
   - Priority: `backlog`
@@ -159,35 +190,39 @@
   - Category: `feature`
   - Impact: Complete recovery of all entity types during dead letter replay.
 
-- [ ] **Webhook idempotency relies on SHA1 (event_key)** — `event_key` is computed with SHA1 (`src/utils/eventKey.js`), which is cryptographically weak. While this is used for idempotency (not security), consider migrating to SHA-256 for defense in depth against collision attacks on webhook deduplication.
-  - Priority: `backlog`
-  - Category: `security`
-  - Impact: Stronger collision resistance for idempotency keys.
-
-- [ ] **Add `PATCH /api/people/:id` for manual corrections** — Currently there's no way to manually correct a person's snapshot data through the API. Admin corrections require direct MongoDB access. A PATCH endpoint with webhookAuth protection would enable operational corrections without database access.
-  - Priority: `backlog`
-  - Category: `feature`
-  - Impact: Enables ops team to fix data quality issues without SSH/database access.
 
 - [ ] **Add webhook delivery acknowledgment/retry protocol** — DuxSoup fires webhooks without delivery guarantees. If the server returns 5xx or times out, DuxSoup may not retry. Consider adding a webhook receipt log and a reconciliation job that compares DuxSoup's expected delivery count against received webhooks.
   - Priority: `backlog`
   - Category: `reliability`
   - Impact: Detects silent webhook data loss.
 
-- [ ] **OpenAPI spec drift detection** — The OpenAPI spec in `src/openapi.js` is manually maintained. It can drift from the actual routes. Consider generating the spec from route definitions or adding a test that validates the spec against registered Express routes.
-  - Priority: `backlog`
-  - Category: `testing`
-  - Impact: Ensures API documentation stays accurate.
 
 - [ ] **Person merge REST endpoint** — Merging people currently requires admin scripts or direct DB access. A `POST /api/admin/merge` endpoint would enable ops workflows without SSH. Should support dry-run mode and safety validation.
   - Priority: `backlog`
   - Category: `feature`
   - Impact: Enables merge operations through the API.
 
-- [ ] **GraphQL API layer** — As the read API surface grows (people, companies, locations, changes, seniority), a GraphQL layer could reduce over-fetching and simplify client integrations. Would sit alongside REST, not replace it.
+- [ ] **GraphQL read layer pilot for composite profile views** — As the read API surface grows (people, companies, locations, changes, seniority), a GraphQL layer could reduce over-fetching and simplify client integrations. Useful once REST read complexity materially increases for consumers. Would sit alongside REST, not replace it.
   - Priority: `backlog`
   - Category: `feature`
   - Impact: Flexible querying for frontend/integration consumers.
+
+- [ ] **Idempotency hash migration plan (SHA-1 to SHA-256) with dual-write period** — `event_key` is computed with SHA1 (`src/utils/eventKey.js`), which is cryptographically weak. Current use is non-crypto-critical, but migration improves long-term robustness. Plan a dual-write period where both hashes are checked for deduplication before fully cutting over.
+  - Priority: `backlog`
+  - Category: `security hardening`
+  - Impact: Stronger collision resistance for idempotency keys with zero-downtime migration.
+
+---
+
+## Recommended Next-Sprint Pack
+
+> If capacity is limited, execute this 5-item pack first. This mix best reduces incident risk while preserving development velocity.
+
+1. **Replay parity test + fix** — Ensure dead letter replay also upserts company/location (existing recommendation).
+2. **OpenAPI drift test gate** — Route-to-OpenAPI conformance tests in CI (new high priority item).
+3. **Identity fuzz corpus tests** — Query/search integration tests with edge-case identity data (existing low priority item).
+4. **Deploy batching/cooldown policy** — Reduce canceled Render deploys (new high priority item).
+5. **Warning telemetry in webhook responses** — Expose structured `warnings[]` in responses (new medium priority item).
 
 ---
 
