@@ -60,6 +60,26 @@
   - Category: `bug prevention`
   - Impact: Prevents API surface drift; catches missing/mismatched routes before merge.
 
+- [ ] **Company intelligence rollup API** — Aggregate all people linked to a company into org-level insights: headcount by seniority tier, department distribution, recent hires and departures (via change records), key decision-makers (highest seniority), average tenure, and hiring velocity (new people observed per month). `GET /api/companies/:id/intelligence` returning a structured summary. Built from existing person snapshots, seniority parsing, and change detection — no new data collection needed.
+  - Priority: `high`
+  - Category: `feature / business intelligence`
+  - Impact: Turns individual contact records into account-level intelligence for ABM (Account-Based Marketing) and sales prioritization.
+
+- [ ] **Engagement trigger feed** — Surface time-sensitive actionable signals as a consumable feed: recent job changes (first 90 days = buying window), promotions (budget authority shift), lateral moves to target accounts, and newly observed decision-makers. `GET /api/signals/` with filters for signal type, seniority tier, recency window, and company. Built on top of the existing Change collection and seniority data. Returns ranked, deduplicated signals with recommended action context.
+  - Priority: `high`
+  - Category: `feature / business intelligence`
+  - Impact: Answers "who should I reach out to this week and why?" — the highest-value question for sales teams consuming this data.
+
+- [ ] **Person activity timeline API** — Chronological feed of all observed events and changes for a single person: when they were first seen, each observation timestamp, every detected change (title change, company change, promotion, lateral move), and snapshot field updates with before/after values. `GET /api/people/:id/timeline` with pagination and optional date range filter. Assembled from the observations array, Change records, and snapshot `_meta` provenance timestamps.
+  - Priority: `high`
+  - Category: `feature / business intelligence`
+  - Impact: Answers "what do we know about this person's career trajectory?" in a single call. Essential for sales prep and relationship context.
+
+- [ ] **Network composition analytics** — Aggregate all 1st-degree connections (people with `snapshot.degree` = "1st") into a profile of the user's network. `GET /api/insights/network-profile` returning distributions across: top companies (ranked by headcount), seniority tier breakdown, most common job titles and title clusters, industry distribution, geographic spread (top cities/countries), department breakdown (from `parsedDepartment`), and average tenure. Support optional filters (industry, location, seniority) to slice the data. Include a `GET /api/insights/network-profile/trends` variant comparing current network composition against 30/60/90-day snapshots to surface growth patterns (e.g., "your fintech connections grew 15% this month"). Built entirely from existing person snapshot fields — no new data collection.
+  - Priority: `high`
+  - Category: `feature / business intelligence`
+  - Impact: Answers "what does my network actually look like?" — reveals concentration gaps, over/under-indexed industries, and informs targeted outreach strategy. Foundational for any network-as-an-asset workflow.
+
 ### Medium Priority
 
 - [ ] **Expose webhook processing warnings in API responses and persisted telemetry** — Capacity-limit drops (`MAX_ROLES`/`MAX_EDUCATION`/`MAX_SKILLS`) and soft errors are currently only logged. Return structured `warnings[]` in webhook responses and persist warning counters for visibility in monitoring.
@@ -91,6 +111,21 @@
   - Priority: `medium`
   - Category: `performance`
   - Impact: Establishes latency baselines and catches query performance regressions.
+
+- [ ] **Enrichment gap analysis report** — Identify high-value contacts (by seniority tier, company, or custom criteria) that are missing critical fields (email, phone, company ID, roles, education). `GET /api/insights/enrichment-gaps` returning ranked gaps grouped by field and filterable by seniority/company. Includes a `GET /api/insights/enrichment-gaps/revisit-list` endpoint that outputs a DuxSoup-compatible CSV of profile URLs to re-visit, prioritized by contact value and gap severity.
+  - Priority: `medium`
+  - Category: `feature / business intelligence`
+  - Impact: Closes the feedback loop — tells the user exactly which profiles to re-visit with DuxSoup to fill data gaps, maximizing the value of each scan cycle.
+
+- [ ] **Tag and list management for people segments** — User-defined tags (free-form labels like `"Q1-outreach"`, `"champions"`) and lists (named collections of person IDs) with full CRUD APIs. Support both static lists (manually curated) and dynamic lists (auto-populated from a saved query that re-evaluates on read or on schedule). `POST /api/lists`, `GET /api/lists/:id/members`, `PATCH /api/people/:id/tags`. Requires a `List` model and a `tags` array on Person.
+  - Priority: `medium`
+  - Category: `feature / business intelligence`
+  - Impact: Enables segmentation and campaign targeting without external tooling. Foundation for CRM-like workflows on top of the intelligence layer.
+
+- [ ] **Saved searches with change-triggered alerts** — Allow consumers to save a query (e.g., "VP+ in fintech, Bay Area") and subscribe to notifications when new people match or existing matches undergo job changes, promotions, or lateral moves. Requires a `SavedSearch` model storing query criteria + notification preferences, and a scheduled job that re-evaluates saved searches against recent changes. Notification delivery via the existing notification service (email/SMS).
+  - Priority: `medium`
+  - Category: `feature / business intelligence`
+  - Impact: Transforms the system from pull-only to push — users get alerted to relevant signals without polling. Core enabler for sales and recruiting workflows.
 
 - [x] **Add export job cleanup scheduler** — `EXPORT_TTL_HOURS` (default 24h) is defined in `exportService.js` but there is no background job to actually delete expired export files from `/tmp/duxsoup-exports`. Stale files accumulate on disk indefinitely. Add a scheduled job to the scheduler that prunes files older than `EXPORT_TTL_HOURS`.
   - Priority: `medium`
@@ -150,6 +185,11 @@
   - Priority: `low`
   - Category: `testing`
   - Impact: Catches aggregation pipeline regressions.
+
+- [ ] **Network proximity and relationship mapping** — Surface connection-degree data and shared attributes (same company history, same school, shared skills) between people in the dataset. `GET /api/people/:id/network` returning 1st-degree connections (from LinkedIn degree field), people with overlapping company tenures, and alumni connections. No new data collection — derived from existing roles, education, and degree fields across the people collection.
+  - Priority: `low`
+  - Category: `feature / business intelligence`
+  - Impact: Enables warm-intro discovery and relationship mapping for sales outreach. Leverages existing data relationships that are currently invisible.
 
 - [x] **Update mongoose 9.1.6 -> 9.2.0** — Minor patch available. Run `npm update mongoose` and verify all tests pass.
   - Priority: `low`
