@@ -101,7 +101,7 @@
   - Category: `testing`
   - Impact: Catches regressions in health monitoring endpoints.
 
-- [ ] **Add export stream integration tests** — Export service has unit tests but no integration tests verifying cursor -> transform -> file pipeline with real MongoDB data. Should test CSV/JSON generation end-to-end, row limits, empty results, and error handling during streaming.
+- [x] **Add export stream integration tests** — Export service has unit tests but no integration tests verifying cursor -> transform -> file pipeline with real MongoDB data. Should test CSV/JSON generation end-to-end, row limits, empty results, and error handling during streaming.
   - Priority: `low`
   - Category: `testing`
   - Impact: Validates export pipeline with real database interactions.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Add export stream integration tests** — 2026-02-11, commit `025a754`. Added 20 integration tests in `src/__tests__/exportStream.integration.test.js` covering the full export streaming pipeline (MongoDB cursor → Transform → file) against a real database. Tests cover: people/company/location CSV and JSON exports (6), empty results (2), filters (2), custom field subsets (1), CSV escaping and data integrity (4), row limit enforcement via `jest.isolateModulesAsync` (1), job lifecycle (3), and error handling (1). All 20 tests pass.
 - [x] **Add error classification to dead letter records** — 2026-02-11. Created `src/utils/errorClassifier.js` extracting 7 permanent error patterns into a shared utility. Added `errorClass` field (`transient`/`permanent`) to DeadLetter model. `createFromFailure()` classifies at creation time. `markReplayFailed()` fast-tracks permanent errors to `permanently_failed` (skips remaining retries). `findEligibleForReplay()`/`countEligibleForReplay()` exclude permanent records via `$ne: 'permanent'` (backward-compatible with legacy records missing the field). Updated `purgeStuckDeadLetters.js` to use shared classifier and set `errorClass: 'permanent'`. Updated `resurrectDeadLetters.js` to set `errorClass: 'transient'`. Added `permanentPendingDeadLetters` metric to health check. 22 new tests. All 1022 tests pass.
 - [x] **Expand health endpoint test coverage** — 2026-02-11. Added 43 unit tests in `healthController.endpoints.test.js` covering 9 previously-untested endpoints: `getIngestionHealth` (business logic), `getParityHealth`, `getCoverageBreakdown`, `getCompanyCoverage`, `getLocationCoverage`, `getMetrics`, `getDataQuality`, `getDashboard`, `testNotifications`. Tests cover success paths, error handling (500), edge cases (zero records), status thresholds (healthy/degraded/unhealthy), cutover gate logic, and recommendation generation. All 1000 tests pass.
 - [x] **Update mongoose 9.1.6 -> 9.2.0** — 2026-02-11. Bumped mongoose from 9.1.6 to 9.2.0 via `npm update mongoose`. All 1000 unit tests pass, no breaking changes.
