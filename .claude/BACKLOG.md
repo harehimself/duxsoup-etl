@@ -55,7 +55,7 @@
   - Category: `reliability / platform efficiency`
   - Impact: Eliminates wasted build minutes and deploy churn on the Starter plan.
 
-- [ ] **Add route-to-OpenAPI conformance tests in CI (hard failure on drift)** — API surface is expanding rapidly. Add a CI test that validates registered Express routes against the OpenAPI spec in `src/openapi.js`, failing the build on any drift. Protects client integrations from undocumented breaking changes.
+- [x] **Add route-to-OpenAPI conformance tests in CI (hard failure on drift)** — API surface is expanding rapidly. Add a CI test that validates registered Express routes against the OpenAPI spec in `src/openapi.js`, failing the build on any drift. Protects client integrations from undocumented breaking changes.
   - Priority: `high`
   - Category: `bug prevention`
   - Impact: Prevents API surface drift; catches missing/mismatched routes before merge.
@@ -219,7 +219,7 @@
 > If capacity is limited, execute this 5-item pack first. This mix best reduces incident risk while preserving development velocity.
 
 1. **Replay parity test + fix** — Ensure dead letter replay also upserts company/location (existing recommendation).
-2. **OpenAPI drift test gate** — Route-to-OpenAPI conformance tests in CI (new high priority item).
+2. ~~**OpenAPI drift test gate**~~ — Done (2026-02-11).
 3. **Identity fuzz corpus tests** — Query/search integration tests with edge-case identity data (existing low priority item).
 4. **Deploy batching/cooldown policy** — Reduce canceled Render deploys (new high priority item).
 5. **Warning telemetry in webhook responses** — Expose structured `warnings[]` in responses (new medium priority item).
@@ -235,6 +235,7 @@
 ## Completed
 
 - [x] **Add export stream integration tests** — 2026-02-11, commit `025a754`. Added 20 integration tests in `src/__tests__/exportStream.integration.test.js` covering the full export streaming pipeline (MongoDB cursor → Transform → file) against a real database. Tests cover: people/company/location CSV and JSON exports (6), empty results (2), filters (2), custom field subsets (1), CSV escaping and data integrity (4), row limit enforcement via `jest.isolateModulesAsync` (1), job lifecycle (3), and error handling (1). All 20 tests pass.
+- [x] **Add route-to-OpenAPI conformance tests in CI (hard failure on drift)** — 2026-02-11. Created `__tests__/openapiConformance.test.js` with 3 assertions: no phantom docs (OpenAPI routes must exist in Express), no undocumented routes (Express routes must exist in OpenAPI, minus exclusions), and no stale exclusions. Route extraction handles Express 5 matcher-function internals via path probing. Added 9 missing routes to `src/openapi.js`: `POST /api/webhook/batch`, `GET /api/health/throughput`, `GET /api/health/test-notifications`, `POST /api/admin/test-notifications`, `POST /api/people/by-aliases`, and 4 company/location export endpoints. All 1025 tests pass.
 - [x] **Add error classification to dead letter records** — 2026-02-11. Created `src/utils/errorClassifier.js` extracting 7 permanent error patterns into a shared utility. Added `errorClass` field (`transient`/`permanent`) to DeadLetter model. `createFromFailure()` classifies at creation time. `markReplayFailed()` fast-tracks permanent errors to `permanently_failed` (skips remaining retries). `findEligibleForReplay()`/`countEligibleForReplay()` exclude permanent records via `$ne: 'permanent'` (backward-compatible with legacy records missing the field). Updated `purgeStuckDeadLetters.js` to use shared classifier and set `errorClass: 'permanent'`. Updated `resurrectDeadLetters.js` to set `errorClass: 'transient'`. Added `permanentPendingDeadLetters` metric to health check. 22 new tests. All 1022 tests pass.
 - [x] **Expand health endpoint test coverage** — 2026-02-11. Added 43 unit tests in `healthController.endpoints.test.js` covering 9 previously-untested endpoints: `getIngestionHealth` (business logic), `getParityHealth`, `getCoverageBreakdown`, `getCompanyCoverage`, `getLocationCoverage`, `getMetrics`, `getDataQuality`, `getDashboard`, `testNotifications`. Tests cover success paths, error handling (500), edge cases (zero records), status thresholds (healthy/degraded/unhealthy), cutover gate logic, and recommendation generation. All 1000 tests pass.
 - [x] **Update mongoose 9.1.6 -> 9.2.0** — 2026-02-11. Bumped mongoose from 9.1.6 to 9.2.0 via `npm update mongoose`. All 1000 unit tests pass, no breaking changes.

@@ -513,6 +513,70 @@ const spec = {
       },
     },
 
+    "/api/webhook/batch": {
+      post: {
+        tags: ["Webhook"],
+        summary: "Batch process DuxSoup webhook events",
+        description:
+          "Accepts an array of webhook payloads (max 50) for batch processing. Each item is processed independently; partial failures are reported in the response.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["type", "data"],
+                  properties: {
+                    type: {
+                      type: "string",
+                      enum: ["visit", "scan"],
+                    },
+                    data: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: { type: "string" },
+                      },
+                    },
+                  },
+                },
+                maxItems: 50,
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Batch processed (individual results in body)",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean" },
+                    processed: { type: "integer" },
+                    failed: { type: "integer" },
+                    results: { type: "array", items: { type: "object" } },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Invalid payload",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
     // ── People ──────────────────────────────────────────────────
     "/api/people/{id}": {
       get: {
@@ -584,6 +648,54 @@ const spec = {
             },
           },
           404: { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+
+    "/api/people/by-aliases": {
+      post: {
+        tags: ["People"],
+        summary: "Bulk lookup people by alias values",
+        description:
+          "Look up multiple people by their alias values in a single request.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["values"],
+                properties: {
+                  values: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Alias values to look up",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "People found",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "array",
+                      items: {
+                        $ref: "#/components/schemas/PersonSnapshot",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -996,6 +1108,126 @@ const spec = {
         tags: ["Export"],
         summary: "Export people to JSON",
         description: "Same as CSV export but produces JSON format.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  filters: { type: "object" },
+                  fields: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          202: { description: "Export job created" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/export/companies/csv": {
+      post: {
+        tags: ["Export"],
+        summary: "Export companies to CSV",
+        description:
+          "Create an async export job for company data in CSV format.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  filters: { type: "object" },
+                  fields: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          202: { description: "Export job created" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/export/companies/json": {
+      post: {
+        tags: ["Export"],
+        summary: "Export companies to JSON",
+        description:
+          "Create an async export job for company data in JSON format.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  filters: { type: "object" },
+                  fields: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          202: { description: "Export job created" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/export/locations/csv": {
+      post: {
+        tags: ["Export"],
+        summary: "Export locations to CSV",
+        description:
+          "Create an async export job for location data in CSV format.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  filters: { type: "object" },
+                  fields: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          202: { description: "Export job created" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/export/locations/json": {
+      post: {
+        tags: ["Export"],
+        summary: "Export locations to JSON",
+        description:
+          "Create an async export job for location data in JSON format.",
         requestBody: {
           required: true,
           content: {
@@ -1713,6 +1945,34 @@ const spec = {
       },
     },
 
+    "/api/health/throughput": {
+      get: {
+        tags: ["Health"],
+        summary: "Real-time webhook throughput metrics",
+        description:
+          "Throughput metrics across 1m, 5m, 15m, and 1h sliding windows.",
+        responses: {
+          200: { description: "Throughput metrics" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/health/test-notifications": {
+      get: {
+        tags: ["Health"],
+        summary: "Test notification configuration",
+        description:
+          "Verify that email/SMS notification configuration is valid. Requires authorization.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: "Notification configuration status" },
+          401: { description: "Unauthorized" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
     // ── Admin ───────────────────────────────────────────────────
     "/api/admin/health": {
       get: {
@@ -1737,6 +1997,20 @@ const spec = {
               },
             },
           },
+          401: { description: "Unauthorized" },
+        },
+      },
+    },
+
+    "/api/admin/test-notifications": {
+      post: {
+        tags: ["Admin"],
+        summary: "Test email/SMS notification delivery",
+        description:
+          "Send a test notification to verify email and SMS delivery configuration.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: "Test notification sent" },
           401: { description: "Unauthorized" },
         },
       },
