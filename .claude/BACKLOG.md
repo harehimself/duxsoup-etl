@@ -96,7 +96,7 @@
 
 ### Low Priority / Tech Debt
 
-- [ ] **Expand health endpoint test coverage** — Only `healthController.cache.test.js` and `healthController.dataQuality.test.js` exist. Missing tests for `/api/health/dashboard`, `/api/health/parity`, `/api/health/coverage-breakdown`, `/api/health/metrics`, and other health routes.
+- [x] **Expand health endpoint test coverage** — Only `healthController.cache.test.js` and `healthController.dataQuality.test.js` exist. Missing tests for `/api/health/dashboard`, `/api/health/parity`, `/api/health/coverage-breakdown`, `/api/health/metrics`, and other health routes.
   - Priority: `low`
   - Category: `testing`
   - Impact: Catches regressions in health monitoring endpoints.
@@ -111,12 +111,12 @@
   - Category: `testing`
   - Impact: Catches aggregation pipeline regressions.
 
-- [ ] **Update mongoose 9.1.6 -> 9.2.0** — Minor patch available. Run `npm update mongoose` and verify all tests pass.
+- [x] **Update mongoose 9.1.6 -> 9.2.0** — Minor patch available. Run `npm update mongoose` and verify all tests pass.
   - Priority: `low`
   - Category: `deps`
   - Impact: Bug fixes, minor improvements.
 
-- [ ] **Update nodemailer 8.0.0 -> 8.0.1** — Patch available (was previously bumped via Dependabot PR #80 but lockfile may have drifted).
+- [x] **Update nodemailer 8.0.0 -> 8.0.1** — Patch available (was previously bumped via Dependabot PR #80 but lockfile may have drifted).
   - Priority: `low`
   - Category: `deps`
   - Impact: Bug fixes.
@@ -199,6 +199,9 @@
 
 ## Completed
 
+- [x] **Expand health endpoint test coverage** — 2026-02-11. Added 43 unit tests in `healthController.endpoints.test.js` covering 9 previously-untested endpoints: `getIngestionHealth` (business logic), `getParityHealth`, `getCoverageBreakdown`, `getCompanyCoverage`, `getLocationCoverage`, `getMetrics`, `getDataQuality`, `getDashboard`, `testNotifications`. Tests cover success paths, error handling (500), edge cases (zero records), status thresholds (healthy/degraded/unhealthy), cutover gate logic, and recommendation generation. All 1000 tests pass.
+- [x] **Update mongoose 9.1.6 -> 9.2.0** — 2026-02-11. Bumped mongoose from 9.1.6 to 9.2.0 via `npm update mongoose`. All 1000 unit tests pass, no breaking changes.
+- [x] **Update nodemailer 8.0.0 -> 8.0.1** — 2026-02-11. Already at 8.0.1 in lockfile — no changes needed. Verified installed version matches package.json spec.
 - [x] **Set `ALLOWED_ORIGINS` environment variable on Render** — 2026-02-10. Set `ALLOWED_ORIGINS=https://duxsoup.onrender.com` via Render MCP env var update (merge mode). Eliminates startup CORS warning, enables browser-based access to Swagger UI at `/api/docs`. No code changes — config-only.
 - [x] **Configurable Winston log level via env var** — 2026-02-10. Added `LOG_LEVEL` env var override to `src/utils/logger.js`. Defaults to `info` in production, `debug` in development; any valid Winston level can be set via env var without redeployment. 4 new tests.
 - [x] **Bulk alias lookup endpoint** — 2026-02-10. Added `POST /api/people/by-aliases` accepting `{ values: string[] }` (max 50, deduped). Single `$in` query on `aliases.value` multikey index. Returns `{ success, total, found, notFound, results: [{ value, found, person }] }`. Added `findPeopleByAliases` to `personReadService.js`, `getPersonsByAliases` to `personReadController.js`. 13 new tests (4 service + 9 controller).
