@@ -2,6 +2,7 @@ const Company = require("../models/company");
 const logger = require("../utils/logger");
 const { resolveCompanyIdentity } = require("../utils/identityMatcher");
 const { dedupeAliases } = require("../utils/aliasHelpers");
+const { parseLocation } = require("../utils/location-parser");
 
 /**
  * Source precedence: visit > scan (matches person controller)
@@ -95,12 +96,32 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     ...(identity.aliases || []),
   ]);
 
+  // Parse structured location fields from raw location string.
+  // DuxSoup webhooks provide the person's Location, which serves as
+  // a proxy for the company's location (best available signal).
+  const parsedLocation = webhookData.Location
+    ? parseLocation(webhookData.Location)
+    : {};
+
   // Apply snapshot fields with provenance (shouldOverwrite decides per-field)
   const snapshotFields = [
     ["name", webhookData.Company],
     ["industry", webhookData.Industry],
+    ["location", webhookData.Location],
     ["companyProfileUrl", webhookData.CompanyProfile],
     ["website", webhookData.CompanyWebsite],
+    // Structured location fields (parsed from person's Location as proxy)
+    ["city", parsedLocation.city],
+    ["state", parsedLocation.state],
+    ["stateCode", parsedLocation.stateCode],
+    ["country", parsedLocation.country],
+    ["countryCode", parsedLocation.countryCode],
+    ["province", parsedLocation.province],
+    ["locationType", parsedLocation.locationType],
+    ["usRegion", parsedLocation.usRegion],
+    ["usSubregion", parsedLocation.usSubregion],
+    ["timezone", parsedLocation.timezone],
+    ["utcOffset", parsedLocation.utcOffset],
   ];
 
   const existingMetaMap = snapshot._meta || {};

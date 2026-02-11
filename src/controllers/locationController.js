@@ -86,6 +86,10 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
           province: parsed.province || null,
           region: parsed.region || null,
           locationType: parsed.locationType || "unknown",
+          usRegion: parsed.usRegion || null,
+          usSubregion: parsed.usSubregion || null,
+          timezone: parsed.timezone || null,
+          utcOffset: parsed.utcOffset != null ? parsed.utcOffset : null,
         },
         observations: { visits: [], scans: [] },
         meta: {},
@@ -124,6 +128,10 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
       ["province", parsed.province],
       ["region", parsed.region],
       ["locationType", parsed.locationType],
+      ["usRegion", parsed.usRegion],
+      ["usSubregion", parsed.usSubregion],
+      ["timezone", parsed.timezone],
+      ["utcOffset", parsed.utcOffset],
     );
   }
 

@@ -11,6 +11,8 @@
  * - "London, England, United Kingdom"
  */
 
+const { getUSRegionData } = require("./us-regions");
+
 // US State mappings
 const US_STATES = {
   AL: "Alabama",
@@ -178,6 +180,29 @@ function inferStateFromCity(cityName) {
 }
 
 /**
+ * Enrich a parsed location object with US region data when a US state code is present.
+ * Adds usRegion, usSubregion, timezone, and utcOffset fields.
+ *
+ * @param {object} location - Parsed location object with stateCode field
+ * @returns {object} Same location object with region fields added
+ */
+function enrichWithUSRegion(location) {
+  const regionData = getUSRegionData(location.stateCode);
+  if (regionData) {
+    location.usRegion = regionData.usRegion;
+    location.usSubregion = regionData.usSubregion;
+    location.timezone = regionData.timezone;
+    location.utcOffset = regionData.utcOffset;
+  } else {
+    location.usRegion = null;
+    location.usSubregion = null;
+    location.timezone = null;
+    location.utcOffset = null;
+  }
+  return location;
+}
+
+/**
  * Parse a LinkedIn location string into structured components
  * @param {string} rawLocation - The raw location string from LinkedIn
  * @returns {object} Structured location object
@@ -187,6 +212,10 @@ function parseLocation(rawLocation) {
     return {
       rawLocation: rawLocation || "",
       locationType: "unknown",
+      usRegion: null,
+      usSubregion: null,
+      timezone: null,
+      utcOffset: null,
     };
   }
 
@@ -200,6 +229,10 @@ function parseLocation(rawLocation) {
     province: null,
     region: null,
     locationType: "unknown",
+    usRegion: null,
+    usSubregion: null,
+    timezone: null,
+    utcOffset: null,
   };
 
   // Check for metropolitan area patterns
@@ -266,7 +299,7 @@ function parseLocation(rawLocation) {
         }
       }
 
-      return location;
+      return enrichWithUSRegion(location);
     }
   }
 
@@ -277,7 +310,7 @@ function parseLocation(rawLocation) {
     // Single part - could be city, region, or country
     location.city = parts[0];
     location.locationType = "city";
-    return location;
+    return enrichWithUSRegion(location);
   }
 
   if (parts.length === 2) {
@@ -310,7 +343,7 @@ function parseLocation(rawLocation) {
       location.locationType = "city";
     }
 
-    return location;
+    return enrichWithUSRegion(location);
   }
 
   if (parts.length === 3) {
@@ -344,7 +377,7 @@ function parseLocation(rawLocation) {
       location.locationType = "city";
     }
 
-    return location;
+    return enrichWithUSRegion(location);
   }
 
   // Four or more parts - unusual, take best guess
@@ -356,7 +389,7 @@ function parseLocation(rawLocation) {
     location.locationType = "city";
   }
 
-  return location;
+  return enrichWithUSRegion(location);
 }
 
 /**

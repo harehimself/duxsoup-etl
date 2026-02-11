@@ -68,6 +68,22 @@ const companySchema = new mongoose.Schema(
       name: { type: String, maxlength: 200 },
       industry: { type: String, maxlength: 100 },
       location: { type: String, maxlength: 200 },
+
+      // Structured location fields (parsed from location string)
+      city: { type: String, maxlength: 100 },
+      state: { type: String, maxlength: 100 },
+      stateCode: { type: String, maxlength: 10 },
+      country: { type: String, maxlength: 100 },
+      countryCode: { type: String, maxlength: 10 },
+      province: { type: String, maxlength: 100 },
+      locationType: { type: String, maxlength: 50 },
+
+      // US region categorization (derived from stateCode)
+      usRegion: { type: String, maxlength: 50 },
+      usSubregion: { type: String, maxlength: 50 },
+      timezone: { type: String, maxlength: 50 },
+      utcOffset: { type: Number, min: -12, max: 14 },
+
       description: { type: String, maxlength: 5000 },
 
       // URLs
