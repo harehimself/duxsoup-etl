@@ -19,6 +19,8 @@ const DeadLetter = require('../src/models/deadLetter');
 const Scan = require('../src/models/scan');
 const Visit = require('../src/models/visit');
 const { upsertFromObservation } = require('../src/controllers/personController');
+const { upsertCompanyFromObservation } = require('../src/controllers/companyController');
+const { upsertLocationFromObservation } = require('../src/controllers/locationController');
 const logger = require('../src/utils/logger');
 
 // Statistics
@@ -28,6 +30,10 @@ const stats = {
   succeeded: 0,
   failed: 0,
   skipped: 0,
+  companySucceeded: 0,
+  companyFailed: 0,
+  locationSucceeded: 0,
+  locationFailed: 0,
   errors: {},
   startTime: null,
   endTime: null,
@@ -67,13 +73,37 @@ async function replayDeadLetter(deadLetter, dryRun = true) {
           sourceType: deadLetter.sourceType,
         });
 
+        // Best-effort company upsert
+        try {
+          await upsertCompanyFromObservation(observation, deadLetter.sourceType);
+          stats.companySucceeded++;
+        } catch (companyErr) {
+          stats.companyFailed++;
+          logger.warn('Company upsert failed during replay (non-blocking)', {
+            dead_letter_id: deadLetter._id,
+            error: companyErr.message,
+          });
+        }
+
+        // Best-effort location upsert
+        try {
+          await upsertLocationFromObservation(observation, deadLetter.sourceType);
+          stats.locationSucceeded++;
+        } catch (locationErr) {
+          stats.locationFailed++;
+          logger.warn('Location upsert failed during replay (non-blocking)', {
+            dead_letter_id: deadLetter._id,
+            error: locationErr.message,
+          });
+        }
+
         return { success: true, person_id: person._id };
       } else {
         stats.failed++;
         return { success: false, reason: 'upsert_returned_null' };
       }
     } else {
-      // Dry run - just validate that observation exists
+      // Dry run - just validate that observation exists (person + company + location would be attempted)
       stats.succeeded++;
       return { success: true, dry_run: true };
     }
@@ -110,7 +140,7 @@ function generateReport() {
   console.log('DEAD LETTER REPLAY REPORT');
   console.log('========================================\n');
 
-  console.log('Summary:');
+  console.log('Person Upserts:');
   console.log(`  Total dead letters: ${stats.total}`);
   console.log(`  Processed: ${stats.processed}`);
   console.log(`  Succeeded: ${stats.succeeded}`);
@@ -118,6 +148,14 @@ function generateReport() {
   console.log(`  Skipped: ${stats.skipped}`);
   console.log(`  Success rate: ${stats.processed > 0 ? Math.round((stats.succeeded / stats.processed) * 100) : 0}%`);
   console.log(`  Duration: ${durationSec}s\n`);
+
+  console.log('Company Upserts (best-effort):');
+  console.log(`  Succeeded: ${stats.companySucceeded}`);
+  console.log(`  Failed: ${stats.companyFailed}\n`);
+
+  console.log('Location Upserts (best-effort):');
+  console.log(`  Succeeded: ${stats.locationSucceeded}`);
+  console.log(`  Failed: ${stats.locationFailed}\n`);
 
   if (Object.keys(stats.errors).length > 0) {
     console.log('Error Types:');

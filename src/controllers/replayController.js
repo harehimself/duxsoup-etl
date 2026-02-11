@@ -1,7 +1,9 @@
-const Visit = require('../models/visit');
-const Scan = require('../models/scan');
-const { upsertFromObservation } = require('./personController');
-const logger = require('../utils/logger');
+const Visit = require("../models/visit");
+const Scan = require("../models/scan");
+const { upsertFromObservation } = require("./personController");
+const { upsertCompanyFromObservation } = require("./companyController");
+const { upsertLocationFromObservation } = require("./locationController");
+const logger = require("../utils/logger");
 
 /**
  * Replay Controller
@@ -23,24 +25,25 @@ async function replayObservation(req, res) {
     const { observationId } = req.params;
     const { type } = req.query;
 
-    if (!type || !['visit', 'scan'].includes(type)) {
+    if (!type || !["visit", "scan"].includes(type)) {
       return res.status(400).json({
         success: false,
-        error: 'INVALID_TYPE',
-        message: 'Query parameter "type" is required and must be "visit" or "scan"',
+        error: "INVALID_TYPE",
+        message:
+          'Query parameter "type" is required and must be "visit" or "scan"',
       });
     }
 
-    logger.info('Replaying observation', { observationId, type });
+    logger.info("Replaying observation", { observationId, type });
 
     // Look up the observation
-    const Model = type === 'visit' ? Visit : Scan;
+    const Model = type === "visit" ? Visit : Scan;
     const observation = await Model.findById(observationId);
 
     if (!observation) {
       return res.status(404).json({
         success: false,
-        error: 'NOT_FOUND',
+        error: "NOT_FOUND",
         message: `${type} observation not found: ${observationId}`,
       });
     }
@@ -51,15 +54,42 @@ async function replayObservation(req, res) {
     if (!person) {
       return res.status(422).json({
         success: false,
-        error: 'UPSERT_SKIPPED',
-        message: 'Observation lacks stable identity — person upsert was skipped',
+        error: "UPSERT_SKIPPED",
+        message:
+          "Observation lacks stable identity — person upsert was skipped",
       });
     }
 
-    logger.info('Observation replayed successfully', {
+    // Best-effort company upsert
+    let company_replayed = false;
+    try {
+      const company = await upsertCompanyFromObservation(observation, type);
+      company_replayed = company != null;
+    } catch (companyErr) {
+      logger.warn("Company upsert failed during replay (non-blocking)", {
+        observationId,
+        error: companyErr.message,
+      });
+    }
+
+    // Best-effort location upsert
+    let location_replayed = false;
+    try {
+      const location = await upsertLocationFromObservation(observation, type);
+      location_replayed = location != null;
+    } catch (locationErr) {
+      logger.warn("Location upsert failed during replay (non-blocking)", {
+        observationId,
+        error: locationErr.message,
+      });
+    }
+
+    logger.info("Observation replayed successfully", {
       observationId,
       type,
       person_id: person._id,
+      company_replayed,
+      location_replayed,
     });
 
     res.json({
@@ -67,12 +97,14 @@ async function replayObservation(req, res) {
       data: {
         person_id: person._id,
         replayed: true,
+        company_replayed,
+        location_replayed,
         observationId,
         type,
       },
     });
   } catch (error) {
-    logger.error('Failed to replay observation', {
+    logger.error("Failed to replay observation", {
       observationId: req.params.observationId,
       error: error.message,
       stack: error.stack,
@@ -80,7 +112,7 @@ async function replayObservation(req, res) {
 
     res.status(500).json({
       success: false,
-      error: 'REPLAY_FAILED',
+      error: "REPLAY_FAILED",
       message: error.message,
     });
   }
