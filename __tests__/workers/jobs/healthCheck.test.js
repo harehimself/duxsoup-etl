@@ -62,6 +62,51 @@ describe("Health Check", () => {
     });
   });
 
+  describe("dead letter backlog with error classification", () => {
+    it("should include permanentPendingDeadLetters in metrics", async () => {
+      Person.countDocuments.mockResolvedValue(100);
+      DeadLetter.countDocuments.mockImplementation((query) => {
+        if (query.status === "pending" && query.errorClass === "permanent")
+          return Promise.resolve(3);
+        if (query.status === "pending") return Promise.resolve(150);
+        return Promise.resolve(0);
+      });
+
+      const report = await runHealthCheck();
+
+      expect(report.metrics.pendingDeadLetters).toBe(150);
+      expect(report.metrics.permanentPendingDeadLetters).toBe(3);
+    });
+
+    it("should include permanent count in critical alert message", async () => {
+      Person.countDocuments.mockResolvedValue(100);
+      DeadLetter.countDocuments.mockImplementation((query) => {
+        if (query.status === "pending" && query.errorClass === "permanent")
+          return Promise.resolve(5);
+        if (query.status === "pending") return Promise.resolve(120);
+        return Promise.resolve(0);
+      });
+
+      const report = await runHealthCheck();
+
+      const backlogIssue = report.criticalIssues.find(
+        (i) => i.type === "dead_letter_backlog",
+      );
+      expect(backlogIssue).toBeDefined();
+      expect(backlogIssue.message).toContain("120");
+      expect(backlogIssue.message).toContain("5 permanent");
+    });
+
+    it("should report zero permanentPendingDeadLetters when none exist", async () => {
+      Person.countDocuments.mockResolvedValue(100);
+      DeadLetter.countDocuments.mockResolvedValue(0);
+
+      const report = await runHealthCheck();
+
+      expect(report.metrics.permanentPendingDeadLetters).toBe(0);
+    });
+  });
+
   describe("permanently_failed dead letters", () => {
     it("should include permanentlyFailedDeadLetters in metrics", async () => {
       Person.countDocuments.mockResolvedValue(100);

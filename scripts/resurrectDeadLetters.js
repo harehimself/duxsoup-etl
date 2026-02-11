@@ -118,6 +118,7 @@ async function resurrectDeadLetters(options = {}) {
           replay_attempts: 0,
           next_replay_at: null,
           last_replay_error: `Resurrected: was permanently_failed with: ${shortError}`,
+          errorClass: 'transient',
         });
       }
 

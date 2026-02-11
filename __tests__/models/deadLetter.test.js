@@ -11,7 +11,7 @@ describe("DeadLetter static methods", () => {
   });
 
   describe("markReplayFailed()", () => {
-    it("should set status to failed_again when under retry limit", async () => {
+    it("should set status to failed_again when under retry limit with transient error", async () => {
       jest
         .spyOn(DeadLetter, "findOne")
         .mockResolvedValue({ replay_attempts: 3 });
@@ -24,18 +24,20 @@ describe("DeadLetter static methods", () => {
             last_replay_error: update.last_replay_error,
             last_replay_at: update.last_replay_at,
             next_replay_at: update.next_replay_at,
+            errorClass: update.errorClass,
           });
         });
 
       const result = await DeadLetter.markReplayFailed(
         "obs-1",
-        new Error("still broken"),
+        new Error("connection timed out"),
       );
 
       expect(result.status).toBe("failed_again");
       expect(result.replay_attempts).toBe(4);
-      expect(result.last_replay_error).toBe("still broken");
+      expect(result.last_replay_error).toBe("connection timed out");
       expect(result.next_replay_at).toBeInstanceOf(Date);
+      expect(result.errorClass).toBe("transient");
     });
 
     it("should set status to permanently_failed when reaching max retries", async () => {
@@ -51,6 +53,7 @@ describe("DeadLetter static methods", () => {
             last_replay_error: update.last_replay_error,
             last_replay_at: update.last_replay_at,
             next_replay_at: update.next_replay_at,
+            errorClass: update.errorClass,
           });
         });
 
@@ -62,6 +65,56 @@ describe("DeadLetter static methods", () => {
       expect(result.status).toBe("permanently_failed");
       expect(result.replay_attempts).toBe(10);
       expect(result.next_replay_at).toBeNull();
+      expect(result.errorClass).toBe("transient");
+    });
+
+    it("should fast-track permanent errors to permanently_failed on first attempt", async () => {
+      jest
+        .spyOn(DeadLetter, "findOne")
+        .mockResolvedValue({ replay_attempts: 0 });
+      jest
+        .spyOn(DeadLetter, "findOneAndUpdate")
+        .mockImplementation((_filter, update, _opts) => {
+          return Promise.resolve({
+            status: update.status,
+            replay_attempts: update.replay_attempts,
+            last_replay_error: update.last_replay_error,
+            next_replay_at: update.next_replay_at,
+            errorClass: update.errorClass,
+          });
+        });
+
+      const result = await DeadLetter.markReplayFailed(
+        "obs-perm",
+        new Error("CastError: Cast to ObjectId failed"),
+      );
+
+      expect(result.status).toBe("permanently_failed");
+      expect(result.replay_attempts).toBe(1);
+      expect(result.next_replay_at).toBeNull();
+      expect(result.errorClass).toBe("permanent");
+    });
+
+    it("should set errorClass to transient for transient errors", async () => {
+      jest
+        .spyOn(DeadLetter, "findOne")
+        .mockResolvedValue({ replay_attempts: 2 });
+      jest
+        .spyOn(DeadLetter, "findOneAndUpdate")
+        .mockImplementation((_filter, update, _opts) => {
+          return Promise.resolve({
+            status: update.status,
+            errorClass: update.errorClass,
+          });
+        });
+
+      const result = await DeadLetter.markReplayFailed(
+        "obs-trans",
+        new Error("MongoNetworkError: connect ECONNREFUSED"),
+      );
+
+      expect(result.status).toBe("failed_again");
+      expect(result.errorClass).toBe("transient");
     });
 
     it("should compute next_replay_at via backoff for non-permanent failures", async () => {
@@ -123,7 +176,7 @@ describe("DeadLetter static methods", () => {
   });
 
   describe("findEligibleForReplay()", () => {
-    it("should query with correct eligibility criteria", async () => {
+    it("should query with correct eligibility criteria including errorClass filter", async () => {
       const mockLimit = jest.fn().mockResolvedValue([]);
       const mockSort = jest.fn().mockReturnValue({ limit: mockLimit });
       jest.spyOn(DeadLetter, "find").mockReturnValue({ sort: mockSort });
@@ -132,6 +185,7 @@ describe("DeadLetter static methods", () => {
 
       const query = DeadLetter.find.mock.calls[0][0];
       expect(query.status).toEqual({ $in: ["pending", "failed_again"] });
+      expect(query.errorClass).toEqual({ $ne: "permanent" });
       expect(query.replay_attempts).toEqual({ $lt: MAX_RETRY_ATTEMPTS });
       expect(query.$or).toEqual(
         expect.arrayContaining([
@@ -166,7 +220,7 @@ describe("DeadLetter static methods", () => {
   });
 
   describe("countEligibleForReplay()", () => {
-    it("should count with correct eligibility criteria", async () => {
+    it("should count with correct eligibility criteria including errorClass filter", async () => {
       jest.spyOn(DeadLetter, "countDocuments").mockResolvedValue(5);
 
       const count = await DeadLetter.countEligibleForReplay();
@@ -174,6 +228,7 @@ describe("DeadLetter static methods", () => {
       expect(count).toBe(5);
       const query = DeadLetter.countDocuments.mock.calls[0][0];
       expect(query.status).toEqual({ $in: ["pending", "failed_again"] });
+      expect(query.errorClass).toEqual({ $ne: "permanent" });
       expect(query.replay_attempts).toEqual({ $lt: MAX_RETRY_ATTEMPTS });
       expect(query.$or).toBeDefined();
     });

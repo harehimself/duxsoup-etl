@@ -123,23 +123,28 @@ async function checkDeadLetterBacklog(report) {
     return;
   }
 
-  const pendingCount = await DeadLetter.countDocuments({
-    status: "pending",
-  });
+  const [pendingCount, permanentPendingCount] = await Promise.all([
+    DeadLetter.countDocuments({ status: "pending" }),
+    DeadLetter.countDocuments({ status: "pending", errorClass: "permanent" }),
+  ]);
 
   report.metrics.pendingDeadLetters = pendingCount;
+  report.metrics.permanentPendingDeadLetters = permanentPendingCount;
 
   // CRITICAL: >100 pending
   if (pendingCount > 100) {
     report.criticalIssues.push({
       type: "dead_letter_backlog",
       severity: "critical",
-      message: `${pendingCount} pending dead letters (threshold: 100)`,
+      message: `${pendingCount} pending dead letters (${permanentPendingCount} permanent) (threshold: 100)`,
       recommendation: "Investigate dead letter causes and replay",
     });
   }
 
-  logger.debug("Dead letter backlog check", { pendingCount });
+  logger.debug("Dead letter backlog check", {
+    pendingCount,
+    permanentPendingCount,
+  });
 }
 
 /**

@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const { stableStringify } = require("../utils/stableStringify");
 const { calculateNextReplayAt } = require("../utils/backoff");
 const { MAX_RETRY_ATTEMPTS } = require("../constants/limits");
+const { classifyError } = require("../utils/errorClassifier");
 
 /**
  * DeadLetter Model - Failed person upserts for replay
@@ -70,6 +71,13 @@ const deadLetterSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Error classification for smart replay
+    errorClass: {
+      type: String,
+      enum: ["transient", "permanent"],
+      index: true,
+    },
+
     // Replay attempt tracking
     replay_attempts: {
       type: Number,
@@ -101,7 +109,7 @@ const deadLetterSchema = new mongoose.Schema(
 deadLetterSchema.index({ status: 1, createdAt: -1 });
 deadLetterSchema.index({ sourceType: 1, status: 1 });
 deadLetterSchema.index({ observation_id: 1 }, { unique: true });
-deadLetterSchema.index({ status: 1, next_replay_at: 1 });
+deadLetterSchema.index({ status: 1, errorClass: 1, next_replay_at: 1 });
 
 // Static method: Create from upsert failure
 deadLetterSchema.statics.createFromFailure = async function (
@@ -128,6 +136,7 @@ deadLetterSchema.statics.createFromFailure = async function (
       identity_hints: identityHints || {},
       payload_hash: payloadHash,
       status: "pending",
+      errorClass: classifyError(error.message),
     });
   } catch (err) {
     // If duplicate, it's already logged - skip
@@ -161,8 +170,10 @@ deadLetterSchema.statics.markReplayFailed = async function (
 
   const newAttempts = doc.replay_attempts + 1;
   const now = new Date();
+  const errorClass = classifyError(error.message);
 
-  if (newAttempts >= MAX_RETRY_ATTEMPTS) {
+  // Fast-track permanent errors — skip remaining retries
+  if (errorClass === "permanent" || newAttempts >= MAX_RETRY_ATTEMPTS) {
     return await this.findOneAndUpdate(
       { observation_id: observationId },
       {
@@ -170,6 +181,7 @@ deadLetterSchema.statics.markReplayFailed = async function (
         last_replay_at: now,
         last_replay_error: error.message,
         replay_attempts: newAttempts,
+        errorClass,
         next_replay_at: null,
       },
       { new: true },
@@ -184,17 +196,19 @@ deadLetterSchema.statics.markReplayFailed = async function (
       last_replay_at: now,
       last_replay_error: error.message,
       replay_attempts: newAttempts,
+      errorClass,
       next_replay_at: nextReplayAt,
     },
     { new: true },
   );
 };
 
-// Static method: Find records eligible for replay (backoff-aware)
+// Static method: Find records eligible for replay (backoff-aware, skips permanent)
 deadLetterSchema.statics.findEligibleForReplay = async function (limit = 100) {
   const now = new Date();
   return await this.find({
     status: { $in: ["pending", "failed_again"] },
+    errorClass: { $ne: "permanent" },
     replay_attempts: { $lt: MAX_RETRY_ATTEMPTS },
     $or: [
       { next_replay_at: null },
@@ -206,11 +220,12 @@ deadLetterSchema.statics.findEligibleForReplay = async function (limit = 100) {
     .limit(limit);
 };
 
-// Static method: Count records eligible for replay
+// Static method: Count records eligible for replay (skips permanent)
 deadLetterSchema.statics.countEligibleForReplay = async function () {
   const now = new Date();
   return await this.countDocuments({
     status: { $in: ["pending", "failed_again"] },
+    errorClass: { $ne: "permanent" },
     replay_attempts: { $lt: MAX_RETRY_ATTEMPTS },
     $or: [
       { next_replay_at: null },

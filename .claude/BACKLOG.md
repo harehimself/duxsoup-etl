@@ -126,7 +126,7 @@
   - Category: `reliability`
   - Impact: Makes data truncation visible rather than silent.
 
-- [ ] **Add error classification to dead letter records** — Dead letters store the raw error message but don't categorize errors. Adding a `errorClass` field (`transient` vs `permanent`) would enable smarter replay (skip `ValidationError` patterns, only retry transient failures like timeouts/connection errors) and better monitoring of true failure rates vs known-bad data.
+- [x] **Add error classification to dead letter records** — Dead letters store the raw error message but don't categorize errors. Adding a `errorClass` field (`transient` vs `permanent`) would enable smarter replay (skip `ValidationError` patterns, only retry transient failures like timeouts/connection errors) and better monitoring of true failure rates vs known-bad data.
   - Priority: `low`
   - Category: `reliability`
   - Impact: Smarter dead letter replay, cleaner error metrics.
@@ -199,6 +199,7 @@
 
 ## Completed
 
+- [x] **Add error classification to dead letter records** — 2026-02-11. Created `src/utils/errorClassifier.js` extracting 7 permanent error patterns into a shared utility. Added `errorClass` field (`transient`/`permanent`) to DeadLetter model. `createFromFailure()` classifies at creation time. `markReplayFailed()` fast-tracks permanent errors to `permanently_failed` (skips remaining retries). `findEligibleForReplay()`/`countEligibleForReplay()` exclude permanent records via `$ne: 'permanent'` (backward-compatible with legacy records missing the field). Updated `purgeStuckDeadLetters.js` to use shared classifier and set `errorClass: 'permanent'`. Updated `resurrectDeadLetters.js` to set `errorClass: 'transient'`. Added `permanentPendingDeadLetters` metric to health check. 22 new tests. All 1022 tests pass.
 - [x] **Expand health endpoint test coverage** — 2026-02-11. Added 43 unit tests in `healthController.endpoints.test.js` covering 9 previously-untested endpoints: `getIngestionHealth` (business logic), `getParityHealth`, `getCoverageBreakdown`, `getCompanyCoverage`, `getLocationCoverage`, `getMetrics`, `getDataQuality`, `getDashboard`, `testNotifications`. Tests cover success paths, error handling (500), edge cases (zero records), status thresholds (healthy/degraded/unhealthy), cutover gate logic, and recommendation generation. All 1000 tests pass.
 - [x] **Update mongoose 9.1.6 -> 9.2.0** — 2026-02-11. Bumped mongoose from 9.1.6 to 9.2.0 via `npm update mongoose`. All 1000 unit tests pass, no breaking changes.
 - [x] **Update nodemailer 8.0.0 -> 8.0.1** — 2026-02-11. Already at 8.0.1 in lockfile — no changes needed. Verified installed version matches package.json spec.

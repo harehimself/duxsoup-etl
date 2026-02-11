@@ -19,9 +19,9 @@ jest.mock("../../src/models/deadLetter", () => {
 
 const DeadLetter = require("../../src/models/deadLetter");
 const {
-  isPermanentError,
   purgeStuckDeadLetters,
 } = require("../../scripts/purgeStuckDeadLetters");
+const { isPermanentError } = require("../../src/utils/errorClassifier");
 
 function setupFind(records) {
   const sortable = [...records];
@@ -132,7 +132,7 @@ describe("purgeStuckDeadLetters", () => {
       expect(DeadLetter.findByIdAndUpdate).not.toHaveBeenCalled();
     });
 
-    it("should update records when not in dry-run", async () => {
+    it("should update records with errorClass when not in dry-run", async () => {
       setupFind([
         makeDL("dl-1", "Cast to string failed for value \"{ text: 'MBA' }\""),
       ]);
@@ -147,6 +147,7 @@ describe("purgeStuckDeadLetters", () => {
         status: "permanently_failed",
         last_replay_error: expect.stringContaining("Purged:"),
         next_replay_at: null,
+        errorClass: "permanent",
       });
     });
 

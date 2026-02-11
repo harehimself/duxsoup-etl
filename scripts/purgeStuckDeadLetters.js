@@ -19,28 +19,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const database = require('../src/utils/database');
 const DeadLetter = require('../src/models/deadLetter');
 const logger = require('../src/utils/logger');
-
-/**
- * Error patterns that indicate permanent, non-retryable failures.
- * Transient errors (timeouts, connection resets) are NOT matched.
- */
-const PERMANENT_ERROR_PATTERNS = [
-  /Cast to string failed/i,
-  /ValidationError/i,
-  /Cast to \[?ObjectId\]? failed/i,
-  /CastError/i,
-  /invalid _id/i,
-  /Document failed validation/i,
-  /E11000 duplicate key/i,
-];
-
-/**
- * Classify whether an error message represents a permanent failure.
- */
-function isPermanentError(errorMessage) {
-  if (!errorMessage) return false;
-  return PERMANENT_ERROR_PATTERNS.some(pattern => pattern.test(errorMessage));
-}
+const { isPermanentError } = require('../src/utils/errorClassifier');
 
 function parseArgs() {
   const args = {
@@ -110,6 +89,7 @@ async function purgeStuckDeadLetters(options = {}) {
           status: 'permanently_failed',
           last_replay_error: `Purged: ${errorMsg}`,
           next_replay_at: null,
+          errorClass: 'permanent',
         });
       }
 

@@ -103,7 +103,7 @@ describe("resurrectDeadLetters", () => {
       expect(DeadLetter.findByIdAndUpdate).not.toHaveBeenCalled();
     });
 
-    it("should reset status to pending when not in dry-run", async () => {
+    it("should reset status to pending with errorClass transient when not in dry-run", async () => {
       setupFind([
         makeDL("dl-1", "Cast to string failed for value \"{ text: 'MBA' }\""),
       ]);
@@ -119,6 +119,7 @@ describe("resurrectDeadLetters", () => {
         replay_attempts: 0,
         next_replay_at: null,
         last_replay_error: expect.stringContaining("Resurrected:"),
+        errorClass: "transient",
       });
     });
 
@@ -219,7 +220,7 @@ describe("resurrectDeadLetters", () => {
       });
     });
 
-    it("should reset replay_attempts to 0 on resurrection", async () => {
+    it("should reset replay_attempts to 0 and set errorClass transient on resurrection", async () => {
       setupFind([makeDL("dl-1", "Cast to string failed for value X", 10)]);
 
       await resurrectDeadLetters({
@@ -231,6 +232,7 @@ describe("resurrectDeadLetters", () => {
         "dl-1",
         expect.objectContaining({
           replay_attempts: 0,
+          errorClass: "transient",
         }),
       );
     });
