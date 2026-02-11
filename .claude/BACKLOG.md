@@ -82,25 +82,25 @@
 
 ### Medium Priority
 
-- [ ] **Trim and collapse whitespace on all snapshot string fields** — The `FIELD_MAPPINGS` loop in `personController.js` passes raw DuxSoup values through to snapshot fields without trimming. Fields affected: `firstName`, `middleName`, `lastName`, `currentTitle`, `currentCompany`, `location`, `industry`, `summary`, `email`, `phone`, `twitter`. DuxSoup scrapes raw LinkedIn HTML, so leading/trailing whitespace and collapsed multi-spaces are common. Add a default `trim()` transform to the field mapping loop and a `collapseWhitespace()` (replace `\s+` with single space) for multi-word text fields. Apply at Phase 2 only — observations should keep raw data for audit. Also trim role `title`, `companyName`, `location`, `description` in `updateRolesTimeline()` before storage (currently only normalized for comparison via `normalizeRoleText()`). Include a backfill script to clean existing records.
+- [x] **Trim and collapse whitespace on all snapshot string fields** — The `FIELD_MAPPINGS` loop in `personController.js` passes raw DuxSoup values through to snapshot fields without trimming. Fields affected: `firstName`, `middleName`, `lastName`, `currentTitle`, `currentCompany`, `location`, `industry`, `summary`, `email`, `phone`, `twitter`. DuxSoup scrapes raw LinkedIn HTML, so leading/trailing whitespace and collapsed multi-spaces are common. Add a default `trim()` transform to the field mapping loop and a `collapseWhitespace()` (replace `\s+` with single space) for multi-word text fields. Apply at Phase 2 only — observations should keep raw data for audit. Also trim role `title`, `companyName`, `location`, `description` in `updateRolesTimeline()` before storage (currently only normalized for comparison via `normalizeRoleText()`). Include a backfill script to clean existing records.
   - Priority: `medium`
   - Category: `data quality`
   - Impact: Eliminates whitespace inconsistencies across all snapshot fields. Improves exact-match queries, faceting, deduplication, and downstream CRM sync.
   - Discovered: 2026-02-11, data cleansing review.
 
-- [ ] **Case-insensitive skill deduplication** — `updateSkills()` in `personController.js` uses `new Set()` with exact string matching, so "JavaScript" and "javascript" are stored as separate entries. Normalize comparison with `.toLowerCase().trim()` while preserving first-seen casing in the stored value. Include a backfill script to deduplicate existing skill arrays.
+- [x] **Case-insensitive skill deduplication** — `updateSkills()` in `personController.js` uses `new Set()` with exact string matching, so "JavaScript" and "javascript" are stored as separate entries. Normalize comparison with `.toLowerCase().trim()` while preserving first-seen casing in the stored value. Include a backfill script to deduplicate existing skill arrays.
   - Priority: `medium`
   - Category: `data quality`
   - Impact: Eliminates duplicate skills caused by casing differences. Improves skill-based filtering and search accuracy.
   - Discovered: 2026-02-11, data cleansing review.
 
-- [ ] **Normalize email addresses on person snapshot** — Email is passed through as-is from DuxSoup with no lowercasing, trimming, or format validation. "John@Gmail.com" and "john@gmail.com" appear as different values. Add a `normalizeEmail` transform: `trim().toLowerCase()` with optional RFC 5322 regex validation in warn-only mode (log invalid formats, don't reject the webhook). Include a backfill script to normalize existing email values.
+- [x] **Normalize email addresses on person snapshot** — Email is passed through as-is from DuxSoup with no lowercasing, trimming, or format validation. "John@Gmail.com" and "john@gmail.com" appear as different values. Add a `normalizeEmail` transform: `trim().toLowerCase()` with optional RFC 5322 regex validation in warn-only mode (log invalid formats, don't reject the webhook). Include a backfill script to normalize existing email values.
   - Priority: `medium`
   - Category: `data quality`
   - Impact: Enables reliable email-based deduplication and CRM matching. Surfaces invalid email data for cleanup.
   - Discovered: 2026-02-11, data cleansing review.
 
-- [ ] **Case-insensitive education deduplication** — `updateEducation()` in `personController.js` compares `school`, `degree`, and `field` with strict `===` equality. "MIT" vs "mit" or " Harvard University" vs "Harvard University" create duplicate entries. Normalize comparison values with `.toLowerCase().trim()` while storing original casing. Include a backfill script to merge duplicate education entries.
+- [x] **Case-insensitive education deduplication** — `updateEducation()` in `personController.js` compares `school`, `degree`, and `field` with strict `===` equality. "MIT" vs "mit" or " Harvard University" vs "Harvard University" create duplicate entries. Normalize comparison values with `.toLowerCase().trim()` while storing original casing. Include a backfill script to merge duplicate education entries.
   - Priority: `medium`
   - Category: `data quality`
   - Impact: Eliminates duplicate education entries caused by casing and whitespace differences.
@@ -112,7 +112,7 @@
   - Impact: Improves company-based grouping, deduplication, and cross-entity linking accuracy.
   - Discovered: 2026-02-11, data cleansing review.
 
-- [ ] **Data cleanliness metrics endpoint** — Health endpoints don't expose field-level quality metrics. Add `GET /api/health/data-cleanliness` that samples person records and reports: % of names with leading/trailing whitespace, % of emails failing format validation, % of skill arrays with case-insensitive duplicates, % of education arrays with trimming-sensitive duplicates, % of records missing key fields (email, phone, title). Uses `metricsCache` with 10-minute TTL.
+- [x] **Data cleanliness metrics endpoint** — Health endpoints don't expose field-level quality metrics. Add `GET /api/health/data-cleanliness` that samples person records and reports: % of names with leading/trailing whitespace, % of emails failing format validation, % of skill arrays with case-insensitive duplicates, % of education arrays with trimming-sensitive duplicates, % of records missing key fields (email, phone, title). Uses `metricsCache` with 10-minute TTL.
   - Priority: `medium`
   - Category: `observability / data quality`
   - Impact: Makes data quality issues measurable and trackable over time. Validates effectiveness of cleansing improvements.
@@ -326,9 +326,9 @@
 
 1. ~~**Replay parity test + fix**~~ — Done (2026-02-11).
 2. ~~**OpenAPI drift test gate**~~ — Done (2026-02-11).
-3. **Trim and collapse whitespace on all snapshot string fields** — Single highest-impact cleansing fix: ~20-line change to the FIELD_MAPPINGS loop cleans 17+ fields.
-4. **Case-insensitive skill dedup + email normalization** — Two quick wins that can land together. Fixes the most visible data duplication issues.
-5. **Data cleanliness metrics endpoint** — Provides before/after measurement for all cleansing work. Ship early to track improvement.
+3. ~~**Trim and collapse whitespace on all snapshot string fields**~~ — Done (2026-02-11).
+4. ~~**Case-insensitive skill dedup + email normalization**~~ — Done (2026-02-11).
+5. ~~**Data cleanliness metrics endpoint**~~ — Done (2026-02-11).
 
 ---
 
@@ -340,6 +340,11 @@
 
 ## Completed
 
+- [x] **Data cleanliness metrics endpoint** — 2026-02-11. Added `GET /api/health/data-cleanliness` with 5 parallel aggregation pipelines measuring whitespace issues (sampled 1000 records), invalid emails (RFC 5322 basic check), case-insensitive skill duplicates, case-insensitive education duplicates, and missing key fields (email, phone, currentTitle). Uses `metricsCache` with 10-minute TTL. Registered in `apiRoutes.js` with `readRateLimiter`, added OpenAPI spec. 5 new tests. All 1077 tests pass.
+- [x] **Case-insensitive skill deduplication** — 2026-02-11. Updated `updateSkills()` in `personController.js` to use `.toLowerCase().trim()` normalization for comparison while preserving first-seen casing. Incoming skills are cleaned via `cleanString()` before storage. Null/empty skills after cleaning are skipped. 5 new tests. All 1077 tests pass.
+- [x] **Case-insensitive education deduplication** — 2026-02-11. Updated `updateEducation()` in `personController.js` to use `.toLowerCase()` comparison for school, degree, and field. Education values are cleaned via `cleanString(coerceToString(...))` before storage and comparison. 3 new tests. All 1077 tests pass.
+- [x] **Normalize email addresses on person snapshot** — 2026-02-11. Added `normalizeEmail()` function to `personController.js`: `trim().toLowerCase()` with warn-only RFC 5322 basic regex check. Integrated as `transform` on the email FIELD_MAPPINGS entry. Email field added to `SKIP_CLEAN_FIELDS` since it has its own transform. 6 new tests. All 1077 tests pass.
+- [x] **Trim and collapse whitespace on all snapshot string fields** — 2026-02-11. Added `cleanString()` helper (`trim()` + `replace(/\s+/g, ' ')`) and `SKIP_CLEAN_FIELDS` set (URL/ID/email fields). Applied in FIELD_MAPPINGS loop after transform and before normalizeField. Also applied `cleanString()` to role fields (title, company, location, description) in both extended positions and single current-role paths of `updateRolesTimeline()`. Education fields cleaned via `cleanString(coerceToString(...))`. 16 new tests. All 1077 tests pass.
 - [x] **Add export stream integration tests** — 2026-02-11, commit `025a754`. Added 20 integration tests in `src/__tests__/exportStream.integration.test.js` covering the full export streaming pipeline (MongoDB cursor → Transform → file) against a real database. Tests cover: people/company/location CSV and JSON exports (6), empty results (2), filters (2), custom field subsets (1), CSV escaping and data integrity (4), row limit enforcement via `jest.isolateModulesAsync` (1), job lifecycle (3), and error handling (1). All 20 tests pass.
 - [x] **Webhook replay from dead letters should also upsert company/location** — 2026-02-11. After person replay succeeds, `replayDeadLetters.js` now also calls `upsertCompanyFromObservation()` and `upsertLocationFromObservation()` as best-effort (failures logged, don't affect dead letter status). Same pattern added to `replayController.js` admin endpoint (`POST /api/admin/replay/:observationId`), which now returns `company_replayed` and `location_replayed` booleans. Company/location are NOT attempted if person fails. Stats report includes 4 new counters (companySucceeded/Failed, locationSucceeded/Failed). 18 new tests (10 replay script + 8 controller). All 1043 tests pass.
 - [x] **Add route-to-OpenAPI conformance tests in CI (hard failure on drift)** — 2026-02-11. Created `__tests__/openapiConformance.test.js` with 3 assertions: no phantom docs (OpenAPI routes must exist in Express), no undocumented routes (Express routes must exist in OpenAPI, minus exclusions), and no stale exclusions. Route extraction handles Express 5 matcher-function internals via path probing. Added 9 missing routes to `src/openapi.js`: `POST /api/webhook/batch`, `GET /api/health/throughput`, `GET /api/health/test-notifications`, `POST /api/admin/test-notifications`, `POST /api/people/by-aliases`, and 4 company/location export endpoints. All 1025 tests pass.

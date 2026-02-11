@@ -1840,6 +1840,54 @@ const spec = {
       },
     },
 
+    "/api/health/data-cleanliness": {
+      get: {
+        tags: ["Health"],
+        summary: "Data cleanliness metrics",
+        description:
+          "Field-level cleanliness: whitespace issues, invalid emails, duplicate skills/education, missing key fields.",
+        parameters: [
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+            description: "Bypass cache and recompute metrics",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Data cleanliness report",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        totalPeople: { type: "integer", example: 12345 },
+                        whitespace: { type: "object" },
+                        email: { type: "object" },
+                        skills: { type: "object" },
+                        education: { type: "object" },
+                        missingFields: { type: "object" },
+                        timestamp: {
+                          type: "string",
+                          format: "date-time",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
     "/api/health/data-quality": {
       get: {
         tags: ["Health"],
