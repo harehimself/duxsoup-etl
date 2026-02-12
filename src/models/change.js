@@ -104,6 +104,10 @@ changeSchema.index({ createdAt: -1 });
 changeSchema.index({ recentJobChange: 1, timestamp: -1 });
 changeSchema.index({ recentJobChangeExpiresAt: 1 }, { expireAfterSeconds: 0 });
 
+// Company intelligence: hires/departures lookup by company
+changeSchema.index({ toCompanyId: 1, type: 1, timestamp: -1 });
+changeSchema.index({ fromCompanyId: 1, type: 1, timestamp: -1 });
+
 // Compound index for deduplication (prevent duplicate change records)
 changeSchema.index(
   { person_id: 1, type: 1, from: 1, to: 1, timestamp: 1 },

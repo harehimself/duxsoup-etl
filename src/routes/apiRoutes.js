@@ -31,6 +31,9 @@ const {
   getCompanyByAlias,
 } = require("../controllers/companyReadController");
 const {
+  getCompanyIntelligence,
+} = require("../controllers/companyIntelligenceController");
+const {
   getLocationById,
   getLocationByAlias,
 } = require("../controllers/locationReadController");
@@ -125,6 +128,11 @@ router.get("/people/by-alias/:value", readRateLimiter, getPersonByAlias);
 router.post("/people/by-aliases", readRateLimiter, getPersonsByAliases);
 
 // Company read endpoints
+router.get(
+  "/companies/:id/intelligence",
+  readRateLimiter,
+  getCompanyIntelligence,
+);
 router.get("/companies/:id", readRateLimiter, getCompanyById);
 router.get("/companies/by-alias/:value", readRateLimiter, getCompanyByAlias);
 
