@@ -8,6 +8,7 @@ const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
 const { MAX_ROLES, MAX_EDUCATION, MAX_SKILLS } = require("../constants/limits");
 const { normalizePhone } = require("../utils/phoneNormalizer");
+const { ensureHttps } = require("../utils/urlNormalizer");
 const { shouldOverwrite } = require("../utils/precedence");
 
 /**
@@ -216,7 +217,11 @@ const FIELD_MAPPINGS = [
   { field: "currentTitle", source: "Title" },
   { field: "currentCompany", source: "Company" },
   { field: "currentCompanyId", source: "CompanyID" },
-  { field: "currentCompanyProfile", source: "CompanyProfile" },
+  {
+    field: "currentCompanyProfile",
+    source: "CompanyProfile",
+    transform: ensureHttps,
+  },
   { field: "location", source: "Location" },
   { field: "industry", source: "Industry" },
   { field: "connections", source: "Connections", transform: parseConnections },
@@ -229,10 +234,14 @@ const FIELD_MAPPINGS = [
   { field: "email", source: "Email", transform: normalizeEmail },
   { field: "phone", source: "Phone", transform: normalizePhone },
   { field: "twitter", source: "Twitter" },
-  { field: "profilePicture", source: "Picture" },
-  { field: "thumbnail", source: "Thumbnail" },
-  { field: "personalWebsite", source: "PersonalWebsite" },
-  { field: "companyWebsite", source: "CompanyWebsite" },
+  { field: "profilePicture", source: "Picture", transform: ensureHttps },
+  { field: "thumbnail", source: "Thumbnail", transform: ensureHttps },
+  {
+    field: "personalWebsite",
+    source: "PersonalWebsite",
+    transform: ensureHttps,
+  },
+  { field: "companyWebsite", source: "CompanyWebsite", transform: ensureHttps },
 ];
 
 /**

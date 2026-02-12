@@ -4,6 +4,7 @@ const { resolveCompanyIdentity } = require("../utils/identityMatcher");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 const { parseLocation } = require("../utils/location-parser");
 const { shouldOverwrite } = require("../utils/precedence");
+const { ensureHttps } = require("../utils/urlNormalizer");
 
 async function upsertCompanyFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
@@ -71,8 +72,8 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     ["name", webhookData.Company],
     ["industry", webhookData.Industry],
     ["location", webhookData.Location],
-    ["companyProfileUrl", webhookData.CompanyProfile],
-    ["website", webhookData.CompanyWebsite],
+    ["companyProfileUrl", ensureHttps(webhookData.CompanyProfile)],
+    ["website", ensureHttps(webhookData.CompanyWebsite)],
     // Structured location fields (parsed from person's Location as proxy)
     ["city", parsedLocation.city],
     ["state", parsedLocation.state],

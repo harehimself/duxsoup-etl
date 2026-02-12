@@ -605,6 +605,89 @@ describe("CompanyController", () => {
       expect(updateCall[1].$set["meta.observationsCount"]).toBe(4);
     });
 
+    // ───────────────────────────────────────────
+    // (k) HTTPS normalization: http:// website converted to https://
+    // ───────────────────────────────────────────
+    it("should convert http:// website to https:// during upsert", async () => {
+      const observationDoc = {
+        _id: "obs-https",
+        rawData: {
+          data: {
+            Company: "HttpCorp",
+            CompanyID: "44444444",
+            CompanyWebsite: "http://www.httpcorp.com",
+            CompanyProfile: "http://linkedin.com/company/44444444",
+            VisitTime: new Date("2024-12-15"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "44444444",
+        canonical_id: "canonical-https",
+        aliases: [{ type: "numericId", value: "44444444" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const doc = buildCompanyDoc({
+        _id: "44444444",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(doc)
+        .mockResolvedValueOnce(doc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      expect($set["snapshot.website"]).toBe("https://www.httpcorp.com");
+      expect($set["snapshot.companyProfileUrl"]).toBe(
+        "https://linkedin.com/company/44444444",
+      );
+    });
+
+    it("should preserve https:// website URLs during upsert", async () => {
+      const observationDoc = {
+        _id: "obs-already-https",
+        rawData: {
+          data: {
+            Company: "SecureCorp",
+            CompanyID: "33333333",
+            CompanyWebsite: "https://www.securecorp.com",
+            VisitTime: new Date("2024-12-15"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "33333333",
+        canonical_id: "canonical-secure",
+        aliases: [{ type: "numericId", value: "33333333" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const doc = buildCompanyDoc({
+        _id: "33333333",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(doc)
+        .mockResolvedValueOnce(doc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      expect($set["snapshot.website"]).toBe("https://www.securecorp.com");
+    });
+
     it("should not double-count when observation already linked", async () => {
       const observationDoc = {
         _id: "obs-dup",

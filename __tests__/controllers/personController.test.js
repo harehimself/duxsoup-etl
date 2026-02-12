@@ -1011,7 +1011,7 @@ describe("PersonController", () => {
       expect(snapshot.firstName).toBe("John");
     });
 
-    it("should NOT clean URL fields through FIELD_MAPPINGS loop", () => {
+    it("should NOT apply cleanString to URL fields but ensureHttps trims whitespace", () => {
       const snapshot = { _meta: {} };
       const meta = {
         observedAt: new Date(),
@@ -1025,8 +1025,8 @@ describe("PersonController", () => {
       if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
       normalizeField(snapshot, mapping.field, value, meta);
 
-      // URL fields should NOT be cleaned — value kept as-is
-      expect(snapshot.profilePicture).toBe("  https://example.com/pic.jpg  ");
+      // URL fields skip cleanString but ensureHttps trims whitespace
+      expect(snapshot.profilePicture).toBe("https://example.com/pic.jpg");
     });
   });
 
@@ -1216,6 +1216,70 @@ describe("PersonController", () => {
 
       expect(person.snapshot.skills).toHaveLength(3);
       expect(person.snapshot.skills).toEqual(["TypeScript", "Python", "Go"]);
+    });
+  });
+
+  describe("ensureHttps transform in FIELD_MAPPINGS", () => {
+    it("should have ensureHttps transform for companyWebsite field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("http://example.com")).toBe(
+        "https://example.com",
+      );
+    });
+
+    it("should have ensureHttps transform for personalWebsite field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "personalWebsite");
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("http://mysite.com")).toBe("https://mysite.com");
+    });
+
+    it("should have ensureHttps transform for profilePicture field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "profilePicture");
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("http://cdn.linkedin.com/photo.jpg")).toBe(
+        "https://cdn.linkedin.com/photo.jpg",
+      );
+    });
+
+    it("should have ensureHttps transform for thumbnail field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "thumbnail");
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("http://cdn.linkedin.com/thumb.jpg")).toBe(
+        "https://cdn.linkedin.com/thumb.jpg",
+      );
+    });
+
+    it("should have ensureHttps transform for currentCompanyProfile field", () => {
+      const mapping = FIELD_MAPPINGS.find(
+        (m) => m.field === "currentCompanyProfile",
+      );
+      expect(mapping.transform).toBeDefined();
+      expect(mapping.transform("http://linkedin.com/company/12345")).toBe(
+        "https://linkedin.com/company/12345",
+      );
+    });
+
+    it("should preserve https URLs through ensureHttps transform", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
+      expect(mapping.transform("https://already-secure.com")).toBe(
+        "https://already-secure.com",
+      );
+    });
+
+    it("should pass null through ensureHttps transform unchanged", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
+      expect(mapping.transform(null)).toBeNull();
+    });
+
+    it("should convert http:// to https:// through FIELD_MAPPINGS loop simulation", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
+      const webhookData = { CompanyWebsite: "http://www.acme.com" };
+      let value = webhookData[mapping.source];
+      if (mapping.transform) {
+        value = mapping.transform(value);
+      }
+      expect(value).toBe("https://www.acme.com");
     });
   });
 });
