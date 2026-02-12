@@ -45,6 +45,7 @@ const searchRoutes = require("./searchRoutes");
 const exportRoutes = require("./exportRoutes");
 const changeRoutes = require("./changeRoutes");
 const seniorityRoutes = require("./seniorityRoutes");
+const signalRoutes = require("./signalRoutes");
 
 const router = express.Router();
 
@@ -195,5 +196,8 @@ router.use("/changes", readRateLimiter, changeRoutes);
 
 // Seniority endpoints (filter and analyze by seniority tier)
 router.use("/seniority", readRateLimiter, seniorityRoutes);
+
+// Signal endpoints (engagement trigger feed)
+router.use("/signals", readRateLimiter, signalRoutes);
 
 module.exports = router;

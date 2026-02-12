@@ -50,6 +50,25 @@ const DATA_FRESHNESS_THRESHOLD_HOURS = parseInt(
   10,
 );
 
+const SIGNAL_DEFAULT_DAYS = parseInt(
+  process.env.SIGNAL_DEFAULT_DAYS || "30",
+  10,
+);
+const SIGNAL_MAX_DAYS = parseInt(process.env.SIGNAL_MAX_DAYS || "180", 10);
+const SIGNAL_DEFAULT_LIMIT = parseInt(
+  process.env.SIGNAL_DEFAULT_LIMIT || "50",
+  10,
+);
+const SIGNAL_MAX_LIMIT = parseInt(process.env.SIGNAL_MAX_LIMIT || "500", 10);
+const SIGNAL_CACHE_TTL_MS = parseInt(
+  process.env.SIGNAL_CACHE_TTL_MS || String(5 * 60 * 1000),
+  10,
+);
+const SIGNAL_NEW_DM_MIN_RANK = parseInt(
+  process.env.SIGNAL_NEW_DM_MIN_RANK || "5",
+  10,
+);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
@@ -63,4 +82,10 @@ module.exports = {
   MAX_DEBOUNCE_CACHE_SIZE,
   MAX_METRICS_CACHE_SIZE,
   DATA_FRESHNESS_THRESHOLD_HOURS,
+  SIGNAL_DEFAULT_DAYS,
+  SIGNAL_MAX_DAYS,
+  SIGNAL_DEFAULT_LIMIT,
+  SIGNAL_MAX_LIMIT,
+  SIGNAL_CACHE_TTL_MS,
+  SIGNAL_NEW_DM_MIN_RANK,
 };

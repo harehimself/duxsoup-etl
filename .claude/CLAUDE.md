@@ -210,6 +210,9 @@ See `src/models/` for full schemas.
 - `GET /api/seniority/search` - Search people with seniority filtering
 - `GET /api/seniority/stats` - Comprehensive seniority statistics
 
+### Signals
+- `GET /api/signals/` - Engagement trigger feed (new roles, promotions, lateral moves, new decision-makers) with ranking, dedup, and action context
+
 ## Code Style & Patterns
 
 ### Async/Await

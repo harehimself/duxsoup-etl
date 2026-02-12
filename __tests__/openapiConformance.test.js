@@ -70,6 +70,7 @@ function getMountPath(layer) {
       "search",
       "seniority",
       "settings",
+      "signals",
       "status",
       "test",
       "users",

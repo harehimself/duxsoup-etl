@@ -25,6 +25,7 @@ const spec = {
     { name: "Export", description: "Async CSV/JSON export" },
     { name: "Changes", description: "Job change tracking" },
     { name: "Seniority", description: "Seniority tier analysis" },
+    { name: "Signals", description: "Engagement trigger feed" },
     { name: "Health", description: "System health and monitoring" },
     { name: "Admin", description: "Administrative operations (auth required)" },
   ],
@@ -314,6 +315,36 @@ const spec = {
           recentJobChange: { type: "boolean" },
           timestamp: { type: "string", format: "date-time" },
           notified: { type: "boolean" },
+        },
+      },
+
+      // ── Signal ────────────────────────────────────────────────
+      Signal: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: [
+              "new_role",
+              "promotion",
+              "lateral_move",
+              "new_decision_maker",
+            ],
+          },
+          personId: { type: "string" },
+          personName: { type: "string", nullable: true },
+          title: { type: "string", nullable: true },
+          company: { type: "string", nullable: true },
+          companyId: { type: "string", nullable: true },
+          seniority: { type: "string", nullable: true },
+          seniorityRank: { type: "integer", nullable: true },
+          score: { type: "number", example: 72.5 },
+          priority: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+          },
+          timestamp: { type: "string", format: "date-time" },
+          actionContext: { type: "string" },
         },
       },
 
@@ -2056,6 +2087,104 @@ const spec = {
               },
             },
           },
+        },
+      },
+    },
+
+    // ── Signals ──────────────────────────────────────────────────
+    "/api/signals": {
+      get: {
+        tags: ["Signals"],
+        summary: "Engagement trigger feed",
+        description:
+          "Ranked, deduplicated engagement signals with action context. Surfaces new roles, promotions, lateral moves, and newly observed decision-makers.",
+        parameters: [
+          {
+            name: "type",
+            in: "query",
+            schema: { type: "string" },
+            description:
+              "Comma-separated signal types: new_role, promotion, lateral_move, new_decision_maker",
+          },
+          {
+            name: "minRank",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 8 },
+            description: "Minimum seniority rank (1-8)",
+          },
+          {
+            name: "company",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company name filter (regex)",
+          },
+          {
+            name: "companyId",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company ID filter",
+          },
+          {
+            name: "days",
+            in: "query",
+            schema: { type: "integer", default: 30, maximum: 180 },
+            description: "Lookback window in days (default 30, max 180)",
+          },
+          { $ref: "#/components/parameters/limitParam" },
+          { $ref: "#/components/parameters/offsetParam" },
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+            description: "Bypass cache and recompute signals",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Engagement signals",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/Signal" },
+                    },
+                    total: { type: "integer" },
+                    limit: { type: "integer" },
+                    offset: { type: "integer" },
+                    metadata: {
+                      type: "object",
+                      properties: {
+                        types: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        minRank: { type: "integer" },
+                        days: { type: "integer" },
+                        generatedAt: {
+                          type: "string",
+                          format: "date-time",
+                        },
+                        cached: { type: "boolean" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Invalid signal type",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
         },
       },
     },
