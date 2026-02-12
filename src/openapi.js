@@ -2395,6 +2395,193 @@ const spec = {
       },
     },
 
+    "/api/insights/network-profile": {
+      get: {
+        tags: ["Insights"],
+        summary: "Network composition analysis",
+        description:
+          "Analyzes 1st-degree connections across multiple dimensions: top companies, seniority distribution, top titles, industry distribution, geography, departments, and average tenure. Cached 10 min.",
+        parameters: [
+          {
+            name: "industry",
+            in: "query",
+            schema: { type: "string" },
+            description: "Industry filter (regex)",
+          },
+          {
+            name: "location",
+            in: "query",
+            schema: { type: "string" },
+            description: "Location filter (regex)",
+          },
+          {
+            name: "seniority",
+            in: "query",
+            schema: { type: "string" },
+            description: "Seniority tier filter (e.g., VP, CXO)",
+          },
+          {
+            name: "minRank",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 8 },
+            description: "Minimum seniority rank (1-8)",
+          },
+          {
+            name: "company",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company name filter (regex)",
+          },
+          {
+            name: "companyId",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company ID filter",
+          },
+          {
+            name: "topN",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 50, default: 10 },
+            description:
+              "Number of top items per category (default 10, max 50)",
+          },
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true", "false"] },
+            description: "Bypass cache",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Network composition analysis",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean" },
+                    data: {
+                      type: "object",
+                      properties: {
+                        totalConnections: { type: "integer" },
+                        topCompanies: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              company: { type: "string" },
+                              companyId: { type: "string", nullable: true },
+                              count: { type: "integer" },
+                              percentage: { type: "integer" },
+                            },
+                          },
+                        },
+                        seniorityBreakdown: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              seniority: { type: "string" },
+                              count: { type: "integer" },
+                              percentage: { type: "integer" },
+                              avgRank: { type: "number" },
+                            },
+                          },
+                        },
+                        topTitles: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              title: { type: "string" },
+                              count: { type: "integer" },
+                              percentage: { type: "integer" },
+                            },
+                          },
+                        },
+                        industryDistribution: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              industry: { type: "string" },
+                              count: { type: "integer" },
+                              percentage: { type: "integer" },
+                            },
+                          },
+                        },
+                        geography: {
+                          type: "object",
+                          properties: {
+                            topCities: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  city: { type: "string" },
+                                  state: { type: "string", nullable: true },
+                                  country: { type: "string", nullable: true },
+                                  count: { type: "integer" },
+                                  percentage: { type: "integer" },
+                                },
+                              },
+                            },
+                            topCountries: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  country: { type: "string" },
+                                  count: { type: "integer" },
+                                  percentage: { type: "integer" },
+                                },
+                              },
+                            },
+                          },
+                        },
+                        departmentBreakdown: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              department: { type: "string" },
+                              count: { type: "integer" },
+                              percentage: { type: "integer" },
+                            },
+                          },
+                        },
+                        averageTenure: {
+                          type: "object",
+                          properties: {
+                            avgTenureYears: { type: "number" },
+                            medianTenureYears: { type: "number" },
+                            count: { type: "integer" },
+                          },
+                        },
+                        filters: { type: "object" },
+                      },
+                    },
+                    metadata: {
+                      type: "object",
+                      properties: {
+                        generatedAt: {
+                          type: "string",
+                          format: "date-time",
+                        },
+                        cached: { type: "boolean" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
     // ── Health ───────────────────────────────────────────────────
     "/health": {
       get: {
