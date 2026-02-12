@@ -345,6 +345,7 @@ personSchema.index(
   },
 );
 
+personSchema.index({ "snapshot.currentCompanyId": 1 });
 personSchema.index({ mergedInto: 1 }, { sparse: true });
 
 // Note: DO NOT add uniqueness constraint on aliases.value

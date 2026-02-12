@@ -913,6 +913,202 @@ const spec = {
       },
     },
 
+    // ── Company Intelligence ──────────────────────────────────
+    "/api/companies/{id}/intelligence": {
+      get: {
+        tags: ["Companies"],
+        summary: "Company intelligence rollup",
+        description:
+          "Aggregates all people linked to a company into org-level insights: headcount by seniority and department, decision makers, tenure, hiring velocity, geography, and recent hires/departures.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Numeric LinkedIn company ID",
+          },
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+            description: "Bypass cache and recompute metrics",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Company intelligence data",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        company: {
+                          type: "object",
+                          properties: {
+                            _id: { type: "string" },
+                            name: { type: "string" },
+                            industry: { type: "string" },
+                            location: { type: "string" },
+                            website: { type: "string" },
+                          },
+                        },
+                        headcount: {
+                          type: "object",
+                          properties: {
+                            total: { type: "integer" },
+                            bySeniority: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  tier: { type: "string" },
+                                  count: { type: "integer" },
+                                  percentage: { type: "number" },
+                                },
+                              },
+                            },
+                            byDepartment: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  department: { type: "string" },
+                                  count: { type: "integer" },
+                                  percentage: { type: "number" },
+                                },
+                              },
+                            },
+                          },
+                        },
+                        decisionMakers: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              personId: { type: "string" },
+                              fullName: { type: "string" },
+                              title: { type: "string" },
+                              seniority: { type: "string" },
+                              email: { type: "string" },
+                              city: { type: "string" },
+                              lastObservedAt: {
+                                type: "string",
+                                format: "date-time",
+                              },
+                            },
+                          },
+                        },
+                        recentHires: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              personId: { type: "string" },
+                              fullName: { type: "string" },
+                              title: { type: "string" },
+                              from: { type: "string" },
+                              seniority: { type: "string" },
+                              timestamp: {
+                                type: "string",
+                                format: "date-time",
+                              },
+                            },
+                          },
+                        },
+                        recentDepartures: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              personId: { type: "string" },
+                              fullName: { type: "string" },
+                              title: { type: "string" },
+                              to: { type: "string" },
+                              seniority: { type: "string" },
+                              timestamp: {
+                                type: "string",
+                                format: "date-time",
+                              },
+                            },
+                          },
+                        },
+                        tenure: {
+                          type: "object",
+                          properties: {
+                            avgYears: { type: "number", nullable: true },
+                            medianYears: { type: "number", nullable: true },
+                            withData: { type: "integer" },
+                          },
+                        },
+                        hiringVelocity: {
+                          type: "object",
+                          properties: {
+                            monthlyNewPeople: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  year: { type: "integer" },
+                                  month: { type: "integer" },
+                                  count: { type: "integer" },
+                                },
+                              },
+                            },
+                            avgPerMonth: { type: "number" },
+                            trend: {
+                              type: "string",
+                              enum: ["increasing", "decreasing", "stable"],
+                            },
+                          },
+                        },
+                        geography: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              city: { type: "string" },
+                              country: { type: "string" },
+                              count: { type: "integer" },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    metadata: {
+                      type: "object",
+                      properties: {
+                        companyId: { type: "string" },
+                        generatedAt: {
+                          type: "string",
+                          format: "date-time",
+                        },
+                        cached: { type: "boolean" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Invalid company ID",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          404: { $ref: "#/components/responses/NotFound" },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
     // ── Locations ───────────────────────────────────────────────
     "/api/locations/{id}": {
       get: {

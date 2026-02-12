@@ -178,6 +178,7 @@ See `src/models/` for full schemas.
 - `GET /api/people/by-alias/:value` - Get person by any alias
 - `POST /api/people/by-aliases` - Bulk lookup people by alias values (body: `{ values: string[] }`)
 - `GET /api/companies/:id` - Get company by ID
+- `GET /api/companies/:id/intelligence` - Company intelligence rollup (headcount, seniority, hires, departures, tenure, velocity, geography)
 - `GET /api/companies/by-alias/:value` - Get company by any alias
 - `GET /api/locations/:id` - Get location by ID
 - `GET /api/locations/by-alias/:value` - Get location by any alias

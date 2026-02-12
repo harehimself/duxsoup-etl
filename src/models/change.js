@@ -108,6 +108,10 @@ changeSchema.index({ recentJobChange: 1, timestamp: -1 });
 // recentJobChange boolean flag daily via updateMany.
 changeSchema.index({ recentJobChangeExpiresAt: 1 });
 
+// Company intelligence: hires/departures lookup by company
+changeSchema.index({ toCompanyId: 1, type: 1, timestamp: -1 });
+changeSchema.index({ fromCompanyId: 1, type: 1, timestamp: -1 });
+
 // Compound index for deduplication (prevent duplicate change records)
 changeSchema.index(
   { person_id: 1, type: 1, from: 1, to: 1, timestamp: 1 },
