@@ -7,6 +7,14 @@ const identityResolverService = require("../../src/services/identityResolverServ
  */
 
 function makePerson(overrides = {}) {
+  const observations = {
+    visits: [],
+    scans: [],
+    ...overrides.observations,
+  };
+  // Default meta.observationsCount to array total if not explicitly provided
+  const defaultCount =
+    (observations.visits?.length || 0) + (observations.scans?.length || 0);
   return {
     _id: overrides._id || "test-person",
     snapshot: {
@@ -15,10 +23,10 @@ function makePerson(overrides = {}) {
       currentCompany: null,
       ...overrides.snapshot,
     },
-    observations: {
-      visits: [],
-      scans: [],
-      ...overrides.observations,
+    observations,
+    meta: {
+      observationsCount: defaultCount,
+      ...overrides.meta,
     },
   };
 }

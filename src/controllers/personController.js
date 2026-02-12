@@ -6,7 +6,12 @@ const { parseSafeDate, parseBirthdayDate } = require("../utils/date-parser");
 const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
-const { MAX_ROLES, MAX_EDUCATION, MAX_SKILLS } = require("../constants/limits");
+const {
+  MAX_ROLES,
+  MAX_EDUCATION,
+  MAX_SKILLS,
+  MAX_OBSERVATION_REFS,
+} = require("../constants/limits");
 const { normalizePhone } = require("../utils/phoneNormalizer");
 const { ensureHttps } = require("../utils/urlNormalizer");
 const { shouldOverwrite } = require("../utils/precedence");
@@ -738,7 +743,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
       sourceObservationId: observationDoc._id,
     });
 
-    // Step 3: Attach observation reference (using $addToSet for atomic uniqueness)
+    // Step 3: Attach observation reference (capped to recent N via $push+$slice)
     const observationRef = observationDoc._id;
     const observedAt =
       webhookData.VisitTime || webhookData.ScanTime || new Date();
@@ -747,10 +752,18 @@ async function upsertFromObservation(observationDoc, sourceType) {
       sourceType === "visit" ? "observations.visits" : "observations.scans";
     await Person.updateOne(
       { _id: person._id },
-      { $addToSet: { [observationField]: observationRef } },
+      {
+        $push: {
+          [observationField]: {
+            $each: [observationRef],
+            $slice: -MAX_OBSERVATION_REFS,
+          },
+        },
+        $inc: { "meta.observationsCount": 1 },
+      },
     );
 
-    // Reload to get updated observations count
+    // Reload to get updated document
     person = await Person.findById(person._id);
 
     // Step 4: Update metadata
@@ -761,9 +774,6 @@ async function upsertFromObservation(observationDoc, sourceType) {
       id: observationRef,
       observedAt: observedAt,
     };
-    person.meta.observationsCount =
-      (person.observations.visits.length || 0) +
-      (person.observations.scans.length || 0);
 
     // Step 5: Merge aliases (already done by resolveOrCreate, but ensure latest)
     if (identity.aliases && identity.aliases.length > 0) {

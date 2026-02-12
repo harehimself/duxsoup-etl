@@ -8,7 +8,10 @@ const {
   normalizeToCanonicalCase,
 } = require("../utils/salesNavIdExtractor");
 const logger = require("../utils/logger");
-const { MERGE_OBS_RATIO_THRESHOLD } = require("../constants/limits");
+const {
+  MERGE_OBS_RATIO_THRESHOLD,
+  MAX_OBSERVATION_REFS,
+} = require("../constants/limits");
 
 /**
  * Identity Resolver Service
@@ -186,12 +189,8 @@ class IdentityResolverService {
       }
 
       // Rule 2: Prefer most observations
-      const winnerObsCount =
-        (winner.observations.visits?.length || 0) +
-        (winner.observations.scans?.length || 0);
-      const candidateObsCount =
-        (candidate.observations.visits?.length || 0) +
-        (candidate.observations.scans?.length || 0);
+      const winnerObsCount = winner.meta?.observationsCount || 0;
+      const candidateObsCount = candidate.meta?.observationsCount || 0;
 
       if (candidateObsCount > winnerObsCount) {
         return candidate;
@@ -239,14 +238,10 @@ class IdentityResolverService {
     const warnings = [];
     const blockers = [];
 
-    const winnerObsCount =
-      (winner.observations?.visits?.length || 0) +
-      (winner.observations?.scans?.length || 0);
+    const winnerObsCount = winner.meta?.observationsCount || 0;
 
     for (const loser of losers) {
-      const loserObsCount =
-        (loser.observations?.visits?.length || 0) +
-        (loser.observations?.scans?.length || 0);
+      const loserObsCount = loser.meta?.observationsCount || 0;
 
       // Observation disparity: winner has 0, loser has >0
       if (winnerObsCount === 0 && loserObsCount > 0) {
@@ -434,7 +429,7 @@ class IdentityResolverService {
         });
       });
 
-      // Collect all observation references
+      // Collect all observation references (deduplicated, capped to MAX_OBSERVATION_REFS)
       const allVisits = new Set([...(winner.observations.visits || [])]);
       const allScans = new Set([...(winner.observations.scans || [])]);
 
@@ -446,6 +441,12 @@ class IdentityResolverService {
           allScans.add(s.toString()),
         );
       });
+
+      // Sum true observation counts from all entities
+      const mergedObsCount = [winner, ...losers].reduce(
+        (sum, entity) => sum + (entity.meta?.observationsCount || 0),
+        0,
+      );
 
       // Merge roles (deduplicate by title + company + dates)
       const roleKeys = new Set();
@@ -487,13 +488,17 @@ class IdentityResolverService {
         (loser.snapshot.skills || []).forEach((skill) => allSkills.add(skill));
       });
 
-      // Update winner with merged data
+      // Update winner with merged data (cap observation arrays to MAX_OBSERVATION_REFS)
       winner.aliases = allAliases;
-      winner.observations.visits = Array.from(allVisits);
-      winner.observations.scans = Array.from(allScans);
+      const visitArr = Array.from(allVisits);
+      const scanArr = Array.from(allScans);
+      winner.observations.visits = visitArr.slice(-MAX_OBSERVATION_REFS);
+      winner.observations.scans = scanArr.slice(-MAX_OBSERVATION_REFS);
       winner.snapshot.roles = allRoles;
       winner.snapshot.education = allEducation;
       winner.snapshot.skills = Array.from(allSkills);
+      winner.meta = winner.meta || {};
+      winner.meta.observationsCount = mergedObsCount;
 
       await winner.save();
 

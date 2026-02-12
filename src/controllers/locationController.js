@@ -3,6 +3,7 @@ const logger = require("../utils/logger");
 const { resolveLocationIdentity } = require("../utils/identityMatcher");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 const { shouldOverwrite } = require("../utils/precedence");
+const { MAX_OBSERVATION_REFS } = require("../constants/limits");
 
 async function upsertLocationFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
@@ -127,7 +128,7 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
     observedAt,
   };
 
-  // Pre-compute observations count (account for the $addToSet below)
+  // Pre-check: is this observation already linked?
   const observationField =
     sourceType === "visit" ? "observations.visits" : "observations.scans";
   const obsArray =
@@ -137,17 +138,19 @@ async function upsertLocationFromObservation(observationDoc, sourceType) {
   const isAlreadyLinked = obsArray.some(
     (id) => id.toString() === observationId.toString(),
   );
-  $set["meta.observationsCount"] =
-    (location.observations.visits?.length || 0) +
-    (location.observations.scans?.length || 0) +
-    (isAlreadyLinked ? 0 : 1);
 
-  // Step 3: Single atomic update — $set + $addToSet in one operation
+  // Step 3: Single atomic update — $set + $push (capped) + $inc in one operation
   const updated = await Location.findOneAndUpdate(
     { _id: location._id },
     {
       $set,
-      $addToSet: { [observationField]: observationId },
+      $push: {
+        [observationField]: {
+          $each: [observationId],
+          $slice: -MAX_OBSERVATION_REFS,
+        },
+      },
+      $inc: { "meta.observationsCount": isAlreadyLinked ? 0 : 1 },
     },
     { new: true },
   );

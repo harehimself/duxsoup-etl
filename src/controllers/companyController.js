@@ -5,6 +5,7 @@ const { dedupeAliases } = require("../utils/aliasHelpers");
 const { parseLocation } = require("../utils/location-parser");
 const { shouldOverwrite } = require("../utils/precedence");
 const { ensureHttps } = require("../utils/urlNormalizer");
+const { MAX_OBSERVATION_REFS } = require("../constants/limits");
 
 async function upsertCompanyFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
@@ -114,7 +115,7 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     observedAt,
   };
 
-  // Pre-compute observations count (account for the $addToSet below)
+  // Pre-check: is this observation already linked?
   const observationField =
     sourceType === "visit" ? "observations.visits" : "observations.scans";
   const obsArray =
@@ -124,17 +125,19 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
   const isAlreadyLinked = obsArray.some(
     (id) => id.toString() === observationId.toString(),
   );
-  $set["meta.observationsCount"] =
-    (company.observations.visits?.length || 0) +
-    (company.observations.scans?.length || 0) +
-    (isAlreadyLinked ? 0 : 1);
 
-  // Step 3: Single atomic update — $set + $addToSet in one operation
+  // Step 3: Single atomic update — $set + $push (capped) + $inc in one operation
   const updated = await Company.findOneAndUpdate(
     { _id: company._id },
     {
       $set,
-      $addToSet: { [observationField]: observationId },
+      $push: {
+        [observationField]: {
+          $each: [observationId],
+          $slice: -MAX_OBSERVATION_REFS,
+        },
+      },
+      $inc: { "meta.observationsCount": isAlreadyLinked ? 0 : 1 },
     },
     { new: true },
   );

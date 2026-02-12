@@ -69,6 +69,11 @@ const SIGNAL_NEW_DM_MIN_RANK = parseInt(
   10,
 );
 
+const MAX_OBSERVATION_REFS = parseInt(
+  process.env.MAX_OBSERVATION_REFS || "200",
+  10,
+);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
@@ -88,4 +93,5 @@ module.exports = {
   SIGNAL_MAX_LIMIT,
   SIGNAL_CACHE_TTL_MS,
   SIGNAL_NEW_DM_MIN_RANK,
+  MAX_OBSERVATION_REFS,
 };

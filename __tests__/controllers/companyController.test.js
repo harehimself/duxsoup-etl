@@ -118,7 +118,7 @@ describe("CompanyController", () => {
         { upsert: true, new: true },
       );
 
-      // Verify step 3: atomic update with $set + $addToSet
+      // Verify step 3: atomic update with $set + $push (capped) + $inc
       expect(Company.findOneAndUpdate).toHaveBeenCalledWith(
         { _id: "12345678" },
         expect.objectContaining({
@@ -126,7 +126,13 @@ describe("CompanyController", () => {
             "snapshot.name": "Acme Inc",
             "snapshot.industry": "Technology",
           }),
-          $addToSet: { "observations.visits": "obs-1" },
+          $push: {
+            "observations.visits": {
+              $each: ["obs-1"],
+              $slice: expect.any(Number),
+            },
+          },
+          $inc: { "meta.observationsCount": 1 },
         }),
         { new: true },
       );
@@ -187,14 +193,17 @@ describe("CompanyController", () => {
         "visit",
       );
 
-      // $addToSet in the atomic update
+      // $push (capped) in the atomic update
       const updateCall = Company.findOneAndUpdate.mock.calls[1];
-      expect(updateCall[1].$addToSet).toEqual({
-        "observations.visits": "obs-2",
+      expect(updateCall[1].$push).toEqual({
+        "observations.visits": {
+          $each: ["obs-2"],
+          $slice: expect.any(Number),
+        },
       });
 
-      // observations count pre-computed
-      expect(updateCall[1].$set["meta.observationsCount"]).toBe(2);
+      // observations count via $inc (not already linked, so +1)
+      expect(updateCall[1].$inc).toEqual({ "meta.observationsCount": 1 });
 
       expect(result).toBeTruthy();
     });
@@ -601,8 +610,8 @@ describe("CompanyController", () => {
       await upsertCompanyFromObservation(observationDoc, "visit");
 
       const updateCall = Company.findOneAndUpdate.mock.calls[1];
-      // 2 visits + 1 scan + 1 new = 4
-      expect(updateCall[1].$set["meta.observationsCount"]).toBe(4);
+      // Not already linked, so $inc by 1
+      expect(updateCall[1].$inc).toEqual({ "meta.observationsCount": 1 });
     });
 
     // ───────────────────────────────────────────
@@ -720,8 +729,8 @@ describe("CompanyController", () => {
       await upsertCompanyFromObservation(observationDoc, "visit");
 
       const updateCall = Company.findOneAndUpdate.mock.calls[1];
-      // Already linked, so count stays at 1
-      expect(updateCall[1].$set["meta.observationsCount"]).toBe(1);
+      // Already linked, so $inc by 0
+      expect(updateCall[1].$inc).toEqual({ "meta.observationsCount": 0 });
     });
   });
 });

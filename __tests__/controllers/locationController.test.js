@@ -209,14 +209,17 @@ describe("LocationController", () => {
         "scan",
       );
 
-      // Observation linked via $addToSet in atomic update
+      // Observation linked via $push (capped) in atomic update
       const updateCall = Location.findOneAndUpdate.mock.calls[1];
-      expect(updateCall[1].$addToSet).toEqual({
-        "observations.scans": "obs-loc-2",
+      expect(updateCall[1].$push).toEqual({
+        "observations.scans": {
+          $each: ["obs-loc-2"],
+          $slice: expect.any(Number),
+        },
       });
 
-      // Meta count pre-computed
-      expect(updateCall[1].$set["meta.observationsCount"]).toBe(2);
+      // observations count via $inc (not already linked, so +1)
+      expect(updateCall[1].$inc).toEqual({ "meta.observationsCount": 1 });
 
       expect(result).toBeTruthy();
     });
@@ -501,8 +504,8 @@ describe("LocationController", () => {
       await upsertLocationFromObservation(observationDoc, "visit");
 
       const updateCall = Location.findOneAndUpdate.mock.calls[1];
-      // 1 visit + 2 scans + 1 new = 4
-      expect(updateCall[1].$set["meta.observationsCount"]).toBe(4);
+      // Not already linked, so $inc by 1
+      expect(updateCall[1].$inc).toEqual({ "meta.observationsCount": 1 });
     });
   });
 });
