@@ -9,11 +9,21 @@ on:
 permissions:
   contents: read
 
+# Cancel in-progress deploys from rapid-fire commits, only deploy the latest
+concurrency:
+  group: deploy-to-render
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production # Or a similar environment defined in GitHub
     steps:
+      - name: Cooldown period (batch rapid pushes)
+        run: |
+          echo "Waiting 30 seconds to batch any additional rapid-fire commits..."
+          sleep 30
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
