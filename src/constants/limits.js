@@ -87,6 +87,11 @@ const ENRICHMENT_GAP_CACHE_TTL_MS = parseInt(
   10,
 );
 
+const NETWORK_PROFILE_CACHE_TTL_MS = parseInt(
+  process.env.NETWORK_PROFILE_CACHE_TTL_MS || String(10 * 60 * 1000),
+  10,
+);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
@@ -110,4 +115,5 @@ module.exports = {
   ENRICHMENT_GAP_DEFAULT_LIMIT,
   ENRICHMENT_GAP_MAX_LIMIT,
   ENRICHMENT_GAP_CACHE_TTL_MS,
+  NETWORK_PROFILE_CACHE_TTL_MS,
 };
