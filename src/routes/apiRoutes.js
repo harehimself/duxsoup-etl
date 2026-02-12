@@ -34,6 +34,7 @@ const {
   getLocationById,
   getLocationByAlias,
 } = require("../controllers/locationReadController");
+const { getPersonTimeline } = require("../controllers/timelineController");
 const { replayObservation } = require("../controllers/replayController");
 const adminRoutes = require("./adminRoutes");
 const queryRoutes = require("./queryRoutes");
@@ -118,6 +119,7 @@ router.get(
 );
 
 // Person read endpoints
+router.get("/people/:id/timeline", readRateLimiter, getPersonTimeline);
 router.get("/people/:id", readRateLimiter, getPersonById);
 router.get("/people/by-alias/:value", readRateLimiter, getPersonByAlias);
 router.post("/people/by-aliases", readRateLimiter, getPersonsByAliases);

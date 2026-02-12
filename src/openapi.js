@@ -704,6 +704,143 @@ const spec = {
       },
     },
 
+    // ── Person Timeline ─────────────────────────────────────────
+    "/api/people/{id}/timeline": {
+      get: {
+        tags: ["People"],
+        summary: "Get person activity timeline",
+        description:
+          "Chronological feed of all observed events and changes for a person: visits, scans, job changes, promotions, title changes, and lateral moves.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Person canonical ID, Sales Nav ID, or _id",
+          },
+          {
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", default: 50, maximum: 500 },
+            description: "Maximum events to return (default 50, max 500)",
+          },
+          {
+            name: "offset",
+            in: "query",
+            schema: { type: "integer", default: 0 },
+            description: "Pagination offset",
+          },
+          {
+            name: "from",
+            in: "query",
+            schema: { type: "string", format: "date-time" },
+            description: "ISO date lower bound filter",
+          },
+          {
+            name: "to",
+            in: "query",
+            schema: { type: "string", format: "date-time" },
+            description: "ISO date upper bound filter",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Timeline retrieved",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        personId: { type: "string" },
+                        timeline: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              timestamp: {
+                                type: "string",
+                                format: "date-time",
+                              },
+                              type: {
+                                type: "string",
+                                enum: [
+                                  "first_seen",
+                                  "visit",
+                                  "scan",
+                                  "company_change",
+                                  "promotion",
+                                  "title_change",
+                                  "lateral_move",
+                                ],
+                              },
+                              source: {
+                                type: "object",
+                                properties: {
+                                  type: { type: "string" },
+                                  id: { type: "string" },
+                                },
+                              },
+                              snapshot: {
+                                type: "object",
+                                properties: {
+                                  currentTitle: { type: "string" },
+                                  currentCompany: { type: "string" },
+                                  location: { type: "string" },
+                                },
+                              },
+                              detail: {
+                                type: "object",
+                                properties: {
+                                  from: { type: "string" },
+                                  to: { type: "string" },
+                                  tenureDays: { type: "integer" },
+                                },
+                              },
+                            },
+                          },
+                        },
+                        metadata: {
+                          type: "object",
+                          properties: {
+                            totalEvents: { type: "integer" },
+                            dateRange: {
+                              type: "object",
+                              properties: {
+                                from: {
+                                  type: "string",
+                                  format: "date-time",
+                                  nullable: true,
+                                },
+                                to: {
+                                  type: "string",
+                                  format: "date-time",
+                                  nullable: true,
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    total: { type: "integer" },
+                    limit: { type: "integer" },
+                    offset: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: "#/components/responses/BadRequest" },
+          404: { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+
     // ── Companies ───────────────────────────────────────────────
     "/api/companies/{id}": {
       get: {

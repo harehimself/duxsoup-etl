@@ -174,6 +174,7 @@ See `src/models/` for full schemas.
 
 ### Read APIs
 - `GET /api/people/:id` - Get person by ID
+- `GET /api/people/:id/timeline` - Person activity timeline (visits, scans, changes) with pagination and date range filter
 - `GET /api/people/by-alias/:value` - Get person by any alias
 - `POST /api/people/by-aliases` - Bulk lookup people by alias values (body: `{ values: string[] }`)
 - `GET /api/companies/:id` - Get company by ID
