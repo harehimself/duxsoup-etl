@@ -189,6 +189,12 @@ const personSchema = new mongoose.Schema(
       region: { type: String, maxlength: 100 },
       locationType: { type: String, maxlength: 50 },
 
+      // US region categorization (derived from stateCode)
+      usRegion: { type: String, maxlength: 50 },
+      usSubregion: { type: String, maxlength: 50 },
+      timezone: { type: String, maxlength: 50 },
+      utcOffset: { type: Number, min: -12, max: 14 },
+
       industry: { type: String, maxlength: 100 },
       connections: { type: Number, min: 0 },
       summary: { type: String, maxlength: 5000 },

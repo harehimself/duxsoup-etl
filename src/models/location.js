@@ -69,6 +69,12 @@ const locationSchema = new mongoose.Schema(
       // Location type: 'city', 'metropolitan', 'unknown'
       locationType: { type: String, maxlength: 50 },
 
+      // US region categorization (derived from stateCode)
+      usRegion: { type: String, maxlength: 50 },
+      usSubregion: { type: String, maxlength: 50 },
+      timezone: { type: String, maxlength: 50 },
+      utcOffset: { type: Number, min: -12, max: 14 },
+
       // Per-field provenance: { fieldName: { value, observedAt, source, observationId } }
       _meta: { type: mongoose.Schema.Types.Mixed, default: {} },
     },

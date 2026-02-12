@@ -101,6 +101,7 @@ Webhook → Phase 1: Visit/Scan (must succeed) → Phase 2: Person/Company (best
     location,                                            // raw location string
     city, state, stateCode, country, countryCode,        // structured location fields
     province, region, locationType,
+    usRegion, usSubregion, timezone, utcOffset,          // US region categorization
     industry, connections, summary,
     email, phone, twitter,
     profilePicture, thumbnail,

@@ -295,6 +295,10 @@ const LOCATION_FIELDS = [
   "province",
   "region",
   "locationType",
+  "usRegion",
+  "usSubregion",
+  "timezone",
+  "utcOffset",
 ];
 
 /**
