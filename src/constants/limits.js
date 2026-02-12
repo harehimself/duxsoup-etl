@@ -74,6 +74,19 @@ const MAX_OBSERVATION_REFS = parseInt(
   10,
 );
 
+const ENRICHMENT_GAP_DEFAULT_LIMIT = parseInt(
+  process.env.ENRICHMENT_GAP_DEFAULT_LIMIT || "100",
+  10,
+);
+const ENRICHMENT_GAP_MAX_LIMIT = parseInt(
+  process.env.ENRICHMENT_GAP_MAX_LIMIT || "500",
+  10,
+);
+const ENRICHMENT_GAP_CACHE_TTL_MS = parseInt(
+  process.env.ENRICHMENT_GAP_CACHE_TTL_MS || String(10 * 60 * 1000),
+  10,
+);
+
 module.exports = {
   MAX_ROLES,
   MAX_EDUCATION,
@@ -94,4 +107,7 @@ module.exports = {
   SIGNAL_CACHE_TTL_MS,
   SIGNAL_NEW_DM_MIN_RANK,
   MAX_OBSERVATION_REFS,
+  ENRICHMENT_GAP_DEFAULT_LIMIT,
+  ENRICHMENT_GAP_MAX_LIMIT,
+  ENRICHMENT_GAP_CACHE_TTL_MS,
 };

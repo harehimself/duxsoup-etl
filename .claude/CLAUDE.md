@@ -213,6 +213,10 @@ See `src/models/` for full schemas.
 ### Signals
 - `GET /api/signals/` - Engagement trigger feed (new roles, promotions, lateral moves, new decision-makers) with ranking, dedup, and action context
 
+### Insights
+- `GET /api/insights/enrichment-gaps` - Enrichment gap analysis dashboard (per-field missing counts/percentages, seniority breakdown, cached 10 min)
+- `GET /api/insights/enrichment-gaps/revisit-list` - Prioritized revisit list scored by contact value + gap severity (CSV default, JSON optional)
+
 ## Code Style & Patterns
 
 ### Async/Await

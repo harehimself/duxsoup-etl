@@ -624,6 +624,7 @@ module.exports = {
   processExportJob,
   getExportJobStatus,
   getExportFile,
+  escapeCsvField,
   PEOPLE_DEFAULT_CSV_FIELDS,
   COMPANY_DEFAULT_CSV_FIELDS,
   LOCATION_DEFAULT_CSV_FIELDS,

@@ -61,6 +61,7 @@ function getMountPath(layer) {
       "docs",
       "export",
       "health",
+      "insights",
       "jobs",
       "locations",
       "metrics",

@@ -26,6 +26,7 @@ const spec = {
     { name: "Changes", description: "Job change tracking" },
     { name: "Seniority", description: "Seniority tier analysis" },
     { name: "Signals", description: "Engagement trigger feed" },
+    { name: "Insights", description: "Business intelligence and gap analysis" },
     { name: "Health", description: "System health and monitoring" },
     { name: "Admin", description: "Administrative operations (auth required)" },
   ],
@@ -2181,6 +2182,211 @@ const spec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    // ── Insights ─────────────────────────────────────────────────
+    "/api/insights/enrichment-gaps": {
+      get: {
+        tags: ["Insights"],
+        summary: "Enrichment gap analysis dashboard",
+        description:
+          "Per-field missing counts/percentages, ranked by severity, with seniority-tier breakdown. Cached 10 min.",
+        parameters: [
+          {
+            name: "seniority",
+            in: "query",
+            schema: { type: "string" },
+            description: "Seniority tier filter (e.g., VP, CXO)",
+          },
+          {
+            name: "minRank",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 8 },
+            description: "Minimum seniority rank (1-8)",
+          },
+          {
+            name: "company",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company name filter (regex)",
+          },
+          {
+            name: "companyId",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company ID filter",
+          },
+          {
+            name: "fields",
+            in: "query",
+            schema: { type: "string" },
+            description:
+              "Comma-separated gap fields to report (email, phone, currentCompanyId, roles, education, skills, industry, location)",
+          },
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+            description: "Bypass cache and recompute",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Enrichment gap analysis",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        summary: {
+                          type: "object",
+                          properties: {
+                            totalPeople: { type: "integer" },
+                            fieldsAnalyzed: { type: "integer" },
+                            avgGapPercent: { type: "number" },
+                          },
+                        },
+                        fieldGaps: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              field: { type: "string" },
+                              weight: { type: "integer" },
+                              missingCount: { type: "integer" },
+                              totalCount: { type: "integer" },
+                              missingPercent: { type: "number" },
+                            },
+                          },
+                        },
+                        seniorityBreakdown: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              seniority: { type: "string" },
+                              count: { type: "integer" },
+                              missingEmail: { type: "integer" },
+                              missingPhone: { type: "integer" },
+                              missingRoles: { type: "integer" },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    metadata: { type: "object" },
+                  },
+                },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/insights/enrichment-gaps/revisit-list": {
+      get: {
+        tags: ["Insights"],
+        summary: "Prioritized revisit list",
+        description:
+          "Prioritized list of people with enrichment gaps, scored by contact value and gap severity. Returns CSV (default, DuxSoup-compatible) or JSON.",
+        parameters: [
+          {
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", default: 100, maximum: 500 },
+            description: "Max results (default 100, max 500)",
+          },
+          {
+            name: "minScore",
+            in: "query",
+            schema: { type: "integer", default: 0 },
+            description: "Minimum priority score filter",
+          },
+          {
+            name: "seniority",
+            in: "query",
+            schema: { type: "string" },
+            description: "Seniority tier filter",
+          },
+          {
+            name: "minRank",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 8 },
+            description: "Minimum seniority rank (1-8)",
+          },
+          {
+            name: "company",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company name filter (regex)",
+          },
+          {
+            name: "companyId",
+            in: "query",
+            schema: { type: "string" },
+            description: "Company ID filter",
+          },
+          {
+            name: "format",
+            in: "query",
+            schema: { type: "string", enum: ["csv", "json"], default: "csv" },
+            description: "Response format (csv or json, default csv)",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Revisit list (CSV or JSON)",
+            content: {
+              "text/csv": {
+                schema: { type: "string" },
+              },
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          personId: { type: "string" },
+                          name: { type: "string" },
+                          currentTitle: { type: "string" },
+                          currentCompany: { type: "string" },
+                          profileUrl: { type: "string" },
+                          gapScore: { type: "number" },
+                          contactValue: { type: "number" },
+                          priorityScore: { type: "number" },
+                          missingFields: {
+                            type: "array",
+                            items: { type: "string" },
+                          },
+                          lastObservedAt: {
+                            type: "string",
+                            format: "date-time",
+                            nullable: true,
+                          },
+                        },
+                      },
+                    },
+                    total: { type: "integer" },
+                    limit: { type: "integer" },
+                    metadata: { type: "object" },
+                  },
+                },
               },
             },
           },

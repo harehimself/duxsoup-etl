@@ -46,6 +46,7 @@ const exportRoutes = require("./exportRoutes");
 const changeRoutes = require("./changeRoutes");
 const seniorityRoutes = require("./seniorityRoutes");
 const signalRoutes = require("./signalRoutes");
+const insightsRoutes = require("./insightsRoutes");
 
 const router = express.Router();
 
@@ -199,5 +200,8 @@ router.use("/seniority", readRateLimiter, seniorityRoutes);
 
 // Signal endpoints (engagement trigger feed)
 router.use("/signals", readRateLimiter, signalRoutes);
+
+// Insights endpoints (enrichment gap analysis)
+router.use("/insights", readRateLimiter, insightsRoutes);
 
 module.exports = router;
