@@ -82,6 +82,43 @@
 
 ### Medium Priority
 
+- [x] **Comprehensive person data quality backfill script** — Nine data quality improvements were added to the ingestion pipeline (whitespace trimming, email normalization, phone normalization, skill/education dedup, location parsing, US region categorization, seniority parsing, derived metrics) but had no backfill scripts for existing records. Created `scripts/backfillPersonDataQuality.js` — a single-pass backfill that applies all improvements to existing person records via cursor-based iteration with dry-run by default. Supports `--only=STEP` for selective application, `--skip`/`--limit` for chunked execution, and `--verbose` for field-level change logging. 50 unit tests.
+  - Priority: `medium`
+  - Category: `data quality / backfill`
+  - Impact: Applies all recent ingestion pipeline improvements retroactively to every existing person record.
+
+- [x] **Fix Change model TTL index destroying audit trail** — The TTL index on `recentJobChangeExpiresAt` with `expireAfterSeconds: 0` was deleting entire Change documents after 90 days, destroying the audit trail. Removed the TTL behavior since scheduler Job 4 already correctly expires the `recentJobChange` boolean flag daily via `updateMany`. Changed to a plain index for query performance.
+  - Priority: `high`
+  - Category: `bug / data integrity`
+  - Impact: Prevents permanent loss of change audit records after 90 days.
+
+- [x] **Add CompanyID field to Visit model** — Visit model was missing `CompanyID` field (present in Scan model). DuxSoup visit webhooks can include CompanyID but it was only preserved in rawData, not as a first-class field. Added to Visit schema and visit data mapper.
+  - Priority: `high`
+  - Category: `bug / data completeness`
+  - Impact: Company identity resolution now works reliably for visit-sourced observations.
+
+- [x] **Add missing region field to Company model** — Company snapshot was missing the `region` field (present in Person and Location models). Added to schema and company controller snapshot field mappings.
+  - Priority: `medium`
+  - Category: `data completeness`
+  - Impact: Metropolitan area region data no longer silently dropped for companies.
+
+- [x] **Add parsedSeniority index to Person model** — Seniority API endpoints filter by `snapshot.parsedSeniority` but the field was not indexed, requiring collection scans.
+  - Priority: `medium`
+  - Category: `performance`
+  - Impact: Faster seniority filter queries.
+
+- [ ] **Cap or replace unbounded observation reference arrays** — Person, Company, and Location models store `observations.visits` and `observations.scans` as unbounded ObjectId arrays that grow with every webhook. High-frequency entities accumulate thousands of refs. Consider capping to last N refs (since `meta.observationsCount` already tracks totals) or replacing with count-only. Location is especially wasteful since common locations like "San Francisco Bay Area" accumulate massive arrays.
+  - Priority: `high`
+  - Category: `performance / data model`
+  - Impact: Reduces document bloat, faster reads/writes, prevents approaching MongoDB 16MB document limit.
+  - Discovered: 2026-02-12, data model review.
+
+- [ ] **Extract shared shouldOverwrite precedence logic** — `shouldOverwrite()` is independently implemented in personController, companyController, and locationController with identical logic. Extract to `src/utils/precedence.js` to eliminate DRY violation and ensure precedence rules stay synchronized.
+  - Priority: `medium`
+  - Category: `tech debt`
+  - Impact: Single source of truth for precedence rules.
+  - Discovered: 2026-02-12, data model review.
+
 - [x] **Trim and collapse whitespace on all snapshot string fields** — The `FIELD_MAPPINGS` loop in `personController.js` passes raw DuxSoup values through to snapshot fields without trimming. Fields affected: `firstName`, `middleName`, `lastName`, `currentTitle`, `currentCompany`, `location`, `industry`, `summary`, `email`, `phone`, `twitter`. DuxSoup scrapes raw LinkedIn HTML, so leading/trailing whitespace and collapsed multi-spaces are common. Add a default `trim()` transform to the field mapping loop and a `collapseWhitespace()` (replace `\s+` with single space) for multi-word text fields. Apply at Phase 2 only — observations should keep raw data for audit. Also trim role `title`, `companyName`, `location`, `description` in `updateRolesTimeline()` before storage (currently only normalized for comparison via `normalizeRoleText()`). Include a backfill script to clean existing records.
   - Priority: `medium`
   - Category: `data quality`
@@ -340,6 +377,7 @@
 
 ## Completed
 
+- [x] **Comprehensive person data quality backfill + data model fixes** — 2026-02-12. Created `scripts/backfillPersonDataQuality.js` applying 9 data quality improvements (whitespace, email, phone, skills, education, location, US regions, seniority, derived metrics) to existing person records in a single pass. Fixed 3 critical data model issues: removed destructive TTL index on Change model `recentJobChangeExpiresAt` that was deleting audit records after 90 days, added missing `CompanyID` field to Visit model/controller, added missing `region` field to Company model/controller. Added `parsedSeniority` index to Person model for seniority API query performance. 50 new tests. All 1,254 tests pass.
 - [x] **Person activity timeline API** — 2026-02-11. Added `GET /api/people/:id/timeline` returning a chronological feed of all visits, scans, changes (company_change, promotion, title_change, lateral_move), and a synthetic `first_seen` event for a person. Supports `limit` (default 50, max 500), `offset`, `from`/`to` ISO date range filters. In-memory merge of Visit, Scan, and Change collections via parallel queries with `.lean()` and `.select()` for minimal payload. Created `timelineService.js` (core merge/sort/filter/paginate logic), `timelineController.js` (HTTP handler with validation), registered route in `apiRoutes.js` with `readRateLimiter`, added OpenAPI spec. 24 new tests (16 service + 8 controller). All 1,204 tests pass.
 - [x] **Categorize US regions on all location-bearing collections** — 2026-02-11. Created `src/utils/us-regions.js` mapping all 50 US states + DC to region (Northeast/Midwest/Southeast/Southwest/West), subregion (New England, Mid-Atlantic, East North Central, West North Central, Lower South, Upper South, Delta, Four Corners, Southern Plains, Great Basin, Pacific, Mountain), IANA timezone, and UTC offset. Integrated into `location-parser.js` via `enrichWithUSRegion()` — every parsed US location now includes `usRegion`, `usSubregion`, `timezone`, `utcOffset`. Added 4 new fields to Person, Location, and Company models. Updated `personController.js` LOCATION_FIELDS, `locationController.js` snapshot fields, and `companyController.js` (now parses location and populates structured location + region fields with provenance tracking). 65 new unit tests for US regions utility. All 1,108 tests pass.
 - [x] **Phone number normalization** — 2026-02-11. Added `normalizePhone()` utility using `libphonenumber-js/min` to normalize phone numbers to E.164 format (`+15551234567`). Integrated as a `transform` on the FIELD_MAPPINGS phone entry, with phone added to `SKIP_CLEAN_FIELDS`. Added phone format metrics to `GET /api/health/data-cleanliness` (6th pipeline counting non-E.164 phones). Created `scripts/backfillPhoneNormalization.js` with `--dry-run`/`--commit` modes, uses person's `countryCode` as default country. Updated OpenAPI spec, FIELD_REFERENCE.md, and package.json. 37 new tests (26 normalizer, 4 personController, 1 healthController, 7 backfill script).

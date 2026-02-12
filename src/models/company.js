@@ -76,6 +76,7 @@ const companySchema = new mongoose.Schema(
       country: { type: String, maxlength: 100 },
       countryCode: { type: String, maxlength: 10 },
       province: { type: String, maxlength: 100 },
+      region: { type: String, maxlength: 100 },
       locationType: { type: String, maxlength: 50 },
 
       // US region categorization (derived from stateCode)

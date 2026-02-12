@@ -54,6 +54,7 @@ const visitSchema = new mongoose.Schema(
     Title: String,
     From: String,
     Company: String,
+    CompanyID: String, // LinkedIn numeric company ID (matches Scan model)
     CompanyProfile: String,
     CompanyWebsite: String,
     PersonalWebsite: String,
