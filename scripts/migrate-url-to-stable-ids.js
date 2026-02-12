@@ -142,18 +142,33 @@ async function migratePeople() {
             }
           );
 
-          // Move observations to existing person
+          // Move observations to existing person (capped to MAX_OBSERVATION_REFS)
+          const { MAX_OBSERVATION_REFS } = require('../src/constants/limits');
           if (oldPerson.observations?.visits?.length > 0) {
             await Person.updateOne(
               { _id: item.newId },
-              { $addToSet: { 'observations.visits': { $each: oldPerson.observations.visits } } }
+              {
+                $push: {
+                  'observations.visits': {
+                    $each: oldPerson.observations.visits,
+                    $slice: -MAX_OBSERVATION_REFS
+                  }
+                }
+              }
             );
           }
 
           if (oldPerson.observations?.scans?.length > 0) {
             await Person.updateOne(
               { _id: item.newId },
-              { $addToSet: { 'observations.scans': { $each: oldPerson.observations.scans } } }
+              {
+                $push: {
+                  'observations.scans': {
+                    $each: oldPerson.observations.scans,
+                    $slice: -MAX_OBSERVATION_REFS
+                  }
+                }
+              }
             );
           }
 

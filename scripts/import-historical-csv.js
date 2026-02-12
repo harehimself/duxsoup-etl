@@ -488,9 +488,14 @@ async function processPerson(row, visit) {
         }
       });
 
-      // Add visit reference
+      // Add visit reference (capped to prevent unbounded growth)
       if (visit && !person.observations.visits.includes(visit._id)) {
         person.observations.visits.push(visit._id);
+        // Trim to MAX_OBSERVATION_REFS if exceeded
+        const { MAX_OBSERVATION_REFS } = require('../src/constants/limits');
+        if (person.observations.visits.length > MAX_OBSERVATION_REFS) {
+          person.observations.visits = person.observations.visits.slice(-MAX_OBSERVATION_REFS);
+        }
       }
 
       // Update metadata
