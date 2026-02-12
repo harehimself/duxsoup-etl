@@ -11,8 +11,14 @@ const {
   findMatchingRole,
   mergeRoleFields,
   normalizeField,
+  cleanString,
+  normalizeEmail,
+  normalizePhone,
+  updateSkills,
+  updateEducation,
   FIELD_MAPPINGS,
   LOCATION_FIELDS,
+  SKIP_CLEAN_FIELDS,
 } = require("../../src/controllers/personController");
 const logger = require("../../src/utils/logger");
 
@@ -889,6 +895,327 @@ describe("PersonController", () => {
       for (const field of LOCATION_FIELDS) {
         expect(field in result).toBe(true);
       }
+    });
+  });
+
+  // ── Data Cleansing Tests ────────────────────────────────────────
+
+  describe("cleanString()", () => {
+    it("should return null for null input", () => {
+      expect(cleanString(null)).toBeNull();
+    });
+
+    it("should return undefined for undefined input", () => {
+      expect(cleanString(undefined)).toBeUndefined();
+    });
+
+    it("should pass non-strings through unchanged", () => {
+      expect(cleanString(42)).toBe(42);
+      expect(cleanString(true)).toBe(true);
+    });
+
+    it("should trim leading and trailing whitespace", () => {
+      expect(cleanString("  John  ")).toBe("John");
+    });
+
+    it("should collapse internal multi-spaces to single space", () => {
+      expect(cleanString("Vice   President  of  Sales")).toBe(
+        "Vice President of Sales",
+      );
+    });
+
+    it("should handle empty string after trim", () => {
+      expect(cleanString("   ")).toBe("");
+    });
+
+    it("should handle tabs and newlines", () => {
+      expect(cleanString("\tSoftware\n  Engineer\r")).toBe("Software Engineer");
+    });
+  });
+
+  describe("normalizeEmail()", () => {
+    it("should lowercase and trim email", () => {
+      expect(normalizeEmail("  John@Gmail.COM  ")).toBe("john@gmail.com");
+    });
+
+    it("should return null for null input", () => {
+      expect(normalizeEmail(null)).toBeNull();
+    });
+
+    it("should return null for undefined input", () => {
+      expect(normalizeEmail(undefined)).toBeNull();
+    });
+
+    it("should return null for empty string", () => {
+      expect(normalizeEmail("")).toBeNull();
+      expect(normalizeEmail("   ")).toBeNull();
+    });
+
+    it("should warn on invalid email format but still return it", () => {
+      const result = normalizeEmail("not-an-email");
+      expect(result).toBe("not-an-email");
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Email fails basic format validation",
+        { email: "not-an-email" },
+      );
+    });
+
+    it("should not warn on valid email format", () => {
+      normalizeEmail("user@example.com");
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("SKIP_CLEAN_FIELDS", () => {
+    it("should skip URL and ID fields", () => {
+      expect(SKIP_CLEAN_FIELDS.has("currentCompanyId")).toBe(true);
+      expect(SKIP_CLEAN_FIELDS.has("currentCompanyProfile")).toBe(true);
+      expect(SKIP_CLEAN_FIELDS.has("profilePicture")).toBe(true);
+      expect(SKIP_CLEAN_FIELDS.has("thumbnail")).toBe(true);
+      expect(SKIP_CLEAN_FIELDS.has("personalWebsite")).toBe(true);
+      expect(SKIP_CLEAN_FIELDS.has("companyWebsite")).toBe(true);
+    });
+
+    it("should skip email (has its own normalizeEmail transform)", () => {
+      expect(SKIP_CLEAN_FIELDS.has("email")).toBe(true);
+    });
+
+    it("should not skip text fields like firstName or currentTitle", () => {
+      expect(SKIP_CLEAN_FIELDS.has("firstName")).toBe(false);
+      expect(SKIP_CLEAN_FIELDS.has("currentTitle")).toBe(false);
+      expect(SKIP_CLEAN_FIELDS.has("currentCompany")).toBe(false);
+    });
+  });
+
+  describe("FIELD_MAPPINGS whitespace cleaning", () => {
+    it("should apply normalizeEmail transform for email field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "email");
+      expect(mapping.transform).toBe(normalizeEmail);
+    });
+
+    it("should clean firstName through FIELD_MAPPINGS loop simulation", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      // Simulate the FIELD_MAPPINGS loop logic
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "firstName");
+      let value = "  John  ";
+      if (mapping.transform) value = mapping.transform(value);
+      if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+
+      expect(snapshot.firstName).toBe("John");
+    });
+
+    it("should NOT clean URL fields through FIELD_MAPPINGS loop", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "profilePicture");
+      let value = "  https://example.com/pic.jpg  ";
+      if (mapping.transform) value = mapping.transform(value);
+      if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+
+      // URL fields should NOT be cleaned — value kept as-is
+      expect(snapshot.profilePicture).toBe("  https://example.com/pic.jpg  ");
+    });
+  });
+
+  describe("Role whitespace cleaning", () => {
+    it("should clean title, company, location, and description in extended positions", () => {
+      const person = buildPersonDoc();
+      const observationData = {
+        extended: {
+          positions: [
+            {
+              Title: "  Software  Engineer ",
+              Company: " Google  LLC ",
+              Location: "  San Francisco ",
+              Description: " Built  stuff ",
+              From: "2022-01-01",
+            },
+          ],
+        },
+      };
+
+      updateRolesTimeline(person, observationData, {});
+
+      const role = person.snapshot.roles[0];
+      expect(role.title).toBe("Software Engineer");
+      expect(role.companyName).toBe("Google LLC");
+      expect(role.location).toBe("San Francisco");
+      expect(role.description).toBe("Built stuff");
+    });
+
+    it("should clean title and company in single current-role path", () => {
+      const person = buildPersonDoc();
+      const observationData = {
+        Title: "  VP  of  Sales ",
+        Company: " Acme  Corp ",
+        Location: "  New York ",
+      };
+
+      updateRolesTimeline(person, observationData, {});
+
+      const role = person.snapshot.roles[0];
+      expect(role.title).toBe("VP of Sales");
+      expect(role.companyName).toBe("Acme Corp");
+      expect(role.location).toBe("New York");
+    });
+  });
+
+  describe("Education whitespace and case-insensitive dedup", () => {
+    it("should clean school, degree, and field before storage", () => {
+      const person = buildPersonDoc({
+        snapshot: { roles: [], education: [] },
+      });
+
+      updateEducation(person, [
+        { Name: "  MIT  ", Degree: " BS ", Field: " CS " },
+      ]);
+
+      expect(person.snapshot.education[0].school).toBe("MIT");
+      expect(person.snapshot.education[0].degree).toBe("BS");
+      expect(person.snapshot.education[0].field).toBe("CS");
+    });
+
+    it("should deduplicate education entries case-insensitively", () => {
+      const person = buildPersonDoc({
+        snapshot: {
+          roles: [],
+          education: [{ school: "MIT", degree: "BS", field: "CS" }],
+        },
+      });
+
+      updateEducation(person, [{ Name: "mit", Degree: "bs", Field: "cs" }]);
+
+      expect(person.snapshot.education).toHaveLength(1);
+    });
+
+    it("should deduplicate education with whitespace differences", () => {
+      const person = buildPersonDoc({
+        snapshot: {
+          roles: [],
+          education: [
+            {
+              school: "Harvard University",
+              degree: "MBA",
+              field: "Business",
+            },
+          ],
+        },
+      });
+
+      updateEducation(person, [
+        {
+          Name: "  Harvard  University  ",
+          Degree: "  MBA ",
+          Field: " Business ",
+        },
+      ]);
+
+      expect(person.snapshot.education).toHaveLength(1);
+    });
+  });
+
+  describe("Phone normalization in FIELD_MAPPINGS", () => {
+    it("should have normalizePhone transform for phone field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "phone");
+      expect(mapping.transform).toBe(normalizePhone);
+    });
+
+    it("should include phone in SKIP_CLEAN_FIELDS", () => {
+      expect(SKIP_CLEAN_FIELDS.has("phone")).toBe(true);
+    });
+
+    it("should normalize phone through FIELD_MAPPINGS loop simulation", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "phone");
+      let value = "+1 (555) 123-4567";
+      if (mapping.transform) value = mapping.transform(value);
+      if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+
+      expect(snapshot.phone).toBe("+15551234567");
+    });
+
+    it("should not apply cleanString to phone field", () => {
+      // cleanString would strip the leading + and collapse digits
+      // SKIP_CLEAN_FIELDS prevents this
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "phone");
+      expect(SKIP_CLEAN_FIELDS.has(mapping.field)).toBe(true);
+    });
+  });
+
+  describe("Skill case-insensitive deduplication", () => {
+    it("should deduplicate skills case-insensitively", () => {
+      const person = buildPersonDoc({
+        snapshot: { roles: [], skills: ["JavaScript"] },
+      });
+
+      updateSkills(person, ["javascript", "JAVASCRIPT"]);
+
+      expect(person.snapshot.skills).toHaveLength(1);
+      expect(person.snapshot.skills[0]).toBe("JavaScript"); // first-seen casing
+    });
+
+    it("should store first-seen casing for new skills", () => {
+      const person = buildPersonDoc({
+        snapshot: { roles: [], skills: [] },
+      });
+
+      updateSkills(person, ["React", "react", "REACT"]);
+
+      expect(person.snapshot.skills).toHaveLength(1);
+      expect(person.snapshot.skills[0]).toBe("React");
+    });
+
+    it("should trim and clean incoming skills", () => {
+      const person = buildPersonDoc({
+        snapshot: { roles: [], skills: [] },
+      });
+
+      updateSkills(person, ["  Machine  Learning  "]);
+
+      expect(person.snapshot.skills[0]).toBe("Machine Learning");
+    });
+
+    it("should skip null and empty skills after cleaning", () => {
+      const person = buildPersonDoc({
+        snapshot: { roles: [], skills: [] },
+      });
+
+      const result = updateSkills(person, [null, "", "   ", "Python"]);
+
+      expect(result).toBe(true);
+      expect(person.snapshot.skills).toHaveLength(1);
+      expect(person.snapshot.skills[0]).toBe("Python");
+    });
+
+    it("should preserve existing skills with different casing in lookups", () => {
+      const person = buildPersonDoc({
+        snapshot: { roles: [], skills: ["TypeScript", "Python"] },
+      });
+
+      updateSkills(person, ["typescript", "python", "Go"]);
+
+      expect(person.snapshot.skills).toHaveLength(3);
+      expect(person.snapshot.skills).toEqual(["TypeScript", "Python", "Go"]);
     });
   });
 });

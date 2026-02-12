@@ -1077,6 +1077,370 @@ async function getThroughput(req, res) {
   }
 }
 
+/**
+ * GET /health/data-cleanliness
+ * Field-level data cleanliness metrics: whitespace issues, invalid emails,
+ * duplicate skills, duplicate education entries, and missing key fields.
+ */
+async function getDataCleanliness(req, res) {
+  try {
+    const fresh = req.query.fresh === "true";
+    const data = await metricsCache.getOrFetch(
+      "data-cleanliness",
+      async () => {
+        const notMerged = { mergedInto: { $exists: false } };
+
+        const [
+          totalPeople,
+          whitespaceSample,
+          emailResults,
+          skillResults,
+          educationResults,
+          missingFieldResults,
+          phoneResults,
+        ] = await Promise.all([
+          Person.countDocuments(notMerged),
+
+          // Whitespace issues: sample 1000 records, check 5 key fields
+          Person.aggregate([
+            { $match: notMerged },
+            { $sample: { size: 1000 } },
+            {
+              $project: {
+                hasIssue: {
+                  $or: [
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ["$snapshot.firstName", ""] },
+                        regex: /^\s|\s$|\s{2,}/,
+                      },
+                    },
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ["$snapshot.lastName", ""] },
+                        regex: /^\s|\s$|\s{2,}/,
+                      },
+                    },
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ["$snapshot.currentTitle", ""] },
+                        regex: /^\s|\s$|\s{2,}/,
+                      },
+                    },
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ["$snapshot.currentCompany", ""] },
+                        regex: /^\s|\s$|\s{2,}/,
+                      },
+                    },
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ["$snapshot.location", ""] },
+                        regex: /^\s|\s$|\s{2,}/,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                sampled: { $sum: 1 },
+                withIssues: { $sum: { $cond: ["$hasIssue", 1, 0] } },
+              },
+            },
+          ]),
+
+          // Invalid emails: full scan of records with email
+          Person.aggregate([
+            {
+              $match: {
+                ...notMerged,
+                "snapshot.email": { $nin: [null, ""] },
+              },
+            },
+            {
+              $project: {
+                isInvalid: {
+                  $not: {
+                    $regexMatch: {
+                      input: "$snapshot.email",
+                      regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                invalid: { $sum: { $cond: ["$isInvalid", 1, 0] } },
+              },
+            },
+          ]),
+
+          // Skill duplicates: compare skills.length vs Set(skills.map(toLower)).size
+          Person.aggregate([
+            {
+              $match: {
+                ...notMerged,
+                "snapshot.skills": { $exists: true, $ne: [] },
+              },
+            },
+            {
+              $project: {
+                totalSkills: { $size: "$snapshot.skills" },
+                uniqueSkills: {
+                  $size: {
+                    $setUnion: [
+                      {
+                        $map: {
+                          input: "$snapshot.skills",
+                          as: "s",
+                          in: { $toLower: "$$s" },
+                        },
+                      },
+                      [],
+                    ],
+                  },
+                },
+              },
+            },
+            {
+              $project: {
+                hasDupes: { $gt: ["$totalSkills", "$uniqueSkills"] },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                withDuplicates: { $sum: { $cond: ["$hasDupes", 1, 0] } },
+              },
+            },
+          ]),
+
+          // Education duplicates: compare education length vs set of toLower(school|degree|field)
+          Person.aggregate([
+            {
+              $match: {
+                ...notMerged,
+                "snapshot.education": { $exists: true, $ne: [] },
+              },
+            },
+            {
+              $project: {
+                totalEdu: { $size: "$snapshot.education" },
+                uniqueEdu: {
+                  $size: {
+                    $setUnion: [
+                      {
+                        $map: {
+                          input: "$snapshot.education",
+                          as: "e",
+                          in: {
+                            $concat: [
+                              {
+                                $toLower: {
+                                  $ifNull: ["$$e.school", ""],
+                                },
+                              },
+                              "|",
+                              {
+                                $toLower: {
+                                  $ifNull: ["$$e.degree", ""],
+                                },
+                              },
+                              "|",
+                              {
+                                $toLower: {
+                                  $ifNull: ["$$e.field", ""],
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                      [],
+                    ],
+                  },
+                },
+              },
+            },
+            {
+              $project: {
+                hasDupes: { $gt: ["$totalEdu", "$uniqueEdu"] },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                withDuplicates: { $sum: { $cond: ["$hasDupes", 1, 0] } },
+              },
+            },
+          ]),
+
+          // Missing key fields: count null/empty for email, phone, currentTitle
+          Person.aggregate([
+            { $match: notMerged },
+            {
+              $project: {
+                missingEmail: {
+                  $or: [
+                    { $eq: ["$snapshot.email", null] },
+                    { $eq: ["$snapshot.email", ""] },
+                    {
+                      $eq: [{ $type: "$snapshot.email" }, "missing"],
+                    },
+                  ],
+                },
+                missingPhone: {
+                  $or: [
+                    { $eq: ["$snapshot.phone", null] },
+                    { $eq: ["$snapshot.phone", ""] },
+                    {
+                      $eq: [{ $type: "$snapshot.phone" }, "missing"],
+                    },
+                  ],
+                },
+                missingTitle: {
+                  $or: [
+                    { $eq: ["$snapshot.currentTitle", null] },
+                    { $eq: ["$snapshot.currentTitle", ""] },
+                    {
+                      $eq: [{ $type: "$snapshot.currentTitle" }, "missing"],
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                missingEmail: {
+                  $sum: { $cond: ["$missingEmail", 1, 0] },
+                },
+                missingPhone: {
+                  $sum: { $cond: ["$missingPhone", 1, 0] },
+                },
+                missingTitle: {
+                  $sum: { $cond: ["$missingTitle", 1, 0] },
+                },
+              },
+            },
+          ]),
+
+          // Phone format: count non-E.164 phones (not matching ^\+\d+$)
+          Person.aggregate([
+            {
+              $match: {
+                ...notMerged,
+                "snapshot.phone": { $nin: [null, ""] },
+              },
+            },
+            {
+              $project: {
+                notE164: {
+                  $not: {
+                    $regexMatch: {
+                      input: "$snapshot.phone",
+                      regex: /^\+\d+$/,
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                notE164: { $sum: { $cond: ["$notE164", 1, 0] } },
+              },
+            },
+          ]),
+        ]);
+
+        const ws = whitespaceSample[0] || { sampled: 0, withIssues: 0 };
+        const em = emailResults[0] || { total: 0, invalid: 0 };
+        const sk = skillResults[0] || { total: 0, withDuplicates: 0 };
+        const ed = educationResults[0] || { total: 0, withDuplicates: 0 };
+        const mf = missingFieldResults[0] || {
+          total: 0,
+          missingEmail: 0,
+          missingPhone: 0,
+          missingTitle: 0,
+        };
+        const ph = phoneResults[0] || { total: 0, notE164: 0 };
+
+        const pct = (count, total) =>
+          total > 0 ? Math.round((count / total) * 100 * 100) / 100 : 0;
+
+        return {
+          totalPeople,
+          whitespace: {
+            sampled: ws.sampled,
+            withIssues: ws.withIssues,
+            percentage: pct(ws.withIssues, ws.sampled),
+          },
+          email: {
+            totalWithEmail: em.total,
+            invalid: em.invalid,
+            percentage: pct(em.invalid, em.total),
+          },
+          skills: {
+            totalWithSkills: sk.total,
+            withDuplicates: sk.withDuplicates,
+            percentage: pct(sk.withDuplicates, sk.total),
+          },
+          education: {
+            totalWithEducation: ed.total,
+            withDuplicates: ed.withDuplicates,
+            percentage: pct(ed.withDuplicates, ed.total),
+          },
+          phone: {
+            totalWithPhone: ph.total,
+            notE164Format: ph.notE164,
+            percentage: pct(ph.notE164, ph.total),
+          },
+          missingFields: {
+            total: mf.total,
+            missingEmail: {
+              count: mf.missingEmail,
+              percentage: pct(mf.missingEmail, mf.total),
+            },
+            missingPhone: {
+              count: mf.missingPhone,
+              percentage: pct(mf.missingPhone, mf.total),
+            },
+            missingTitle: {
+              count: mf.missingTitle,
+              percentage: pct(mf.missingTitle, mf.total),
+            },
+          },
+          timestamp: new Date().toISOString(),
+        };
+      },
+      fresh ? 0 : 600000, // 10-minute TTL
+    );
+
+    res.json({ success: true, data });
+  } catch (error) {
+    logger.error("Failed to get data cleanliness metrics", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Failed to compute data cleanliness metrics",
+      message: error.message,
+    });
+  }
+}
+
 module.exports = {
   getIngestionHealth,
   getParityHealth,
@@ -1090,4 +1454,5 @@ module.exports = {
   getDashboard,
   testNotifications,
   getThroughput,
+  getDataCleanliness,
 };

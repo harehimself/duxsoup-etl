@@ -7,6 +7,7 @@ const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
 const { MAX_ROLES, MAX_EDUCATION, MAX_SKILLS } = require("../constants/limits");
+const { normalizePhone } = require("../utils/phoneNormalizer");
 
 /**
  * Person Controller
@@ -80,6 +81,25 @@ function parseDegree(value) {
 }
 
 /**
+ * Normalize an email address: trim, lowercase, warn on invalid format.
+ *
+ * @param {*} value - Raw email from webhook
+ * @returns {string|null} Normalized email or null
+ */
+function normalizeEmail(value) {
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim().toLowerCase();
+  if (str === "") return null;
+
+  // Warn-only RFC 5322 basic check
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+    logger.warn("Email fails basic format validation", { email: str });
+  }
+
+  return str;
+}
+
+/**
  * Coerce a value to a string, handling DuxSoup rich objects like
  * { textDirection, text, attributesV2 } that occasionally appear
  * in place of plain strings for school names, degrees, etc.
@@ -93,6 +113,19 @@ function coerceToString(value) {
   if (typeof value === "object" && value.text != null)
     return String(value.text);
   return String(value);
+}
+
+/**
+ * Trim and collapse internal whitespace on a string value.
+ * Returns null/undefined unchanged; passes non-strings through.
+ *
+ * @param {*} value - Value to clean
+ * @returns {*} Cleaned string, or original value if not a string
+ */
+function cleanString(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== "string") return value;
+  return value.trim().replace(/\s+/g, " ");
 }
 
 /**
@@ -240,8 +273,8 @@ const FIELD_MAPPINGS = [
     source: ["Degree", "Connection Degree"],
     transform: parseDegree,
   },
-  { field: "email", source: "Email" },
-  { field: "phone", source: "Phone" },
+  { field: "email", source: "Email", transform: normalizeEmail },
+  { field: "phone", source: "Phone", transform: normalizePhone },
   { field: "twitter", source: "Twitter" },
   { field: "profilePicture", source: "Picture" },
   { field: "thumbnail", source: "Thumbnail" },
@@ -267,6 +300,22 @@ const LOCATION_FIELDS = [
   "timezone",
   "utcOffset",
 ];
+
+/**
+ * Fields that should NOT be cleaned by cleanString() in the FIELD_MAPPINGS loop.
+ * URL/ID fields where whitespace collapsing could corrupt values, plus email
+ * which has its own normalizeEmail transform.
+ */
+const SKIP_CLEAN_FIELDS = new Set([
+  "currentCompanyId",
+  "currentCompanyProfile",
+  "profilePicture",
+  "thumbnail",
+  "personalWebsite",
+  "companyWebsite",
+  "email",
+  "phone",
+]);
 
 /**
  * Compute derived metrics from roles timeline
@@ -488,13 +537,13 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
       const isCurrent = pos.To === "Present" || !pos.To;
 
       const incoming = {
-        title: pos.Title,
-        companyName: pos.Company,
+        title: cleanString(pos.Title),
+        companyName: cleanString(pos.Company),
         startDate,
         endDate,
         isCurrent,
-        location: pos.Location,
-        description: pos.Description,
+        location: cleanString(pos.Location),
+        description: cleanString(pos.Description),
       };
 
       const existingRole = findMatchingRole(person.snapshot.roles, incoming);
@@ -520,11 +569,11 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
         }
         // Add new role with seniority classification
         const newRole = enrichRoleWithSeniority({
-          title: pos.Title,
+          title: cleanString(pos.Title),
           companyId: null, // Will be resolved separately
-          companyName: pos.Company,
-          location: pos.Location,
-          description: pos.Description,
+          companyName: cleanString(pos.Company),
+          location: cleanString(pos.Location),
+          description: cleanString(pos.Description),
           startDate,
           endDate,
           isCurrent,
@@ -536,12 +585,12 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
   } else if (currentRole && currentCompany) {
     // Single current role from scan/visit — use normalized matching
     const incoming = {
-      title: currentRole,
-      companyName: currentCompany,
+      title: cleanString(currentRole),
+      companyName: cleanString(currentCompany),
       startDate: null,
       endDate: null,
       isCurrent: true,
-      location: observationData.Location,
+      location: cleanString(observationData.Location),
       description: null,
     };
 
@@ -561,10 +610,10 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
       } else {
         // Add current role with seniority classification
         const newRole = enrichRoleWithSeniority({
-          title: currentRole,
+          title: cleanString(currentRole),
           companyId: currentCompanyId || null,
-          companyName: currentCompany,
-          location: observationData.Location,
+          companyName: cleanString(currentCompany),
+          location: cleanString(observationData.Location),
           description: null,
           startDate: null, // Unknown without extended data
           endDate: null,
@@ -602,12 +651,20 @@ function updateEducation(person, schools) {
   let updated = false;
 
   schools.forEach((school) => {
-    const name = coerceToString(school.Name);
-    const degree = coerceToString(school.Degree);
-    const field = coerceToString(school.Field);
+    const name = cleanString(coerceToString(school.Name));
+    const degree = cleanString(coerceToString(school.Degree));
+    const field = cleanString(coerceToString(school.Field));
+
+    // Case-insensitive comparison to avoid duplicates from casing differences
+    const nameLower = name?.toLowerCase();
+    const degreeLower = degree?.toLowerCase();
+    const fieldLower = field?.toLowerCase();
 
     const exists = person.snapshot.education.find(
-      (e) => e.school === name && e.degree === degree && e.field === field,
+      (e) =>
+        e.school?.toLowerCase() === nameLower &&
+        e.degree?.toLowerCase() === degreeLower &&
+        e.field?.toLowerCase() === fieldLower,
     );
 
     if (!exists) {
@@ -648,12 +705,18 @@ function updateSkills(person, skills) {
     person.snapshot.skills = [];
   }
 
-  const existingSkills = new Set(person.snapshot.skills);
+  // Case-insensitive lookup: track lowercase versions of existing skills
+  const existingLower = new Set(
+    person.snapshot.skills.map((s) => s.toLowerCase().trim()),
+  );
   let updated = false;
   let capWarningLogged = false;
 
   skills.forEach((skill) => {
-    if (existingSkills.has(skill)) return;
+    const cleaned = cleanString(skill);
+    if (!cleaned) return; // Skip null/empty after cleaning
+    const normalized = cleaned.toLowerCase();
+    if (existingLower.has(normalized)) return;
     if (person.snapshot.skills.length >= MAX_SKILLS) {
       if (!capWarningLogged) {
         logger.warn("Skills array at capacity, dropping new skills", {
@@ -665,8 +728,8 @@ function updateSkills(person, skills) {
       }
       return;
     }
-    person.snapshot.skills.push(skill);
-    existingSkills.add(skill);
+    person.snapshot.skills.push(cleaned); // Store cleaned (trimmed), original casing
+    existingLower.add(normalized);
     updated = true;
   });
 
@@ -781,6 +844,9 @@ async function upsertFromObservation(observationDoc, sourceType) {
       }
       if (transform) {
         value = transform(value);
+      }
+      if (!SKIP_CLEAN_FIELDS.has(field)) {
+        value = cleanString(value);
       }
       normalizeField(person.snapshot, field, value, observationMeta);
     }
@@ -957,9 +1023,13 @@ module.exports = {
   updateEducation, // Export for testing
   updateSkills, // Export for testing
   coerceToString, // Export for testing
+  cleanString, // Export for testing
+  normalizeEmail, // Export for testing
+  normalizePhone, // Re-export for testing
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
   mergeRoleFields, // Export for testing
   FIELD_MAPPINGS, // Export for testing
   LOCATION_FIELDS, // Export for testing
+  SKIP_CLEAN_FIELDS, // Export for testing
 };

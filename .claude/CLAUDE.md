@@ -170,6 +170,7 @@ See `src/models/` for full schemas.
 - `GET /api/health/quality` - Structural data quality dashboard (identity, aliases, enrichment, freshness)
 - `GET /api/health/dashboard` - Consolidated health dashboard
 - `GET /api/health/throughput` - Real-time webhook throughput metrics (1m/5m/15m/1h windows)
+- `GET /api/health/data-cleanliness` - Field-level data cleanliness metrics (whitespace, email, skills, education, missing fields)
 
 ### Read APIs
 - `GET /api/people/:id` - Get person by ID
