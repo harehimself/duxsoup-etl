@@ -326,6 +326,7 @@ personSchema.index({
   "snapshot.country": 1,
 });
 personSchema.index({ "derived.highestSeniorityRank": -1 });
+personSchema.index({ "snapshot.parsedSeniority": 1 }); // Seniority API filter queries
 
 // Full-text search index (weighted by relevance)
 personSchema.index(

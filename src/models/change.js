@@ -102,7 +102,11 @@ changeSchema.index({ person_id: 1, type: 1 });
 changeSchema.index({ notified: 1, timestamp: -1 }); // For pending notifications
 changeSchema.index({ createdAt: -1 });
 changeSchema.index({ recentJobChange: 1, timestamp: -1 });
-changeSchema.index({ recentJobChangeExpiresAt: 1 }, { expireAfterSeconds: 0 });
+// NOTE: Do NOT use a TTL index (expireAfterSeconds) on recentJobChangeExpiresAt.
+// A TTL index deletes the entire Change document when the date passes, which
+// would destroy the audit trail. Instead, Job 4 in scheduler.js expires the
+// recentJobChange boolean flag daily via updateMany.
+changeSchema.index({ recentJobChangeExpiresAt: 1 });
 
 // Company intelligence: hires/departures lookup by company
 changeSchema.index({ toCompanyId: 1, type: 1, timestamp: -1 });

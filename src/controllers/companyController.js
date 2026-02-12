@@ -117,6 +117,7 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     ["country", parsedLocation.country],
     ["countryCode", parsedLocation.countryCode],
     ["province", parsedLocation.province],
+    ["region", parsedLocation.region],
     ["locationType", parsedLocation.locationType],
     ["usRegion", parsedLocation.usRegion],
     ["usSubregion", parsedLocation.usSubregion],

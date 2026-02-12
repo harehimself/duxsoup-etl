@@ -27,6 +27,7 @@ function mapVisitData(profileData, payload, eventKey) {
     Title: profileData.Title || "",
     From: profileData.From || "",
     Company: profileData.Company || "",
+    CompanyID: profileData.CompanyID || "",
     CompanyProfile: profileData.CompanyProfile || "",
     CompanyWebsite: profileData.CompanyWebsite || "",
     PersonalWebsite: profileData.PersonalWebsite || "",
