@@ -8,6 +8,7 @@ const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
 const { MAX_ROLES, MAX_EDUCATION, MAX_SKILLS } = require("../constants/limits");
 const { normalizePhone } = require("../utils/phoneNormalizer");
+const { shouldOverwrite } = require("../utils/precedence");
 
 /**
  * Person Controller
@@ -128,55 +129,7 @@ function cleanString(value) {
   return value.trim().replace(/\s+/g, " ");
 }
 
-/**
- * Determine if incoming value should overwrite existing snapshot value
- *
- * @param {Object} existingMeta - { value, observedAt, source, observationId }
- * @param {Object} incomingMeta - { value, observedAt, source, observationId }
- * @returns {boolean} True if incoming should overwrite existing
- */
-function shouldOverwrite(existingMeta, incomingMeta) {
-  // Always accept if no existing value
-  if (
-    !existingMeta ||
-    existingMeta.value === null ||
-    existingMeta.value === undefined
-  ) {
-    return true;
-  }
-
-  // Check if incoming value is empty/blank
-  const isIncomingEmpty = (value) => {
-    if (value === null || value === undefined) return true;
-    if (typeof value === "string" && value.trim() === "") return true;
-    if (typeof value === "number" && isNaN(value)) return true;
-    return false;
-  };
-
-  // Never overwrite with empty/blank incoming
-  if (isIncomingEmpty(incomingMeta.value)) {
-    return false;
-  }
-
-  // Source precedence: visit > scan
-  const sourcePrecedence = { visit: 2, scan: 1 };
-  const existingPrecedence = sourcePrecedence[existingMeta.source] || 0;
-  const incomingPrecedence = sourcePrecedence[incomingMeta.source] || 0;
-
-  if (incomingPrecedence > existingPrecedence) {
-    return true; // Higher precedence wins
-  }
-
-  if (incomingPrecedence < existingPrecedence) {
-    return false; // Lower precedence loses
-  }
-
-  // Same precedence: newer wins
-  const existingTime = new Date(existingMeta.observedAt).getTime();
-  const incomingTime = new Date(incomingMeta.observedAt).getTime();
-
-  return incomingTime >= existingTime;
-}
+// shouldOverwrite is imported from ../utils/precedence
 
 /**
  * Clear a derived (computed) field, bypassing the "never overwrite with empty" rule.
@@ -1015,7 +968,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
 
 module.exports = {
   upsertFromObservation,
-  shouldOverwrite, // Export for testing
+  shouldOverwrite, // Re-exported from utils/precedence
   normalizeField, // Export for testing
   clearDerivedField, // Export for testing
   computeDerivedMetrics, // Export for testing

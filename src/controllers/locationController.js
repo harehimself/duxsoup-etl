@@ -2,38 +2,7 @@ const Location = require("../models/location");
 const logger = require("../utils/logger");
 const { resolveLocationIdentity } = require("../utils/identityMatcher");
 const { dedupeAliases } = require("../utils/aliasHelpers");
-
-/**
- * Source precedence: visit > scan (matches person/company controllers)
- */
-const SOURCE_PRECEDENCE = { visit: 2, scan: 1 };
-
-/**
- * Determine whether an incoming value should overwrite an existing one.
- */
-function shouldOverwrite(existingMeta, incomingMeta) {
-  if (
-    !existingMeta ||
-    existingMeta.value === null ||
-    existingMeta.value === undefined
-  ) {
-    return true;
-  }
-
-  const v = incomingMeta.value;
-  if (v === null || v === undefined) return false;
-  if (typeof v === "string" && v.trim() === "") return false;
-
-  const existingP = SOURCE_PRECEDENCE[existingMeta.source] || 0;
-  const incomingP = SOURCE_PRECEDENCE[incomingMeta.source] || 0;
-
-  if (incomingP > existingP) return true;
-  if (incomingP < existingP) return false;
-
-  const existingTime = new Date(existingMeta.observedAt).getTime();
-  const incomingTime = new Date(incomingMeta.observedAt).getTime();
-  return incomingTime >= existingTime;
-}
+const { shouldOverwrite } = require("../utils/precedence");
 
 async function upsertLocationFromObservation(observationDoc, sourceType) {
   // Extract data from nested rawData.data structure if present, otherwise use top-level fields
