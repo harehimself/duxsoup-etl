@@ -7,6 +7,7 @@ const { parseLocation } = require("../utils/location-parser");
 const { detectChanges } = require("../services/changeDetectionService");
 const { parseTitle, getHighestSeniorityRole } = require("../utils/titleParser");
 const { MAX_ROLES, MAX_EDUCATION, MAX_SKILLS } = require("../constants/limits");
+const { normalizePhone } = require("../utils/phoneNormalizer");
 
 /**
  * Person Controller
@@ -273,7 +274,7 @@ const FIELD_MAPPINGS = [
     transform: parseDegree,
   },
   { field: "email", source: "Email", transform: normalizeEmail },
-  { field: "phone", source: "Phone" },
+  { field: "phone", source: "Phone", transform: normalizePhone },
   { field: "twitter", source: "Twitter" },
   { field: "profilePicture", source: "Picture" },
   { field: "thumbnail", source: "Thumbnail" },
@@ -309,6 +310,7 @@ const SKIP_CLEAN_FIELDS = new Set([
   "personalWebsite",
   "companyWebsite",
   "email",
+  "phone",
 ]);
 
 /**
@@ -1019,6 +1021,7 @@ module.exports = {
   coerceToString, // Export for testing
   cleanString, // Export for testing
   normalizeEmail, // Export for testing
+  normalizePhone, // Re-export for testing
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
   mergeRoleFields, // Export for testing

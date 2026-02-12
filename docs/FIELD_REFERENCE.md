@@ -471,7 +471,7 @@ The Person model (`src/models/person.js`) is the canonical state built from all 
 | Snapshot Field | Type | Webhook Source | Transform | Description |
 |---|---|---|---|---|
 | `snapshot.email` | String | `Email` | Trim | Email address |
-| `snapshot.phone` | String | `Phone` | Trim | Phone number |
+| `snapshot.phone` | String | `Phone` | E.164 via libphonenumber-js | Phone number normalized to E.164 format (e.g. `+15551234567`). Uses person's `countryCode` as default country when available, falls back to US. Unparseable numbers are digit-stripped. |
 | `snapshot.twitter` | String | `Twitter` | Trim | Twitter/X handle |
 | `snapshot.personalWebsite` | String | `PersonalWebsite` | Trim | Personal website URL |
 | `snapshot.companyWebsite` | String | `CompanyWebsite` | Trim | Company website URL |

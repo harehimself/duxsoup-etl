@@ -13,6 +13,7 @@ const {
   normalizeField,
   cleanString,
   normalizeEmail,
+  normalizePhone,
   updateSkills,
   updateEducation,
   FIELD_MAPPINGS,
@@ -1123,6 +1124,41 @@ describe("PersonController", () => {
       ]);
 
       expect(person.snapshot.education).toHaveLength(1);
+    });
+  });
+
+  describe("Phone normalization in FIELD_MAPPINGS", () => {
+    it("should have normalizePhone transform for phone field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "phone");
+      expect(mapping.transform).toBe(normalizePhone);
+    });
+
+    it("should include phone in SKIP_CLEAN_FIELDS", () => {
+      expect(SKIP_CLEAN_FIELDS.has("phone")).toBe(true);
+    });
+
+    it("should normalize phone through FIELD_MAPPINGS loop simulation", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "phone");
+      let value = "+1 (555) 123-4567";
+      if (mapping.transform) value = mapping.transform(value);
+      if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+
+      expect(snapshot.phone).toBe("+15551234567");
+    });
+
+    it("should not apply cleanString to phone field", () => {
+      // cleanString would strip the leading + and collapse digits
+      // SKIP_CLEAN_FIELDS prevents this
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "phone");
+      expect(SKIP_CLEAN_FIELDS.has(mapping.field)).toBe(true);
     });
   });
 

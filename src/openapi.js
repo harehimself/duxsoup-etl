@@ -146,7 +146,11 @@ const spec = {
               connections: { type: "integer" },
               summary: { type: "string" },
               email: { type: "string", format: "email" },
-              phone: { type: "string" },
+              phone: {
+                type: "string",
+                description:
+                  "Phone number normalized to E.164 format (e.g. +15551234567) via libphonenumber-js",
+              },
               twitter: { type: "string" },
               profilePicture: { type: "string", format: "uri" },
               roles: {
@@ -1871,6 +1875,14 @@ const spec = {
                         email: { type: "object" },
                         skills: { type: "object" },
                         education: { type: "object" },
+                        phone: {
+                          type: "object",
+                          properties: {
+                            totalWithPhone: { type: "integer" },
+                            notE164Format: { type: "integer" },
+                            percentage: { type: "number" },
+                          },
+                        },
                         missingFields: { type: "object" },
                         timestamp: {
                           type: "string",

@@ -118,7 +118,7 @@
   - Impact: Makes data quality issues measurable and trackable over time. Validates effectiveness of cleansing improvements.
   - Discovered: 2026-02-11, data cleansing review.
 
-- [ ] **Phone number normalization** — Phone stored as raw string with no formatting. "+1 (555) 123-4567", "5551234567", "555-123-4567" are all different values for the same number. Add a `normalizePhone()` utility that strips non-digit characters (except leading `+`) and stores a normalized form. Keep raw value in `_meta` provenance for audit. Include a backfill script.
+- [x] **Phone number normalization** — Phone stored as raw string with no formatting. "+1 (555) 123-4567", "5551234567", "555-123-4567" are all different values for the same number. Add a `normalizePhone()` utility that strips non-digit characters (except leading `+`) and stores a normalized form. Keep raw value in `_meta` provenance for audit. Include a backfill script.
   - Priority: `medium`
   - Category: `data quality`
   - Impact: Enables reliable phone-based deduplication and CRM matching.
@@ -340,6 +340,7 @@
 
 ## Completed
 
+- [x] **Phone number normalization** — 2026-02-11. Added `normalizePhone()` utility using `libphonenumber-js/min` to normalize phone numbers to E.164 format (`+15551234567`). Integrated as a `transform` on the FIELD_MAPPINGS phone entry, with phone added to `SKIP_CLEAN_FIELDS`. Added phone format metrics to `GET /api/health/data-cleanliness` (6th pipeline counting non-E.164 phones). Created `scripts/backfillPhoneNormalization.js` with `--dry-run`/`--commit` modes, uses person's `countryCode` as default country. Updated OpenAPI spec, FIELD_REFERENCE.md, and package.json. 37 new tests (26 normalizer, 4 personController, 1 healthController, 7 backfill script).
 - [x] **Data cleanliness metrics endpoint** — 2026-02-11. Added `GET /api/health/data-cleanliness` with 5 parallel aggregation pipelines measuring whitespace issues (sampled 1000 records), invalid emails (RFC 5322 basic check), case-insensitive skill duplicates, case-insensitive education duplicates, and missing key fields (email, phone, currentTitle). Uses `metricsCache` with 10-minute TTL. Registered in `apiRoutes.js` with `readRateLimiter`, added OpenAPI spec. 5 new tests. All 1077 tests pass.
 - [x] **Case-insensitive skill deduplication** — 2026-02-11. Updated `updateSkills()` in `personController.js` to use `.toLowerCase().trim()` normalization for comparison while preserving first-seen casing. Incoming skills are cleaned via `cleanString()` before storage. Null/empty skills after cleaning are skipped. 5 new tests. All 1077 tests pass.
 - [x] **Case-insensitive education deduplication** — 2026-02-11. Updated `updateEducation()` in `personController.js` to use `.toLowerCase()` comparison for school, degree, and field. Education values are cleaned via `cleanString(coerceToString(...))` before storage and comparison. 3 new tests. All 1077 tests pass.

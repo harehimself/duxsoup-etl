@@ -57,15 +57,17 @@ describe("getDataCleanliness()", () => {
     missingFieldResults = [
       { total: 1000, missingEmail: 600, missingPhone: 800, missingTitle: 100 },
     ],
+    phoneResults = [{ total: 400, notE164: 30 }],
   } = {}) {
     Person.countDocuments.mockResolvedValue(totalPeople);
-    // aggregate is called 5 times in Promise.all
+    // aggregate is called 6 times in Promise.all
     Person.aggregate
       .mockResolvedValueOnce(whitespaceSample)
       .mockResolvedValueOnce(emailResults)
       .mockResolvedValueOnce(skillResults)
       .mockResolvedValueOnce(educationResults)
-      .mockResolvedValueOnce(missingFieldResults);
+      .mockResolvedValueOnce(missingFieldResults)
+      .mockResolvedValueOnce(phoneResults);
   }
 
   it("should return expected response shape", async () => {
@@ -98,6 +100,11 @@ describe("getDataCleanliness()", () => {
           withDuplicates: 5,
           percentage: expect.any(Number),
         }),
+        phone: expect.objectContaining({
+          totalWithPhone: 400,
+          notE164Format: 30,
+          percentage: expect.any(Number),
+        }),
         missingFields: expect.objectContaining({
           total: 1000,
           missingEmail: expect.objectContaining({
@@ -126,6 +133,7 @@ describe("getDataCleanliness()", () => {
       skillResults: [],
       educationResults: [],
       missingFieldResults: [],
+      phoneResults: [],
     });
     const { req, res } = buildReqRes({ fresh: "true" });
 
@@ -139,6 +147,7 @@ describe("getDataCleanliness()", () => {
     expect(response.data.email.totalWithEmail).toBe(0);
     expect(response.data.skills.totalWithSkills).toBe(0);
     expect(response.data.education.totalWithEducation).toBe(0);
+    expect(response.data.phone.totalWithPhone).toBe(0);
   });
 
   it("should bypass cache when fresh=true", async () => {
@@ -148,7 +157,7 @@ describe("getDataCleanliness()", () => {
     await getDataCleanliness(req, res);
 
     expect(Person.countDocuments).toHaveBeenCalled();
-    expect(Person.aggregate).toHaveBeenCalledTimes(5);
+    expect(Person.aggregate).toHaveBeenCalledTimes(6);
   });
 
   it("should return 500 on error", async () => {
@@ -166,6 +175,22 @@ describe("getDataCleanliness()", () => {
     );
   });
 
+  it("should include phone format metrics", async () => {
+    stubAggregates({
+      phoneResults: [{ total: 100, notE164: 15 }],
+    });
+    const { req, res } = buildReqRes({ fresh: "true" });
+
+    await getDataCleanliness(req, res);
+
+    const data = res.json.mock.calls[0][0].data;
+    expect(data.phone).toEqual({
+      totalWithPhone: 100,
+      notE164Format: 15,
+      percentage: 15,
+    });
+  });
+
   it("should compute correct percentages", async () => {
     stubAggregates({
       totalPeople: 1000,
@@ -181,6 +206,7 @@ describe("getDataCleanliness()", () => {
           missingTitle: 100,
         },
       ],
+      phoneResults: [{ total: 200, notE164: 40 }],
     });
     const { req, res } = buildReqRes({ fresh: "true" });
 
@@ -191,6 +217,7 @@ describe("getDataCleanliness()", () => {
     expect(data.email.percentage).toBe(5);
     expect(data.skills.percentage).toBe(50);
     expect(data.education.percentage).toBe(20);
+    expect(data.phone.percentage).toBe(20);
     expect(data.missingFields.missingEmail.percentage).toBe(50);
     expect(data.missingFields.missingPhone.percentage).toBe(75);
     expect(data.missingFields.missingTitle.percentage).toBe(10);

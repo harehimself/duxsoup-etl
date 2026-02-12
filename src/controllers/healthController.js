@@ -1097,6 +1097,7 @@ async function getDataCleanliness(req, res) {
           skillResults,
           educationResults,
           missingFieldResults,
+          phoneResults,
         ] = await Promise.all([
           Person.countDocuments(notMerged),
 
@@ -1332,6 +1333,35 @@ async function getDataCleanliness(req, res) {
               },
             },
           ]),
+
+          // Phone format: count non-E.164 phones (not matching ^\+\d+$)
+          Person.aggregate([
+            {
+              $match: {
+                ...notMerged,
+                "snapshot.phone": { $nin: [null, ""] },
+              },
+            },
+            {
+              $project: {
+                notE164: {
+                  $not: {
+                    $regexMatch: {
+                      input: "$snapshot.phone",
+                      regex: /^\+\d+$/,
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                notE164: { $sum: { $cond: ["$notE164", 1, 0] } },
+              },
+            },
+          ]),
         ]);
 
         const ws = whitespaceSample[0] || { sampled: 0, withIssues: 0 };
@@ -1344,6 +1374,7 @@ async function getDataCleanliness(req, res) {
           missingPhone: 0,
           missingTitle: 0,
         };
+        const ph = phoneResults[0] || { total: 0, notE164: 0 };
 
         const pct = (count, total) =>
           total > 0 ? Math.round((count / total) * 100 * 100) / 100 : 0;
@@ -1369,6 +1400,11 @@ async function getDataCleanliness(req, res) {
             totalWithEducation: ed.total,
             withDuplicates: ed.withDuplicates,
             percentage: pct(ed.withDuplicates, ed.total),
+          },
+          phone: {
+            totalWithPhone: ph.total,
+            notE164Format: ph.notE164,
+            percentage: pct(ph.notE164, ph.total),
           },
           missingFields: {
             total: mf.total,
