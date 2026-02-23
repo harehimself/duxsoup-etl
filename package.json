@@ -43,7 +43,7 @@
   "author": "Mike Hare",
   "license": "MIT",
   "dependencies": {
-    "ajv": "^8.17.1",
+    "ajv": "^8.18.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.0",
