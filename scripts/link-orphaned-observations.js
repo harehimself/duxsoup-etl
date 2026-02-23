@@ -232,9 +232,18 @@ async function linkOrphanedObservations() {
           ? 'observations.visits'
           : 'observations.scans';
 
+        // Use $push with $slice to cap array size (prevents unbounded growth)
+        const { MAX_OBSERVATION_REFS } = require('../src/constants/limits');
         await Person.updateOne(
           { _id: update.personId },
-          { $addToSet: { [field]: update.observationId } }
+          {
+            $push: {
+              [field]: {
+                $each: [update.observationId],
+                $slice: -MAX_OBSERVATION_REFS
+              }
+            }
+          }
         );
 
         successCount++;
