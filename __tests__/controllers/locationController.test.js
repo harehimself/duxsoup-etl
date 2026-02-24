@@ -138,7 +138,7 @@ describe("LocationController", () => {
             }),
           }),
         }),
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
       );
 
       expect(result).toBeTruthy();
@@ -333,7 +333,7 @@ describe("LocationController", () => {
 
       // Uses findOneAndUpdate with upsert, not separate findOne + create
       expect(Location.findOneAndUpdate.mock.calls[0][2]).toEqual(
-        expect.objectContaining({ upsert: true, new: true }),
+        expect.objectContaining({ upsert: true, returnDocument: "after" }),
       );
       expect(result).toBeTruthy();
     });

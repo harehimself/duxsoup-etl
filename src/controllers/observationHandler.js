@@ -94,7 +94,7 @@ async function processObservationPayload(config, payload) {
         { event_key: eventKey },
         { $setOnInsert: dataToSave },
         {
-          new: true,
+          returnDocument: "after",
           upsert: true,
           runValidators: true,
           includeResultMetadata: true,

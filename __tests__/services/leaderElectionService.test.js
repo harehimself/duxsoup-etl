@@ -1,16 +1,16 @@
-jest.mock('../../src/models/schedulerLock');
-jest.mock('../../src/utils/logger', () => ({
+jest.mock("../../src/models/schedulerLock");
+jest.mock("../../src/utils/logger", () => ({
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
 }));
 
-const SchedulerLock = require('../../src/models/schedulerLock');
-const LeaderElectionService = require('../../src/services/leaderElectionService');
+const SchedulerLock = require("../../src/models/schedulerLock");
+const LeaderElectionService = require("../../src/services/leaderElectionService");
 
-describe('LeaderElectionService', () => {
-  const INSTANCE_ID = 'test-instance-1';
+describe("LeaderElectionService", () => {
+  const INSTANCE_ID = "test-instance-1";
   let service;
 
   beforeEach(() => {
@@ -28,13 +28,17 @@ describe('LeaderElectionService', () => {
     jest.useRealTimers();
   });
 
-  describe('constructor', () => {
-    it('should throw when instanceId is not provided', () => {
-      expect(() => new LeaderElectionService()).toThrow('requires an instanceId');
-      expect(() => new LeaderElectionService({})).toThrow('requires an instanceId');
+  describe("constructor", () => {
+    it("should throw when instanceId is not provided", () => {
+      expect(() => new LeaderElectionService()).toThrow(
+        "requires an instanceId",
+      );
+      expect(() => new LeaderElectionService({})).toThrow(
+        "requires an instanceId",
+      );
     });
 
-    it('should initialise isLeader to false', () => {
+    it("should initialise isLeader to false", () => {
       expect(service.isLeader).toBe(false);
     });
   });
@@ -42,10 +46,10 @@ describe('LeaderElectionService', () => {
   // ─────────────────────────────────────
   // tryAcquire()
   // ─────────────────────────────────────
-  describe('tryAcquire()', () => {
-    it('should acquire lock and become leader when no lock exists', async () => {
+  describe("tryAcquire()", () => {
+    it("should acquire lock and become leader when no lock exists", async () => {
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
         expiresAt: new Date(Date.now() + 30000),
       });
@@ -56,7 +60,7 @@ describe('LeaderElectionService', () => {
       expect(service.isLeader).toBe(true);
       expect(SchedulerLock.findOneAndUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          _id: 'scheduler-leader',
+          _id: "scheduler-leader",
           $or: expect.arrayContaining([
             expect.objectContaining({ expiresAt: expect.any(Object) }),
             { instanceId: INSTANCE_ID },
@@ -67,13 +71,13 @@ describe('LeaderElectionService', () => {
             instanceId: INSTANCE_ID,
           }),
         }),
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
       );
     });
 
-    it('should fail to acquire when another instance holds a live lock', async () => {
+    it("should fail to acquire when another instance holds a live lock", async () => {
       // Simulate duplicate key error (another instance won the upsert race)
-      const dupKeyError = new Error('E11000 duplicate key');
+      const dupKeyError = new Error("E11000 duplicate key");
       dupKeyError.code = 11000;
       SchedulerLock.findOneAndUpdate.mockRejectedValue(dupKeyError);
 
@@ -83,8 +87,10 @@ describe('LeaderElectionService', () => {
       expect(service.isLeader).toBe(false);
     });
 
-    it('should handle unexpected errors gracefully', async () => {
-      SchedulerLock.findOneAndUpdate.mockRejectedValue(new Error('network error'));
+    it("should handle unexpected errors gracefully", async () => {
+      SchedulerLock.findOneAndUpdate.mockRejectedValue(
+        new Error("network error"),
+      );
 
       const result = await service.tryAcquire();
 
@@ -96,10 +102,10 @@ describe('LeaderElectionService', () => {
   // ─────────────────────────────────────
   // renew()
   // ─────────────────────────────────────
-  describe('renew()', () => {
-    it('should extend TTL when we still own the lock', async () => {
+  describe("renew()", () => {
+    it("should extend TTL when we still own the lock", async () => {
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
         expiresAt: new Date(Date.now() + 30000),
       });
@@ -110,7 +116,7 @@ describe('LeaderElectionService', () => {
 
       // Renew
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
         expiresAt: new Date(Date.now() + 30000),
       });
@@ -120,21 +126,21 @@ describe('LeaderElectionService', () => {
       expect(result).toBe(true);
       expect(service.isLeader).toBe(true);
       expect(SchedulerLock.findOneAndUpdate).toHaveBeenCalledWith(
-        { _id: 'scheduler-leader', instanceId: INSTANCE_ID },
+        { _id: "scheduler-leader", instanceId: INSTANCE_ID },
         expect.objectContaining({
           $set: expect.objectContaining({
             expiresAt: expect.any(Date),
             lastRenewedAt: expect.any(Date),
           }),
         }),
-        { new: true },
+        { returnDocument: "after" },
       );
     });
 
-    it('should detect lost leadership when lock is owned by another instance', async () => {
+    it("should detect lost leadership when lock is owned by another instance", async () => {
       // Acquire first
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
       });
       await service.tryAcquire();
@@ -149,16 +155,16 @@ describe('LeaderElectionService', () => {
       expect(service.isLeader).toBe(false);
     });
 
-    it('should handle errors during renewal gracefully', async () => {
+    it("should handle errors during renewal gracefully", async () => {
       // Acquire first
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
       });
       await service.tryAcquire();
 
       // Renew fails
-      SchedulerLock.findOneAndUpdate.mockRejectedValue(new Error('db timeout'));
+      SchedulerLock.findOneAndUpdate.mockRejectedValue(new Error("db timeout"));
 
       const result = await service.renew();
 
@@ -169,11 +175,11 @@ describe('LeaderElectionService', () => {
   // ─────────────────────────────────────
   // release()
   // ─────────────────────────────────────
-  describe('release()', () => {
-    it('should delete the lock document and demote to follower', async () => {
+  describe("release()", () => {
+    it("should delete the lock document and demote to follower", async () => {
       // Acquire first
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
       });
       await service.tryAcquire();
@@ -185,13 +191,13 @@ describe('LeaderElectionService', () => {
 
       expect(service.isLeader).toBe(false);
       expect(SchedulerLock.deleteOne).toHaveBeenCalledWith({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
       });
     });
 
-    it('should handle errors during release gracefully', async () => {
-      SchedulerLock.deleteOne.mockRejectedValue(new Error('db error'));
+    it("should handle errors during release gracefully", async () => {
+      SchedulerLock.deleteOne.mockRejectedValue(new Error("db error"));
 
       await service.release();
 
@@ -202,18 +208,18 @@ describe('LeaderElectionService', () => {
   // ─────────────────────────────────────
   // startRenewal() / stopRenewal()
   // ─────────────────────────────────────
-  describe('startRenewal() / stopRenewal()', () => {
-    it('should call renew periodically when leader', async () => {
+  describe("startRenewal() / stopRenewal()", () => {
+    it("should call renew periodically when leader", async () => {
       // Acquire
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
       });
       await service.tryAcquire();
 
       // Mock renew for subsequent calls
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
         expiresAt: new Date(Date.now() + 30000),
       });
@@ -230,10 +236,10 @@ describe('LeaderElectionService', () => {
       service.stopRenewal();
     });
 
-    it('should not call renew when not leader', async () => {
+    it("should not call renew when not leader", async () => {
       // Don't acquire — service.isLeader is false
       SchedulerLock.findOneAndUpdate.mockResolvedValue({
-        _id: 'scheduler-leader',
+        _id: "scheduler-leader",
         instanceId: INSTANCE_ID,
         expiresAt: new Date(Date.now() + 30000),
       });
@@ -248,7 +254,7 @@ describe('LeaderElectionService', () => {
       service.stopRenewal();
     });
 
-    it('should clear interval on stopRenewal', async () => {
+    it("should clear interval on stopRenewal", async () => {
       service.startRenewal();
       service.stopRenewal();
 
@@ -258,7 +264,7 @@ describe('LeaderElectionService', () => {
       expect(SchedulerLock.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
-    it('should be idempotent — calling startRenewal twice does not create two timers', () => {
+    it("should be idempotent — calling startRenewal twice does not create two timers", () => {
       service.startRenewal();
       service.startRenewal();
 

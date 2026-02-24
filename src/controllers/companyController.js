@@ -49,7 +49,7 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
         meta: {},
       },
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: "after" },
   );
 
   // Step 2: Compute all updates from current state
@@ -140,7 +140,7 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
       },
       $inc: { "meta.observationsCount": isAlreadyLinked ? 0 : 1 },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   logger.info("Upserted company from observation", {

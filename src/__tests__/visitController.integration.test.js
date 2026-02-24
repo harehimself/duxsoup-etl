@@ -186,7 +186,7 @@ describe("visitController", () => {
           Profile: "https://linkedin.com/in/jane",
         }),
         {
-          new: true,
+          returnDocument: "after",
           upsert: true,
           runValidators: true,
           setDefaultsOnInsert: true,

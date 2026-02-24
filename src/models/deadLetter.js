@@ -156,7 +156,7 @@ deadLetterSchema.statics.markReplayed = async function (observationId) {
       last_replay_at: new Date(),
       $inc: { replay_attempts: 1 },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 };
 
@@ -184,7 +184,7 @@ deadLetterSchema.statics.markReplayFailed = async function (
         errorClass,
         next_replay_at: null,
       },
-      { new: true },
+      { returnDocument: "after" },
     );
   }
 
@@ -199,7 +199,7 @@ deadLetterSchema.statics.markReplayFailed = async function (
       errorClass,
       next_replay_at: nextReplayAt,
     },
-    { new: true },
+    { returnDocument: "after" },
   );
 };
 

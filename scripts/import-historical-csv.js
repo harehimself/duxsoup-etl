@@ -290,7 +290,7 @@ async function processVisit(row) {
     const visit = await Visit.findOneAndUpdate(
       { event_key: eventKey },
       { $setOnInsert: visitData },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     // Check if this was a new insert or existing record

@@ -168,7 +168,7 @@ describe("ObservationHandler", () => {
         { event_key: "event-key-abc" },
         { $setOnInsert: expect.any(Object) },
         {
-          new: true,
+          returnDocument: "after",
           upsert: true,
           runValidators: true,
           includeResultMetadata: true,

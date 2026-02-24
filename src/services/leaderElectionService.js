@@ -1,8 +1,8 @@
-const os = require('os');
-const logger = require('../utils/logger');
-const SchedulerLock = require('../models/schedulerLock');
+const os = require("os");
+const logger = require("../utils/logger");
+const SchedulerLock = require("../models/schedulerLock");
 
-const LOCK_ID = 'scheduler-leader';
+const LOCK_ID = "scheduler-leader";
 
 /**
  * LeaderElectionService — MongoDB advisory lock for single-leader scheduling
@@ -19,7 +19,7 @@ class LeaderElectionService {
    */
   constructor({ instanceId, ttlSeconds = 30, renewIntervalSeconds = 10 } = {}) {
     if (!instanceId) {
-      throw new Error('LeaderElectionService requires an instanceId');
+      throw new Error("LeaderElectionService requires an instanceId");
     }
     this._instanceId = instanceId;
     this._ttlSeconds = ttlSeconds;
@@ -46,7 +46,7 @@ class LeaderElectionService {
         {
           _id: LOCK_ID,
           $or: [
-            { expiresAt: { $lte: now } },  // expired
+            { expiresAt: { $lte: now } }, // expired
             { instanceId: this._instanceId }, // we already own it
           ],
         },
@@ -60,12 +60,12 @@ class LeaderElectionService {
             pid: process.pid,
           },
         },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
       );
 
       if (result && result.instanceId === this._instanceId) {
         this._isLeader = true;
-        logger.info('Leader election: acquired lock', {
+        logger.info("Leader election: acquired lock", {
           instanceId: this._instanceId,
           expiresAt: expiresAt.toISOString(),
         });
@@ -75,12 +75,12 @@ class LeaderElectionService {
       // E11000 duplicate key = another instance inserted first (race on upsert)
       if (err.code === 11000) {
         this._isLeader = false;
-        logger.info('Leader election: another instance is leader', {
+        logger.info("Leader election: another instance is leader", {
           instanceId: this._instanceId,
         });
         return false;
       }
-      logger.error('Leader election: error acquiring lock', {
+      logger.error("Leader election: error acquiring lock", {
         instanceId: this._instanceId,
         error: err.message,
       });
@@ -102,11 +102,11 @@ class LeaderElectionService {
       const result = await SchedulerLock.findOneAndUpdate(
         { _id: LOCK_ID, instanceId: this._instanceId },
         { $set: { expiresAt, lastRenewedAt: now } },
-        { new: true },
+        { returnDocument: "after" },
       );
 
       if (result) {
-        logger.debug('Leader election: lock renewed', {
+        logger.debug("Leader election: lock renewed", {
           instanceId: this._instanceId,
           expiresAt: expiresAt.toISOString(),
         });
@@ -115,12 +115,12 @@ class LeaderElectionService {
 
       // Lock no longer ours — another instance took over
       this._isLeader = false;
-      logger.warn('Leader election: lost leadership during renewal', {
+      logger.warn("Leader election: lost leadership during renewal", {
         instanceId: this._instanceId,
       });
       return false;
     } catch (err) {
-      logger.error('Leader election: error renewing lock', {
+      logger.error("Leader election: error renewing lock", {
         instanceId: this._instanceId,
         error: err.message,
       });
@@ -139,12 +139,12 @@ class LeaderElectionService {
       });
 
       if (result.deletedCount > 0) {
-        logger.info('Leader election: lock released', {
+        logger.info("Leader election: lock released", {
           instanceId: this._instanceId,
         });
       }
     } catch (err) {
-      logger.error('Leader election: error releasing lock', {
+      logger.error("Leader election: error releasing lock", {
         instanceId: this._instanceId,
         error: err.message,
       });
@@ -172,7 +172,7 @@ class LeaderElectionService {
       this._renewalTimer.unref();
     }
 
-    logger.debug('Leader election: renewal timer started', {
+    logger.debug("Leader election: renewal timer started", {
       intervalSeconds: this._renewIntervalSeconds,
     });
   }
@@ -184,7 +184,7 @@ class LeaderElectionService {
     if (this._renewalTimer) {
       clearInterval(this._renewalTimer);
       this._renewalTimer = null;
-      logger.debug('Leader election: renewal timer stopped');
+      logger.debug("Leader election: renewal timer stopped");
     }
   }
 }

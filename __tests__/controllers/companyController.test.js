@@ -115,7 +115,7 @@ describe("CompanyController", () => {
             canonical_id: "canonical-acme",
           }),
         }),
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
       );
 
       // Verify step 3: atomic update with $set + $push (capped) + $inc
@@ -134,7 +134,7 @@ describe("CompanyController", () => {
           },
           $inc: { "meta.observationsCount": 1 },
         }),
-        { new: true },
+        { returnDocument: "after" },
       );
 
       expect(result).toBeTruthy();
@@ -309,7 +309,7 @@ describe("CompanyController", () => {
 
       // Uses findOneAndUpdate with upsert, not separate findOne + create
       expect(Company.findOneAndUpdate.mock.calls[0][2]).toEqual(
-        expect.objectContaining({ upsert: true, new: true }),
+        expect.objectContaining({ upsert: true, returnDocument: "after" }),
       );
       expect(result).toBeTruthy();
     });

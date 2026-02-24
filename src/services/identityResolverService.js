@@ -138,7 +138,7 @@ class IdentityResolverService {
             aliases: { $each: uniqueAliases },
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       );
 
       logger.info("Merged aliases into person", {
