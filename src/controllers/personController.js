@@ -13,6 +13,7 @@ const {
   MAX_OBSERVATION_REFS,
 } = require("../constants/limits");
 const { normalizePhone } = require("../utils/phoneNormalizer");
+const { normalizeTwitter } = require("../utils/twitterNormalizer");
 const { normalizeCompanyName } = require("../utils/companyNormalizer");
 const { ensureHttps } = require("../utils/urlNormalizer");
 const { shouldOverwrite } = require("../utils/precedence");
@@ -243,7 +244,7 @@ const FIELD_MAPPINGS = [
   },
   { field: "email", source: "Email", transform: normalizeEmail },
   { field: "phone", source: "Phone", transform: normalizePhone },
-  { field: "twitter", source: "Twitter" },
+  { field: "twitter", source: "Twitter", transform: normalizeTwitter },
   { field: "profilePicture", source: "Picture", transform: ensureHttps },
   { field: "thumbnail", source: "Thumbnail", transform: ensureHttps },
   {
@@ -288,6 +289,7 @@ const SKIP_CLEAN_FIELDS = new Set([
   "companyWebsite",
   "email",
   "phone",
+  "twitter",
 ]);
 
 /**
@@ -1008,6 +1010,7 @@ module.exports = {
   cleanString, // Export for testing
   normalizeEmail, // Export for testing
   normalizePhone, // Re-export for testing
+  normalizeTwitter, // Re-export for testing
   normalizeCompanyName, // Re-export for testing
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
