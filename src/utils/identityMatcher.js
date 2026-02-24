@@ -22,6 +22,7 @@
 const crypto = require("crypto");
 const logger = require("./logger");
 const { parseLocation } = require("./location-parser");
+const { normalizeCompanyName } = require("./companyNormalizer");
 
 /**
  * Safely decode percent-encoded URL components.
@@ -758,7 +759,7 @@ function resolveCompanyIdentity(webhookData) {
   }
 
   if (webhookData.Company) {
-    const name = webhookData.Company.trim();
+    const name = normalizeCompanyName(webhookData.Company);
     if (name && !aliases.find((a) => a.value === name)) {
       aliases.push({ type: "name", value: name });
     }

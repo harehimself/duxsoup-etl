@@ -1,6 +1,7 @@
 const Company = require("../models/company");
 const logger = require("../utils/logger");
 const { resolveCompanyIdentity } = require("../utils/identityMatcher");
+const { normalizeCompanyName } = require("../utils/companyNormalizer");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 const { parseLocation } = require("../utils/location-parser");
 const { shouldOverwrite } = require("../utils/precedence");
@@ -70,7 +71,7 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
 
   // Apply snapshot fields with provenance (shouldOverwrite decides per-field)
   const snapshotFields = [
-    ["name", webhookData.Company],
+    ["name", normalizeCompanyName(webhookData.Company)],
     ["industry", webhookData.Industry],
     ["location", webhookData.Location],
     ["companyProfileUrl", ensureHttps(webhookData.CompanyProfile)],

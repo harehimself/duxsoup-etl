@@ -297,7 +297,7 @@ describe("PersonController", () => {
           roles: [
             {
               title: "Software Engineer",
-              companyName: "Google LLC",
+              companyName: "Google",
               startDate: new Date("2022-01-01"),
             },
           ],
@@ -983,7 +983,10 @@ describe("PersonController", () => {
     it("should not skip text fields like firstName or currentTitle", () => {
       expect(SKIP_CLEAN_FIELDS.has("firstName")).toBe(false);
       expect(SKIP_CLEAN_FIELDS.has("currentTitle")).toBe(false);
-      expect(SKIP_CLEAN_FIELDS.has("currentCompany")).toBe(false);
+    });
+
+    it("should skip currentCompany (has its own normalizeCompanyName transform)", () => {
+      expect(SKIP_CLEAN_FIELDS.has("currentCompany")).toBe(true);
     });
   });
 
@@ -1051,7 +1054,7 @@ describe("PersonController", () => {
 
       const role = person.snapshot.roles[0];
       expect(role.title).toBe("Software Engineer");
-      expect(role.companyName).toBe("Google LLC");
+      expect(role.companyName).toBe("Google");
       expect(role.location).toBe("San Francisco");
       expect(role.description).toBe("Built stuff");
     });

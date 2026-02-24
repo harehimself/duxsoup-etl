@@ -13,6 +13,7 @@ const {
   MAX_OBSERVATION_REFS,
 } = require("../constants/limits");
 const { normalizePhone } = require("../utils/phoneNormalizer");
+const { normalizeCompanyName } = require("../utils/companyNormalizer");
 const { ensureHttps } = require("../utils/urlNormalizer");
 const { shouldOverwrite } = require("../utils/precedence");
 
@@ -220,7 +221,11 @@ const FIELD_MAPPINGS = [
   { field: "middleName", source: "Middle Name" },
   { field: "lastName", source: "Last Name" },
   { field: "currentTitle", source: "Title" },
-  { field: "currentCompany", source: "Company" },
+  {
+    field: "currentCompany",
+    source: "Company",
+    transform: normalizeCompanyName,
+  },
   { field: "currentCompanyId", source: "CompanyID" },
   {
     field: "currentCompanyProfile",
@@ -274,6 +279,7 @@ const LOCATION_FIELDS = [
  * which has its own normalizeEmail transform.
  */
 const SKIP_CLEAN_FIELDS = new Set([
+  "currentCompany",
   "currentCompanyId",
   "currentCompanyProfile",
   "profilePicture",
@@ -505,7 +511,8 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
 
       const incoming = {
         title: cleanString(pos.Title),
-        companyName: cleanString(pos.Company),
+        companyName:
+          normalizeCompanyName(pos.Company) || cleanString(pos.Company),
         startDate,
         endDate,
         isCurrent,
@@ -538,7 +545,8 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
         const newRole = enrichRoleWithSeniority({
           title: cleanString(pos.Title),
           companyId: null, // Will be resolved separately
-          companyName: cleanString(pos.Company),
+          companyName:
+            normalizeCompanyName(pos.Company) || cleanString(pos.Company),
           location: cleanString(pos.Location),
           description: cleanString(pos.Description),
           startDate,
@@ -553,7 +561,8 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
     // Single current role from scan/visit — use normalized matching
     const incoming = {
       title: cleanString(currentRole),
-      companyName: cleanString(currentCompany),
+      companyName:
+        normalizeCompanyName(currentCompany) || cleanString(currentCompany),
       startDate: null,
       endDate: null,
       isCurrent: true,
@@ -579,7 +588,8 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
         const newRole = enrichRoleWithSeniority({
           title: cleanString(currentRole),
           companyId: currentCompanyId || null,
-          companyName: cleanString(currentCompany),
+          companyName:
+            normalizeCompanyName(currentCompany) || cleanString(currentCompany),
           location: cleanString(observationData.Location),
           description: null,
           startDate: null, // Unknown without extended data
@@ -998,6 +1008,7 @@ module.exports = {
   cleanString, // Export for testing
   normalizeEmail, // Export for testing
   normalizePhone, // Re-export for testing
+  normalizeCompanyName, // Re-export for testing
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
   mergeRoleFields, // Export for testing
