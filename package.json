@@ -25,6 +25,7 @@
     "backfill:phone": "node scripts/backfillPhoneNormalization.js --dry-run",
     "backfill:twitter": "node scripts/backfillTwitterNormalization.js --dry-run",
     "backfill:seniority": "node scripts/backfillSeniority.js",
+    "cleanup:roles": "node scripts/cleanupRoles.js --dry-run",
     "import:csv": "node scripts/import-csv-visits.js",
     "ops": "node scripts/cli.js",
     "ops:merge": "node scripts/cli.js merge-duplicates",

@@ -153,6 +153,24 @@ describe("titleParser", () => {
         expect(result.seniorityRank).toBe(5);
       });
 
+      it("should classify RVP as VP tier", () => {
+        const result = parseTitle("RVP Sales, Intelligent Self Service");
+        expect(result.seniority).toBe("VP");
+        expect(result.seniorityRank).toBe(5);
+      });
+
+      it("should classify lowercase rvp as VP tier", () => {
+        const result = parseTitle("rvp of enterprise sales");
+        expect(result.seniority).toBe("VP");
+        expect(result.seniorityRank).toBe(5);
+      });
+
+      it("should classify Regional Vice President as VP tier", () => {
+        const result = parseTitle("Regional Vice President, Sales");
+        expect(result.seniority).toBe("VP");
+        expect(result.seniorityRank).toBe(5);
+      });
+
       it("should classify AVP as VP tier", () => {
         const result = parseTitle("AVP of Operations");
         expect(result.seniority).toBe("VP");

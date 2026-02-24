@@ -399,7 +399,7 @@ async function main() {
 
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI, { dbName: process.env.MONGODB_DB_NAME || "duxsoup" });
     log("Connected to MongoDB\n", "green");
 
     // Phase 1: Analyze

@@ -36,7 +36,7 @@ async function run() {
     process.exit(1);
   }
 
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(mongoUri, { dbName: process.env.MONGODB_DB_NAME || "duxsoup" });
   console.log('Connected to MongoDB\n');
 
   if (mergeId === '--list') {

@@ -9,6 +9,7 @@ const {
   updateRolesTimeline,
   normalizeRoleText,
   findMatchingRole,
+  isLikelyCorruptedDate,
   mergeRoleFields,
   normalizeField,
   cleanString,
@@ -485,6 +486,184 @@ describe("PersonController", () => {
       expect(updated).toBe(true);
       expect(person.snapshot.roles).toHaveLength(1);
       expect(person.snapshot.roles[0].companyId).toBe("12345678");
+    });
+  });
+
+  describe("isCurrent lifecycle management", () => {
+    it("should flip isCurrent to false when observation shows role has ended", () => {
+      const person = buildPersonDoc({
+        snapshot: {
+          roles: [
+            {
+              title: "Account Executive",
+              companyName: "Acme Corp",
+              startDate: new Date("2020-01-01"),
+              endDate: null,
+              isCurrent: true,
+            },
+          ],
+        },
+      });
+
+      const observationData = {
+        extended: {
+          positions: [
+            {
+              Title: "Account Executive",
+              Company: "Acme Corp",
+              From: "2020-01-01",
+              To: "2023-06-01",
+            },
+          ],
+        },
+      };
+
+      const updated = updateRolesTimeline(person, observationData, {});
+
+      expect(updated).toBe(true);
+      expect(person.snapshot.roles).toHaveLength(1);
+      expect(person.snapshot.roles[0].isCurrent).toBe(false);
+      expect(person.snapshot.roles[0].endDate).toEqual(new Date("2023-06-01"));
+    });
+
+    it("should not flip isCurrent when role is still current", () => {
+      const person = buildPersonDoc({
+        snapshot: {
+          roles: [
+            {
+              title: "VP Sales",
+              companyName: "BigCo",
+              startDate: new Date("2022-01-01"),
+              endDate: null,
+              isCurrent: true,
+            },
+          ],
+        },
+      });
+
+      const observationData = {
+        extended: {
+          positions: [
+            {
+              Title: "VP Sales",
+              Company: "BigCo",
+              From: "2022-01-01",
+              To: "Present",
+            },
+          ],
+        },
+      };
+
+      const updated = updateRolesTimeline(person, observationData, {});
+
+      expect(updated).toBe(false);
+      expect(person.snapshot.roles[0].isCurrent).toBe(true);
+    });
+  });
+
+  describe("isLikelyCorruptedDate()", () => {
+    it("should detect dates in the 2001 range as corrupted", () => {
+      expect(isLikelyCorruptedDate(new Date("2001-03-15"))).toBe(true);
+      expect(isLikelyCorruptedDate(new Date("2001-12-19"))).toBe(true);
+      expect(isLikelyCorruptedDate(new Date("2000-06-01"))).toBe(true);
+    });
+
+    it("should not flag legitimate dates as corrupted", () => {
+      expect(isLikelyCorruptedDate(new Date("2020-01-01"))).toBe(false);
+      expect(isLikelyCorruptedDate(new Date("2025-06-15"))).toBe(false);
+      expect(isLikelyCorruptedDate(new Date("2010-03-01"))).toBe(false);
+    });
+
+    it("should return false for null/undefined", () => {
+      expect(isLikelyCorruptedDate(null)).toBe(false);
+      expect(isLikelyCorruptedDate(undefined)).toBe(false);
+    });
+  });
+
+  describe("findMatchingRole() - corrupted date dedup", () => {
+    it("should match role with corrupted 2001 date against same role with real date", () => {
+      const existing = [
+        {
+          title: "Account Executive",
+          companyName: "Five9",
+          startDate: new Date("2022-02-01"),
+        },
+      ];
+      const incoming = {
+        title: "Account Executive",
+        companyName: "Five9",
+        startDate: new Date("2001-02-22"),
+      };
+
+      expect(findMatchingRole(existing, incoming)).toBe(existing[0]);
+    });
+
+    it("should match role with real date against existing corrupted 2001 date", () => {
+      const existing = [
+        {
+          title: "VP Sales",
+          companyName: "Verint",
+          startDate: new Date("2001-12-19"),
+        },
+      ];
+      const incoming = {
+        title: "VP Sales",
+        companyName: "Verint",
+        startDate: new Date("2019-12-01"),
+      };
+
+      expect(findMatchingRole(existing, incoming)).toBe(existing[0]);
+    });
+
+    it("should not match different titles even with corrupted dates", () => {
+      const existing = [
+        {
+          title: "VP Sales",
+          companyName: "Verint",
+          startDate: new Date("2001-12-19"),
+        },
+      ];
+      const incoming = {
+        title: "Account Executive",
+        companyName: "Verint",
+        startDate: new Date("2019-12-01"),
+      };
+
+      expect(findMatchingRole(existing, incoming)).toBeUndefined();
+    });
+
+    it("should still match exactly when both dates are legitimate", () => {
+      const existing = [
+        {
+          title: "Engineer",
+          companyName: "Corp",
+          startDate: new Date("2022-01-01"),
+        },
+      ];
+      const incoming = {
+        title: "Engineer",
+        companyName: "Corp",
+        startDate: new Date("2022-01-01"),
+      };
+
+      expect(findMatchingRole(existing, incoming)).toBe(existing[0]);
+    });
+
+    it("should not match when both dates are legitimate but different", () => {
+      const existing = [
+        {
+          title: "Engineer",
+          companyName: "Corp",
+          startDate: new Date("2022-01-01"),
+        },
+      ];
+      const incoming = {
+        title: "Engineer",
+        companyName: "Corp",
+        startDate: new Date("2023-06-01"),
+      };
+
+      expect(findMatchingRole(existing, incoming)).toBeUndefined();
     });
   });
 

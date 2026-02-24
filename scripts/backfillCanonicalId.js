@@ -119,7 +119,7 @@ async function backfillCanonicalId(args) {
 
   try {
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/duxsoup-etl';
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, { dbName: process.env.MONGODB_DB_NAME || "duxsoup" });
     console.log('✓ Connected to MongoDB\n');
 
     const query = {

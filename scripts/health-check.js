@@ -52,7 +52,7 @@ function success(text, count) {
 async function connectDB() {
   const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/duxsoup-etl';
   const environment = process.env.NODE_ENV || 'development';
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(mongoUri, { dbName: process.env.MONGODB_DB_NAME || "duxsoup" });
   console.log(colorize(`Connected to MongoDB (${environment})`, 'green'));
   if (environment === 'development') {
     console.log(colorize('⚠ Running on development database. Use NODE_ENV=production for production.', 'yellow'));

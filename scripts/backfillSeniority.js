@@ -27,7 +27,7 @@ async function backfillSeniority() {
     }
 
     logger.info('Connecting to MongoDB...', { mongoUri: mongoUri.substring(0, 30) + '...' });
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, { dbName: process.env.MONGODB_DB_NAME || "duxsoup" });
     logger.info('Connected to MongoDB');
 
     // Find all people with roles

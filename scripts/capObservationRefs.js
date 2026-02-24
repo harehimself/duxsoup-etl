@@ -133,7 +133,7 @@ async function main() {
     process.exit(1);
   }
 
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(mongoUri, { dbName: process.env.MONGODB_DB_NAME || "duxsoup" });
   console.log("Connected to MongoDB\n");
 
   const targets = args.collection

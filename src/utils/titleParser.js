@@ -68,6 +68,9 @@ const SENIORITY_TIERS = [
       // Vice President (excluding SVP/EVP which are caught above)
       /\bVice\s+President\b/i,
       /\b(VP|V\.P\.)\b/i,
+      // Regional VP (RVP = Regional Vice President)
+      /\bRVP\b/i,
+      /\bRegional\s+Vice\s+President\b/i,
       // Assistant VP
       /\b(AVP|A\.V\.P\.)\b/i,
       /\bAssistant\s+Vice\s+President\b/i,

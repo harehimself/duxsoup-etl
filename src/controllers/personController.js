@@ -396,6 +396,20 @@ function normalizeRoleText(text) {
  * @param {Object} incoming - { title, companyName, startDate, endDate, isCurrent, location, description }
  * @returns {Object|undefined} Matching existing role, or undefined
  */
+/**
+ * Detect whether a date looks like a corrupted/fabricated date.
+ * DuxSoup scan data sometimes produces dates in 2001 when it parses
+ * relative date strings (e.g., "3 years") without a reference year.
+ *
+ * @param {Date} date - Date to check
+ * @returns {boolean} True if the date appears corrupted
+ */
+function isLikelyCorruptedDate(date) {
+  if (!date) return false;
+  const year = date.getFullYear();
+  return year >= 2000 && year <= 2002;
+}
+
 function findMatchingRole(existingRoles, incoming) {
   const normTitle = normalizeRoleText(incoming.title);
   const normCompany = normalizeRoleText(incoming.companyName);
@@ -405,8 +419,22 @@ function findMatchingRole(existingRoles, incoming) {
     if (normalizeRoleText(r.companyName) !== normCompany) return false;
 
     if (incoming.startDate != null) {
-      // Dated role: match on startDate
-      return r.startDate?.toString() === incoming.startDate.toString();
+      // Dated role: exact startDate match first
+      if (r.startDate?.toString() === incoming.startDate.toString()) {
+        return true;
+      }
+
+      // Fuzzy match: if title+company match and one date looks corrupted,
+      // treat as the same role to prevent duplicates from bad scan data.
+      if (
+        r.startDate &&
+        (isLikelyCorruptedDate(r.startDate) ||
+          isLikelyCorruptedDate(incoming.startDate))
+      ) {
+        return true;
+      }
+
+      return false;
     }
 
     // Undated incoming role.
@@ -527,6 +555,14 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
       if (existingRole) {
         // Backfill any missing fields on the existing role
         if (mergeRoleFields(existingRole, incoming)) {
+          updated = true;
+        }
+        // Lifecycle: if incoming role has ended, flip existing isCurrent to false
+        if (!isCurrent && existingRole.isCurrent) {
+          existingRole.isCurrent = false;
+          if (endDate && !existingRole.endDate) {
+            existingRole.endDate = endDate;
+          }
           updated = true;
         }
       } else {
@@ -1014,6 +1050,7 @@ module.exports = {
   normalizeCompanyName, // Re-export for testing
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
+  isLikelyCorruptedDate, // Export for testing
   mergeRoleFields, // Export for testing
   FIELD_MAPPINGS, // Export for testing
   LOCATION_FIELDS, // Export for testing
