@@ -5,6 +5,7 @@ const {
 } = require("../controllers/enrichmentGapController");
 const {
   getNetworkProfile,
+  getNetworkTrends,
 } = require("../controllers/networkProfileController");
 
 const router = express.Router();
@@ -23,5 +24,8 @@ router.get("/enrichment-gaps/revisit-list", getRevisitList);
 
 // GET /api/insights/network-profile — network composition analysis
 router.get("/network-profile", getNetworkProfile);
+
+// GET /api/insights/network-profile/trends — network composition trends (30/60/90d)
+router.get("/network-profile/trends", getNetworkTrends);
 
 module.exports = router;

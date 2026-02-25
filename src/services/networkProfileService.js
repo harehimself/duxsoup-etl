@@ -17,36 +17,34 @@ const logger = require("../utils/logger");
  */
 
 /**
- * Get network composition profile for 1st-degree connections
+ * Calculate true median from an array of numeric values.
+ * @param {number[]} values
+ * @returns {number|null}
+ */
+function calculateMedian(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+/**
+ * Build base filter for 1st-degree connections with optional filters.
  *
  * @param {Object} options - Filter options
- * @param {string} [options.industry] - Filter by industry (regex)
- * @param {string} [options.location] - Filter by location (regex)
- * @param {string} [options.seniority] - Filter by seniority tier
- * @param {number} [options.minRank] - Filter by minimum seniority rank (1-8)
- * @param {string} [options.company] - Filter by company name (regex)
- * @param {string} [options.companyId] - Filter by company ID
- * @param {number} [options.topN] - Number of top items to return per category (default 10)
- * @returns {Promise<Object>} Network composition analysis
+ * @returns {Object} MongoDB filter document
  */
-async function getNetworkProfile(options = {}) {
-  const {
-    industry,
-    location,
-    seniority,
-    minRank,
-    company,
-    companyId,
-    topN = 10,
-  } = options;
+function buildBaseFilter(options = {}) {
+  const { industry, location, seniority, minRank, company, companyId } =
+    options;
 
-  // Base filter: only 1st-degree connections, not merged
   const baseFilter = {
     "snapshot.degree": 1,
     mergedInto: { $exists: false },
   };
 
-  // Apply optional filters
   if (industry) {
     baseFilter["snapshot.industry"] = { $regex: industry, $options: "i" };
   }
@@ -65,6 +63,27 @@ async function getNetworkProfile(options = {}) {
   if (companyId) {
     baseFilter["snapshot.currentCompanyId"] = companyId;
   }
+
+  return baseFilter;
+}
+
+/**
+ * Get network composition profile for 1st-degree connections
+ *
+ * @param {Object} options - Filter options
+ * @param {string} [options.industry] - Filter by industry (regex)
+ * @param {string} [options.location] - Filter by location (regex)
+ * @param {string} [options.seniority] - Filter by seniority tier
+ * @param {number} [options.minRank] - Filter by minimum seniority rank (1-8)
+ * @param {string} [options.company] - Filter by company name (regex)
+ * @param {string} [options.companyId] - Filter by company ID
+ * @param {number} [options.topN] - Number of top items to return per category (default 10)
+ * @returns {Promise<Object>} Network composition analysis
+ */
+async function getNetworkProfile(options = {}) {
+  const { topN = 10 } = options;
+
+  const baseFilter = buildBaseFilter(options);
 
   logger.debug("Building network profile", { filters: baseFilter, topN });
 
@@ -266,19 +285,23 @@ async function getNetworkProfile(options = {}) {
       },
     ]),
 
-    // Average tenure (for people with current company and tenure data)
+    // Tenure: push values for true median calculation
     Person.aggregate([
       { $match: baseFilter },
       {
         $match: {
-          "derived.yearsAtCurrentCompany": { $exists: true, $ne: null, $gt: 0 },
+          "derived.yearsAtCurrentCompany": {
+            $exists: true,
+            $ne: null,
+            $gt: 0,
+          },
         },
       },
       {
         $group: {
           _id: null,
           avgTenureYears: { $avg: "$derived.yearsAtCurrentCompany" },
-          medianTenureYears: { $avg: "$derived.yearsAtCurrentCompany" }, // Approximation
+          values: { $push: "$derived.yearsAtCurrentCompany" },
           count: { $sum: 1 },
         },
       },
@@ -286,14 +309,14 @@ async function getNetworkProfile(options = {}) {
         $project: {
           _id: 0,
           avgTenureYears: { $round: ["$avgTenureYears", 1] },
-          medianTenureYears: { $round: ["$medianTenureYears", 1] },
+          values: 1,
           count: 1,
         },
       },
     ]),
   ]);
 
-  // Calculate percentages for each distribution
+  // Calculate percentages using totalCount as denominator
   const addPercentages = (items, total) => {
     return items.map((item) => ({
       ...item,
@@ -301,44 +324,27 @@ async function getNetworkProfile(options = {}) {
     }));
   };
 
-  const companiesTotal = topCompanies.reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
-  const seniorityTotal = seniorityBreakdown.reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
-  const titlesTotal = topTitles.reduce((sum, item) => sum + item.count, 0);
-  const industryTotal = industryDistribution.reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
-  const cityTotal = geographyCity.reduce((sum, item) => sum + item.count, 0);
-  const countryTotal = geographyCountry.reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
-  const departmentTotal = departmentBreakdown.reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
+  // Compute true median from pushed values
+  const tenureData = tenureStats[0];
+  const medianTenureYears = tenureData
+    ? Math.round(calculateMedian(tenureData.values) * 10) / 10
+    : 0;
 
   const result = {
     totalConnections: totalCount,
-    topCompanies: addPercentages(topCompanies, companiesTotal),
-    seniorityBreakdown: addPercentages(seniorityBreakdown, seniorityTotal),
-    topTitles: addPercentages(topTitles, titlesTotal),
-    industryDistribution: addPercentages(industryDistribution, industryTotal),
+    topCompanies: addPercentages(topCompanies, totalCount),
+    seniorityBreakdown: addPercentages(seniorityBreakdown, totalCount),
+    topTitles: addPercentages(topTitles, totalCount),
+    industryDistribution: addPercentages(industryDistribution, totalCount),
     geography: {
-      topCities: addPercentages(geographyCity, cityTotal),
-      topCountries: addPercentages(geographyCountry, countryTotal),
+      topCities: addPercentages(geographyCity, totalCount),
+      topCountries: addPercentages(geographyCountry, totalCount),
     },
-    departmentBreakdown: addPercentages(departmentBreakdown, departmentTotal),
-    averageTenure: tenureStats[0] || {
-      avgTenureYears: 0,
-      medianTenureYears: 0,
-      count: 0,
+    departmentBreakdown: addPercentages(departmentBreakdown, totalCount),
+    averageTenure: {
+      avgTenureYears: tenureData ? tenureData.avgTenureYears : 0,
+      medianTenureYears,
+      count: tenureData ? tenureData.count : 0,
     },
     filters: options,
   };
@@ -352,6 +358,255 @@ async function getNetworkProfile(options = {}) {
   return result;
 }
 
+/**
+ * Get network composition trends comparing current state against 30/60/90-day windows.
+ *
+ * For each window, identifies connections added within that period and computes
+ * growth rates across companies, seniority, industry, country, and department.
+ *
+ * @param {Object} options - Same filter options as getNetworkProfile
+ * @returns {Promise<Object>} Network trends analysis
+ */
+async function getNetworkTrends(options = {}) {
+  const baseFilter = buildBaseFilter(options);
+
+  const now = new Date();
+  const windowDays = [30, 60, 90];
+
+  // 1 countDocuments for current total + 3 aggregate calls (one per window)
+  const [totalConnections, ...windowResults] = await Promise.all([
+    Person.countDocuments(baseFilter),
+    ...windowDays.map((days) => {
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const windowFilter = { ...baseFilter, createdAt: { $gte: cutoff } };
+
+      return Person.aggregate([
+        { $match: windowFilter },
+        {
+          $facet: {
+            total: [{ $count: "count" }],
+            byCompany: [
+              {
+                $match: {
+                  "snapshot.currentCompany": {
+                    $exists: true,
+                    $nin: ["", null],
+                  },
+                },
+              },
+              {
+                $group: {
+                  _id: "$snapshot.currentCompany",
+                  count: { $sum: 1 },
+                  companyId: { $first: "$snapshot.currentCompanyId" },
+                },
+              },
+              { $sort: { count: -1 } },
+              { $limit: 10 },
+              {
+                $project: {
+                  _id: 0,
+                  company: "$_id",
+                  companyId: 1,
+                  count: 1,
+                },
+              },
+            ],
+            bySeniority: [
+              {
+                $match: {
+                  "snapshot.parsedSeniority": {
+                    $exists: true,
+                    $nin: ["", null],
+                  },
+                },
+              },
+              {
+                $group: {
+                  _id: "$snapshot.parsedSeniority",
+                  count: { $sum: 1 },
+                },
+              },
+              { $sort: { count: -1 } },
+              { $project: { _id: 0, seniority: "$_id", count: 1 } },
+            ],
+            byIndustry: [
+              {
+                $match: {
+                  "snapshot.industry": { $exists: true, $nin: ["", null] },
+                },
+              },
+              {
+                $group: {
+                  _id: "$snapshot.industry",
+                  count: { $sum: 1 },
+                },
+              },
+              { $sort: { count: -1 } },
+              { $limit: 10 },
+              { $project: { _id: 0, industry: "$_id", count: 1 } },
+            ],
+            byCountry: [
+              {
+                $match: {
+                  "snapshot.country": { $exists: true, $nin: ["", null] },
+                },
+              },
+              {
+                $group: {
+                  _id: "$snapshot.country",
+                  count: { $sum: 1 },
+                },
+              },
+              { $sort: { count: -1 } },
+              { $limit: 10 },
+              { $project: { _id: 0, country: "$_id", count: 1 } },
+            ],
+            byDepartment: [
+              {
+                $match: {
+                  "snapshot.parsedDepartment": {
+                    $exists: true,
+                    $nin: ["", null],
+                  },
+                },
+              },
+              {
+                $group: {
+                  _id: "$snapshot.parsedDepartment",
+                  count: { $sum: 1 },
+                },
+              },
+              { $sort: { count: -1 } },
+              { $project: { _id: 0, department: "$_id", count: 1 } },
+            ],
+          },
+        },
+      ]);
+    }),
+  ]);
+
+  const insights = [];
+  const windows = {};
+
+  windowDays.forEach((days, i) => {
+    const facetResult = windowResults[i][0] || {};
+    const newConnections =
+      facetResult.total && facetResult.total[0]
+        ? facetResult.total[0].count
+        : 0;
+
+    const previousTotal = totalConnections - newConnections;
+    const growthRate =
+      previousTotal > 0
+        ? Math.round((newConnections / previousTotal) * 1000) / 10
+        : newConnections > 0
+          ? 100
+          : 0;
+
+    const byCompany = (facetResult.byCompany || []).map((item) => ({
+      company: item.company,
+      companyId: item.companyId,
+      current: item.count,
+      new: item.count,
+      growthRate: item.count,
+    }));
+
+    const bySeniority = (facetResult.bySeniority || []).map((item) => ({
+      seniority: item.seniority,
+      current: item.count,
+      new: item.count,
+      growthRate: item.count,
+    }));
+
+    const byIndustry = (facetResult.byIndustry || []).map((item) => ({
+      industry: item.industry,
+      current: item.count,
+      new: item.count,
+      growthRate: item.count,
+    }));
+
+    const byCountry = (facetResult.byCountry || []).map((item) => ({
+      country: item.country,
+      current: item.count,
+      new: item.count,
+      growthRate: item.count,
+    }));
+
+    const byDepartment = (facetResult.byDepartment || []).map((item) => ({
+      department: item.department,
+      current: item.count,
+      new: item.count,
+      growthRate: item.count,
+    }));
+
+    windows[`${days}d`] = {
+      newConnections,
+      growthRate,
+      byCompany,
+      bySeniority,
+      byIndustry,
+      byCountry,
+      byDepartment,
+    };
+
+    // Generate insights for the shortest window (30d) only
+    if (days === 30 && newConnections > 0) {
+      // Industry insights
+      for (const item of facetResult.byIndustry || []) {
+        if (item.count > 2 && previousTotal > 0) {
+          const pct = Math.round((item.count / previousTotal) * 1000) / 10;
+          if (pct > 10) {
+            insights.push(
+              `Your ${item.industry} connections grew ${pct}% in the last 30 days (${item.count} new)`,
+            );
+          }
+        }
+      }
+
+      // Seniority insights
+      for (const item of facetResult.bySeniority || []) {
+        if (item.count > 2 && previousTotal > 0) {
+          const pct = Math.round((item.count / previousTotal) * 1000) / 10;
+          if (pct > 10) {
+            insights.push(
+              `${item.seniority}-level connections grew ${pct}% in the last 30 days (${item.count} new)`,
+            );
+          }
+        }
+      }
+
+      // Company insights
+      for (const item of facetResult.byCompany || []) {
+        if (item.count > 2 && previousTotal > 0) {
+          const pct = Math.round((item.count / previousTotal) * 1000) / 10;
+          if (pct > 10) {
+            insights.push(
+              `${item.company} connections grew ${pct}% in the last 30 days (${item.count} new)`,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  logger.debug("Network trends built", {
+    totalConnections,
+    windows: Object.keys(windows),
+    insightsCount: insights.length,
+  });
+
+  return {
+    totalConnections,
+    windows,
+    insights,
+    filters: options,
+  };
+}
+
 module.exports = {
   getNetworkProfile,
+  getNetworkTrends,
+  _calculateMedian: calculateMedian,
+  _buildBaseFilter: buildBaseFilter,
 };

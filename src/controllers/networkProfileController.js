@@ -4,6 +4,35 @@ const logger = require("../utils/logger");
 const { NETWORK_PROFILE_CACHE_TTL_MS } = require("../constants/limits");
 
 /**
+ * Parse common query params shared between network-profile and network-profile/trends.
+ */
+function parseNetworkProfileOptions(query) {
+  const industry = query.industry || null;
+  const location = query.location || null;
+  const seniority = query.seniority || null;
+  const minRank = query.minRank
+    ? Math.max(Math.min(parseInt(query.minRank) || 1, 8), 1)
+    : null;
+  const company = query.company || null;
+  const companyId = query.companyId || null;
+  const topN = Math.min(
+    Math.max(parseInt(query.topN) || 10, 1),
+    50, // Max 50 items per category
+  );
+  const fresh = query.fresh === "true";
+
+  const options = { topN };
+  if (industry) options.industry = industry;
+  if (location) options.location = location;
+  if (seniority) options.seniority = seniority;
+  if (minRank) options.minRank = minRank;
+  if (company) options.company = company;
+  if (companyId) options.companyId = companyId;
+
+  return { options, fresh };
+}
+
+/**
  * GET /api/insights/network-profile
  *
  * Network composition analysis for 1st-degree connections.
@@ -22,27 +51,7 @@ const { NETWORK_PROFILE_CACHE_TTL_MS } = require("../constants/limits");
  */
 async function getNetworkProfile(req, res, next) {
   try {
-    const industry = req.query.industry || null;
-    const location = req.query.location || null;
-    const seniority = req.query.seniority || null;
-    const minRank = req.query.minRank
-      ? Math.max(Math.min(parseInt(req.query.minRank) || 1, 8), 1)
-      : null;
-    const company = req.query.company || null;
-    const companyId = req.query.companyId || null;
-    const topN = Math.min(
-      Math.max(parseInt(req.query.topN) || 10, 1),
-      50, // Max 50 items per category
-    );
-    const fresh = req.query.fresh === "true";
-
-    const options = { topN };
-    if (industry) options.industry = industry;
-    if (location) options.location = location;
-    if (seniority) options.seniority = seniority;
-    if (minRank) options.minRank = minRank;
-    if (company) options.company = company;
-    if (companyId) options.companyId = companyId;
+    const { options, fresh } = parseNetworkProfileOptions(req.query);
 
     const cacheKey = `network-profile:${JSON.stringify(options)}`;
 
@@ -69,6 +78,44 @@ async function getNetworkProfile(req, res, next) {
   }
 }
 
+/**
+ * GET /api/insights/network-profile/trends
+ *
+ * Network composition trends comparing current state against 30/60/90-day windows.
+ * Returns growth rates across companies, seniority, industry, country, and department.
+ *
+ * Query params: same as network-profile
+ */
+async function getNetworkTrends(req, res, next) {
+  try {
+    const { options, fresh } = parseNetworkProfileOptions(req.query);
+
+    const cacheKey = `network-trends:${JSON.stringify(options)}`;
+
+    const data = await metricsCache.getOrFetch(
+      cacheKey,
+      () => networkProfileService.getNetworkTrends(options),
+      fresh ? 0 : NETWORK_PROFILE_CACHE_TTL_MS,
+    );
+
+    res.json({
+      success: true,
+      data,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        cached: !fresh,
+      },
+    });
+  } catch (error) {
+    logger.error("Error getting network trends", {
+      error: error.message,
+      stack: error.stack,
+    });
+    next(error);
+  }
+}
+
 module.exports = {
   getNetworkProfile,
+  getNetworkTrends,
 };

@@ -34,7 +34,7 @@ describe("networkProfileController", () => {
     const mockNetworkProfile = {
       totalConnections: 150,
       topCompanies: [
-        { company: "Google", companyId: "123", count: 25, percentage: 50 },
+        { company: "Google", companyId: "123", count: 25, percentage: 17 },
       ],
       seniorityBreakdown: [{ seniority: "VP", count: 30, percentage: 20 }],
       topTitles: [{ title: "Software Engineer", count: 40, percentage: 27 }],
@@ -287,6 +287,131 @@ describe("networkProfileController", () => {
       expect(cacheKey1).not.toBe(cacheKey2);
       expect(cacheKey1).toContain("network-profile:");
       expect(cacheKey2).toContain("network-profile:");
+    });
+  });
+
+  describe("getNetworkTrends()", () => {
+    const mockTrends = {
+      totalConnections: 150,
+      windows: {
+        "30d": {
+          newConnections: 12,
+          growthRate: 8.7,
+          byCompany: [],
+          bySeniority: [],
+          byIndustry: [],
+          byCountry: [],
+          byDepartment: [],
+        },
+        "60d": {
+          newConnections: 25,
+          growthRate: 20,
+          byCompany: [],
+          bySeniority: [],
+          byIndustry: [],
+          byCountry: [],
+          byDepartment: [],
+        },
+        "90d": {
+          newConnections: 40,
+          growthRate: 36.4,
+          byCompany: [],
+          bySeniority: [],
+          byIndustry: [],
+          byCountry: [],
+          byDepartment: [],
+        },
+      },
+      insights: ["Your fintech connections grew 15% in the last 30 days"],
+      filters: {},
+    };
+
+    beforeEach(() => {
+      metricsCache.getOrFetch.mockImplementation((key, fn) => fn());
+      networkProfileService.getNetworkTrends.mockResolvedValue(mockTrends);
+    });
+
+    it("should return trends with default parameters", async () => {
+      await networkProfileController.getNetworkTrends(req, res, next);
+
+      expect(networkProfileService.getNetworkTrends).toHaveBeenCalledWith({
+        topN: 10,
+      });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockTrends,
+        metadata: {
+          generatedAt: expect.any(String),
+          cached: true,
+        },
+      });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it("should parse and pass filters", async () => {
+      req.query = {
+        industry: "Technology",
+        seniority: "VP",
+        minRank: "5",
+        topN: "15",
+      };
+
+      await networkProfileController.getNetworkTrends(req, res, next);
+
+      expect(networkProfileService.getNetworkTrends).toHaveBeenCalledWith({
+        industry: "Technology",
+        seniority: "VP",
+        minRank: 5,
+        topN: 15,
+      });
+    });
+
+    it("should use network-trends: cache key prefix", async () => {
+      await networkProfileController.getNetworkTrends(req, res, next);
+
+      const cacheKey = metricsCache.getOrFetch.mock.calls[0][0];
+      expect(cacheKey).toContain("network-trends:");
+    });
+
+    it("should bypass cache when fresh=true", async () => {
+      req.query.fresh = "true";
+
+      await networkProfileController.getNetworkTrends(req, res, next);
+
+      expect(metricsCache.getOrFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        0,
+      );
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ cached: false }),
+        }),
+      );
+    });
+
+    it("should handle service errors", async () => {
+      const error = new Error("Database error");
+      networkProfileService.getNetworkTrends.mockRejectedValue(error);
+
+      await networkProfileController.getNetworkTrends(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(error);
+      expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it("should create unique cache keys for different filter combinations", async () => {
+      await networkProfileController.getNetworkTrends(req, res, next);
+      const key1 = metricsCache.getOrFetch.mock.calls[0][0];
+
+      req.query = { seniority: "CXO" };
+      await networkProfileController.getNetworkTrends(req, res, next);
+      const key2 = metricsCache.getOrFetch.mock.calls[1][0];
+
+      expect(key1).not.toBe(key2);
+      expect(key1).toContain("network-trends:");
+      expect(key2).toContain("network-trends:");
     });
   });
 });

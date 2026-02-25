@@ -327,6 +327,7 @@ personSchema.index({
 });
 personSchema.index({ "derived.highestSeniorityRank": -1 });
 personSchema.index({ "snapshot.parsedSeniority": 1 }); // Seniority API filter queries
+personSchema.index({ "snapshot.degree": 1 }); // Network profile aggregations
 
 // Full-text search index (weighted by relevance)
 personSchema.index(

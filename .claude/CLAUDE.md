@@ -216,6 +216,8 @@ See `src/models/` for full schemas.
 ### Insights
 - `GET /api/insights/enrichment-gaps` - Enrichment gap analysis dashboard (per-field missing counts/percentages, seniority breakdown, cached 10 min)
 - `GET /api/insights/enrichment-gaps/revisit-list` - Prioritized revisit list scored by contact value + gap severity (CSV default, JSON optional)
+- `GET /api/insights/network-profile` - Network composition analytics (company, seniority, title, industry, geography, department, tenure distributions for 1st-degree connections)
+- `GET /api/insights/network-profile/trends` - Network composition trends comparing current state against 30/60/90-day windows (growth rates, insights)
 
 ## Code Style & Patterns
 

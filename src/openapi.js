@@ -73,6 +73,76 @@ const spec = {
         },
       },
 
+      // ── Trend Window ─────────────────────────────────────────────
+      TrendWindow: {
+        type: "object",
+        properties: {
+          newConnections: { type: "integer" },
+          growthRate: { type: "number" },
+          byCompany: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                company: { type: "string" },
+                companyId: { type: "string", nullable: true },
+                current: { type: "integer" },
+                new: { type: "integer" },
+                growthRate: { type: "number" },
+              },
+            },
+          },
+          bySeniority: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                seniority: { type: "string" },
+                current: { type: "integer" },
+                new: { type: "integer" },
+                growthRate: { type: "number" },
+              },
+            },
+          },
+          byIndustry: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                industry: { type: "string" },
+                current: { type: "integer" },
+                new: { type: "integer" },
+                growthRate: { type: "number" },
+              },
+            },
+          },
+          byCountry: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                country: { type: "string" },
+                current: { type: "integer" },
+                new: { type: "integer" },
+                growthRate: { type: "number" },
+              },
+            },
+          },
+          byDepartment: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                department: { type: "string" },
+                current: { type: "integer" },
+                new: { type: "integer" },
+                growthRate: { type: "number" },
+              },
+            },
+          },
+        },
+      },
+
       // ── Role ────────────────────────────────────────────────────
       Role: {
         type: "object",
@@ -2558,6 +2628,110 @@ const spec = {
                             medianTenureYears: { type: "number" },
                             count: { type: "integer" },
                           },
+                        },
+                        filters: { type: "object" },
+                      },
+                    },
+                    metadata: {
+                      type: "object",
+                      properties: {
+                        generatedAt: {
+                          type: "string",
+                          format: "date-time",
+                        },
+                        cached: { type: "boolean" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          429: { $ref: "#/components/responses/RateLimited" },
+        },
+      },
+    },
+
+    "/api/insights/network-profile/trends": {
+      get: {
+        tags: ["Insights"],
+        summary: "Network composition trends",
+        description:
+          "Compares current network composition against 30/60/90-day windows to surface growth patterns across companies, seniority, industry, country, and department.",
+        parameters: [
+          {
+            name: "industry",
+            in: "query",
+            schema: { type: "string" },
+            description: "Filter by industry (regex)",
+          },
+          {
+            name: "location",
+            in: "query",
+            schema: { type: "string" },
+            description: "Filter by location (regex)",
+          },
+          {
+            name: "seniority",
+            in: "query",
+            schema: { type: "string" },
+            description: "Filter by seniority tier",
+          },
+          {
+            name: "minRank",
+            in: "query",
+            schema: { type: "integer", minimum: 1, maximum: 8 },
+            description: "Minimum seniority rank (1-8)",
+          },
+          {
+            name: "company",
+            in: "query",
+            schema: { type: "string" },
+            description: "Filter by company name (regex)",
+          },
+          {
+            name: "companyId",
+            in: "query",
+            schema: { type: "string" },
+            description: "Filter by company ID",
+          },
+          {
+            name: "topN",
+            in: "query",
+            schema: { type: "integer", default: 10, maximum: 50 },
+            description: "Number of top items per category",
+          },
+          {
+            name: "fresh",
+            in: "query",
+            schema: { type: "string", enum: ["true"] },
+            description: "Bypass cache",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Network trends analysis",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean" },
+                    data: {
+                      type: "object",
+                      properties: {
+                        totalConnections: { type: "integer" },
+                        windows: {
+                          type: "object",
+                          properties: {
+                            "30d": { $ref: "#/components/schemas/TrendWindow" },
+                            "60d": { $ref: "#/components/schemas/TrendWindow" },
+                            "90d": { $ref: "#/components/schemas/TrendWindow" },
+                          },
+                        },
+                        insights: {
+                          type: "array",
+                          items: { type: "string" },
                         },
                         filters: { type: "object" },
                       },
