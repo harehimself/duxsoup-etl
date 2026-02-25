@@ -15,7 +15,7 @@ const {
 const { normalizePhone } = require("../utils/phoneNormalizer");
 const { normalizeTwitter } = require("../utils/twitterNormalizer");
 const { normalizeCompanyName } = require("../utils/companyNormalizer");
-const { ensureHttps } = require("../utils/urlNormalizer");
+const { validateAndEnsureHttps } = require("../utils/urlValidator");
 const { shouldOverwrite } = require("../utils/precedence");
 
 /**
@@ -231,7 +231,7 @@ const FIELD_MAPPINGS = [
   {
     field: "currentCompanyProfile",
     source: "CompanyProfile",
-    transform: ensureHttps,
+    transform: (v) => validateAndEnsureHttps(v, "currentCompanyProfile"),
   },
   { field: "location", source: "Location" },
   { field: "industry", source: "Industry" },
@@ -245,14 +245,26 @@ const FIELD_MAPPINGS = [
   { field: "email", source: "Email", transform: normalizeEmail },
   { field: "phone", source: "Phone", transform: normalizePhone },
   { field: "twitter", source: "Twitter", transform: normalizeTwitter },
-  { field: "profilePicture", source: "Picture", transform: ensureHttps },
-  { field: "thumbnail", source: "Thumbnail", transform: ensureHttps },
+  {
+    field: "profilePicture",
+    source: "Picture",
+    transform: (v) => validateAndEnsureHttps(v, "profilePicture"),
+  },
+  {
+    field: "thumbnail",
+    source: "Thumbnail",
+    transform: (v) => validateAndEnsureHttps(v, "thumbnail"),
+  },
   {
     field: "personalWebsite",
     source: "PersonalWebsite",
-    transform: ensureHttps,
+    transform: (v) => validateAndEnsureHttps(v, "personalWebsite"),
   },
-  { field: "companyWebsite", source: "CompanyWebsite", transform: ensureHttps },
+  {
+    field: "companyWebsite",
+    source: "CompanyWebsite",
+    transform: (v) => validateAndEnsureHttps(v, "companyWebsite"),
+  },
 ];
 
 /**

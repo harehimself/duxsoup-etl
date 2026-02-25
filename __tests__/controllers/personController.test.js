@@ -1401,8 +1401,8 @@ describe("PersonController", () => {
     });
   });
 
-  describe("ensureHttps transform in FIELD_MAPPINGS", () => {
-    it("should have ensureHttps transform for companyWebsite field", () => {
+  describe("URL validation + HTTPS transform in FIELD_MAPPINGS", () => {
+    it("should have transform for companyWebsite that validates and upgrades http to https", () => {
       const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
       expect(mapping.transform).toBeDefined();
       expect(mapping.transform("http://example.com")).toBe(
@@ -1410,13 +1410,13 @@ describe("PersonController", () => {
       );
     });
 
-    it("should have ensureHttps transform for personalWebsite field", () => {
+    it("should have transform for personalWebsite that validates and upgrades", () => {
       const mapping = FIELD_MAPPINGS.find((m) => m.field === "personalWebsite");
       expect(mapping.transform).toBeDefined();
       expect(mapping.transform("http://mysite.com")).toBe("https://mysite.com");
     });
 
-    it("should have ensureHttps transform for profilePicture field", () => {
+    it("should have transform for profilePicture that validates and upgrades", () => {
       const mapping = FIELD_MAPPINGS.find((m) => m.field === "profilePicture");
       expect(mapping.transform).toBeDefined();
       expect(mapping.transform("http://cdn.linkedin.com/photo.jpg")).toBe(
@@ -1424,7 +1424,7 @@ describe("PersonController", () => {
       );
     });
 
-    it("should have ensureHttps transform for thumbnail field", () => {
+    it("should have transform for thumbnail that validates and upgrades", () => {
       const mapping = FIELD_MAPPINGS.find((m) => m.field === "thumbnail");
       expect(mapping.transform).toBeDefined();
       expect(mapping.transform("http://cdn.linkedin.com/thumb.jpg")).toBe(
@@ -1432,7 +1432,7 @@ describe("PersonController", () => {
       );
     });
 
-    it("should have ensureHttps transform for currentCompanyProfile field", () => {
+    it("should have transform for currentCompanyProfile that validates and upgrades", () => {
       const mapping = FIELD_MAPPINGS.find(
         (m) => m.field === "currentCompanyProfile",
       );
@@ -1442,14 +1442,14 @@ describe("PersonController", () => {
       );
     });
 
-    it("should preserve https URLs through ensureHttps transform", () => {
+    it("should preserve https URLs through transform", () => {
       const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
       expect(mapping.transform("https://already-secure.com")).toBe(
         "https://already-secure.com",
       );
     });
 
-    it("should pass null through ensureHttps transform unchanged", () => {
+    it("should return null for null input", () => {
       const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
       expect(mapping.transform(null)).toBeNull();
     });
@@ -1462,6 +1462,45 @@ describe("PersonController", () => {
         value = mapping.transform(value);
       }
       expect(value).toBe("https://www.acme.com");
+    });
+
+    // ── URL validation: non-URL strings rejected ──
+
+    it("should return null for non-URL profilePicture value", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "profilePicture");
+      expect(mapping.transform("not-a-url")).toBeNull();
+    });
+
+    it("should return null for bare domain in companyWebsite", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "companyWebsite");
+      expect(mapping.transform("example.com")).toBeNull();
+    });
+
+    it("should log warning when invalid URL is rejected", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "thumbnail");
+      mapping.transform("just-a-string");
+      expect(logger.warn).toHaveBeenCalledWith("Invalid URL format", {
+        field: "thumbnail",
+        value: "just-a-string",
+      });
+    });
+
+    it("should store null in snapshot when profilePicture is not a URL", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "profilePicture");
+      let value = "some random text";
+      if (mapping.transform) value = mapping.transform(value);
+      if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+
+      // Invalid URL → null stored via normalizeField
+      expect(snapshot.profilePicture).toBeNull();
     });
   });
 });

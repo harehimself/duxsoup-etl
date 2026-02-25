@@ -697,6 +697,87 @@ describe("CompanyController", () => {
       expect($set["snapshot.website"]).toBe("https://www.securecorp.com");
     });
 
+    // ───────────────────────────────────────────
+    // URL validation: non-URL strings rejected with null
+    // ───────────────────────────────────────────
+    it("should store null for non-URL CompanyWebsite value", async () => {
+      const observationDoc = {
+        _id: "obs-bad-url",
+        rawData: {
+          data: {
+            Company: "BadUrlCorp",
+            CompanyID: "55550001",
+            CompanyWebsite: "not-a-url",
+            VisitTime: new Date("2024-12-20"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "55550001",
+        canonical_id: "canonical-bad-url",
+        aliases: [{ type: "numericId", value: "55550001" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const doc = buildCompanyDoc({
+        _id: "55550001",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(doc)
+        .mockResolvedValueOnce(doc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      // Non-URL string → validateAndEnsureHttps returns null → stored as null
+      expect($set["snapshot.website"]).toBeNull();
+    });
+
+    it("should store null for non-URL CompanyProfile value", async () => {
+      const observationDoc = {
+        _id: "obs-bad-profile",
+        rawData: {
+          data: {
+            Company: "BadProfileCorp",
+            CompanyID: "55550002",
+            CompanyProfile: "just-some-text",
+            VisitTime: new Date("2024-12-20"),
+          },
+        },
+      };
+
+      resolveCompanyIdentity.mockReturnValue({
+        company_id: "55550002",
+        canonical_id: "canonical-bad-profile",
+        aliases: [{ type: "numericId", value: "55550002" }],
+        source: "numericId",
+        primary_id_type: "numericId",
+      });
+
+      const doc = buildCompanyDoc({
+        _id: "55550002",
+        snapshot: {},
+        observations: { visits: [], scans: [] },
+      });
+
+      Company.findOneAndUpdate
+        .mockResolvedValueOnce(doc)
+        .mockResolvedValueOnce(doc);
+
+      await upsertCompanyFromObservation(observationDoc, "visit");
+
+      const updateCall = Company.findOneAndUpdate.mock.calls[1];
+      const $set = updateCall[1].$set;
+      // Non-URL string → validateAndEnsureHttps returns null → stored as null
+      expect($set["snapshot.companyProfileUrl"]).toBeNull();
+    });
+
     it("should not double-count when observation already linked", async () => {
       const observationDoc = {
         _id: "obs-dup",

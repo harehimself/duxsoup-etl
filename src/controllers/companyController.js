@@ -5,7 +5,7 @@ const { normalizeCompanyName } = require("../utils/companyNormalizer");
 const { dedupeAliases } = require("../utils/aliasHelpers");
 const { parseLocation } = require("../utils/location-parser");
 const { shouldOverwrite } = require("../utils/precedence");
-const { ensureHttps } = require("../utils/urlNormalizer");
+const { validateAndEnsureHttps } = require("../utils/urlValidator");
 const { MAX_OBSERVATION_REFS } = require("../constants/limits");
 
 async function upsertCompanyFromObservation(observationDoc, sourceType) {
@@ -74,8 +74,11 @@ async function upsertCompanyFromObservation(observationDoc, sourceType) {
     ["name", normalizeCompanyName(webhookData.Company)],
     ["industry", webhookData.Industry],
     ["location", webhookData.Location],
-    ["companyProfileUrl", ensureHttps(webhookData.CompanyProfile)],
-    ["website", ensureHttps(webhookData.CompanyWebsite)],
+    [
+      "companyProfileUrl",
+      validateAndEnsureHttps(webhookData.CompanyProfile, "companyProfileUrl"),
+    ],
+    ["website", validateAndEnsureHttps(webhookData.CompanyWebsite, "website")],
     // Structured location fields (parsed from person's Location as proxy)
     ["city", parsedLocation.city],
     ["state", parsedLocation.state],
