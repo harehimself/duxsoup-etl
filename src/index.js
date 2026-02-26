@@ -5,6 +5,8 @@ const cors = require("cors");
 const compression = require("compression");
 const { sanitize: mongoSanitize } = require("express-mongo-sanitize");
 const crypto = require("crypto");
+const path = require("path");
+const fs = require("fs");
 
 const swaggerUi = require("swagger-ui-express");
 
@@ -33,8 +35,20 @@ const app = express();
 // Trust first proxy (Render's reverse proxy) for correct req.ip and rate limiting
 app.set("trust proxy", 1);
 
-// Security headers
-app.use(helmet());
+// Security headers — relax CSP for embedded SPA assets
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+      },
+    },
+  }),
+);
 
 // Response compression
 app.use(compression());
@@ -94,8 +108,12 @@ app.use((req, res, next) => {
 
 // Database readiness check - reject requests if DB is not ready
 app.use((req, res, next) => {
-  // Skip DB check for health endpoint
-  if (req.path === "/health" || req.path === "/") {
+  // Skip DB check for health endpoint and static assets
+  if (
+    req.path === "/health" ||
+    req.path === "/" ||
+    !req.path.startsWith("/api")
+  ) {
     return next();
   }
 
@@ -128,6 +146,10 @@ app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
 // Add API routes with default 30s timeout
 app.use("/api", requestTimeout(30000), apiRoutes);
 
+// Serve client SPA static assets (production build)
+const clientDistPath = path.join(__dirname, "..", "client", "dist");
+app.use(express.static(clientDistPath));
+
 // Health check endpoint - ALWAYS returns 200 for Render health checks
 // This endpoint must be simple and always succeed, even during startup
 app.get("/health", requestTimeout(5000), async (req, res) => {
@@ -143,6 +165,16 @@ app.get("/health", requestTimeout(5000), async (req, res) => {
   // Always return 200 - Render needs this to pass health checks during startup
   // Database readiness is reported in the response body for monitoring
   res.status(200).json(response);
+});
+
+// SPA fallback: serve index.html for all non-API, non-health routes
+app.get("/{0,}", (req, res, next) => {
+  const indexHtml = path.join(clientDistPath, "index.html");
+  if (fs.existsSync(indexHtml)) {
+    return res.sendFile(indexHtml);
+  }
+  // Fallback to JSON response if no client build exists
+  next();
 });
 
 app.get("/", (req, res) => {
