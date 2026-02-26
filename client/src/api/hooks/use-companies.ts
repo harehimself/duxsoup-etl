@@ -32,10 +32,11 @@ export function useCompanyIntelligence(id: string | undefined) {
   return useQuery({
     queryKey: ["company", id, "intelligence"],
     queryFn: () =>
-      apiFetch<CompanyIntelligence>(
+      apiFetch<{ success: boolean; data: CompanyIntelligence }>(
         `/api/companies/${encodeURIComponent(id!)}/intelligence`,
       ),
     enabled: !!id,
     staleTime: 300_000,
+    select: (res) => res.data,
   });
 }

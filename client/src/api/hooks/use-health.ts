@@ -10,18 +10,26 @@ import type {
 export function useDashboard() {
   return useQuery({
     queryKey: ["health", "dashboard"],
-    queryFn: () => apiFetch<DashboardHealth>("/api/health/dashboard"),
+    queryFn: () =>
+      apiFetch<{ success: boolean; data: DashboardHealth }>(
+        "/api/health/dashboard",
+      ),
     staleTime: 30_000,
     refetchInterval: 60_000,
+    select: (res) => res.data,
   });
 }
 
 export function useThroughput() {
   return useQuery({
     queryKey: ["health", "throughput"],
-    queryFn: () => apiFetch<ThroughputData>("/api/health/throughput"),
+    queryFn: () =>
+      apiFetch<{ success: boolean; data: ThroughputData }>(
+        "/api/health/throughput",
+      ),
     staleTime: 30_000,
     refetchInterval: 60_000,
+    select: (res) => res.data,
   });
 }
 
@@ -91,23 +99,35 @@ export function useLocationCoverage() {
 export function useDataQuality() {
   return useQuery({
     queryKey: ["health", "data-quality"],
-    queryFn: () => apiFetch<DataQuality>("/api/health/data-quality"),
+    queryFn: () =>
+      apiFetch<{ success: boolean; data: DataQuality }>(
+        "/api/health/data-quality",
+      ),
     staleTime: 60_000,
+    select: (res) => res.data,
   });
 }
 
 export function useQualityDashboard() {
   return useQuery({
     queryKey: ["health", "quality"],
-    queryFn: () => apiFetch<Record<string, unknown>>("/api/health/quality"),
+    queryFn: () =>
+      apiFetch<{ success: boolean; data: Record<string, unknown> }>(
+        "/api/health/quality",
+      ),
     staleTime: 60_000,
+    select: (res) => res.data,
   });
 }
 
 export function useDataCleanliness() {
   return useQuery({
     queryKey: ["health", "data-cleanliness"],
-    queryFn: () => apiFetch<DataCleanliness>("/api/health/data-cleanliness"),
+    queryFn: () =>
+      apiFetch<{ success: boolean; data: DataCleanliness }>(
+        "/api/health/data-cleanliness",
+      ),
     staleTime: 60_000,
+    select: (res) => res.data,
   });
 }
