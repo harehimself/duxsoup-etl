@@ -15,6 +15,7 @@ const {
   cleanString,
   normalizeEmail,
   normalizePhone,
+  stripHtmlTags,
   updateSkills,
   updateEducation,
   FIELD_MAPPINGS,
@@ -1501,6 +1502,110 @@ describe("PersonController", () => {
 
       // Invalid URL → null stored via normalizeField
       expect(snapshot.profilePicture).toBeNull();
+    });
+  });
+
+  // ── HTML Sanitization Tests ────────────────────────────────────────
+
+  describe("HTML sanitization in FIELD_MAPPINGS", () => {
+    it("should have stripHtmlTags transform for summary field", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "summary");
+      expect(mapping.transform).toBe(stripHtmlTags);
+    });
+
+    it("should not include summary in SKIP_CLEAN_FIELDS", () => {
+      expect(SKIP_CLEAN_FIELDS.has("summary")).toBe(false);
+    });
+
+    it("should strip HTML and clean whitespace through FIELD_MAPPINGS loop simulation", () => {
+      const snapshot = { _meta: {} };
+      const meta = {
+        observedAt: new Date(),
+        source: "visit",
+        observationId: "obs1",
+      };
+
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "summary");
+      let value = "<p>  Experienced  in  R&amp;D  </p>";
+      if (mapping.transform) value = mapping.transform(value);
+      if (!SKIP_CLEAN_FIELDS.has(mapping.field)) value = cleanString(value);
+      normalizeField(snapshot, mapping.field, value, meta);
+
+      expect(snapshot.summary).toBe("Experienced in R&D");
+    });
+
+    it("should return null for HTML-only summary", () => {
+      const mapping = FIELD_MAPPINGS.find((m) => m.field === "summary");
+      let value = "<br><br>";
+      if (mapping.transform) value = mapping.transform(value);
+      expect(value).toBeNull();
+    });
+  });
+
+  describe("HTML sanitization in role descriptions", () => {
+    it("should strip HTML from role description in extended positions", () => {
+      const person = buildPersonDoc();
+      const observationData = {
+        extended: {
+          positions: [
+            {
+              Title: "Engineer",
+              Company: "Acme",
+              Description: "<p>Built <b>distributed</b> systems</p>",
+              From: "2022-01-01",
+            },
+          ],
+        },
+      };
+
+      updateRolesTimeline(person, observationData, {});
+
+      expect(person.snapshot.roles[0].description).toBe(
+        "Built distributed systems",
+      );
+    });
+
+    it("should handle null description in roles", () => {
+      const person = buildPersonDoc();
+      const observationData = {
+        extended: {
+          positions: [
+            {
+              Title: "Manager",
+              Company: "Corp",
+              Description: null,
+              From: "2023-01-01",
+            },
+          ],
+        },
+      };
+
+      updateRolesTimeline(person, observationData, {});
+
+      expect(person.snapshot.roles[0].description).toBeNull();
+    });
+
+    it("should strip HTML and decode entities in new role description", () => {
+      const person = buildPersonDoc();
+      const observationData = {
+        extended: {
+          positions: [
+            {
+              Title: "VP Sales",
+              Company: "BigCo",
+              Description:
+                "<ul><li>Managed P&amp;L</li><li>Led R&amp;D team</li></ul>",
+              From: "2021-06-01",
+            },
+          ],
+        },
+      };
+
+      updateRolesTimeline(person, observationData, {});
+
+      expect(person.snapshot.roles[0].description).toBe(
+        "Managed P&LLed R&D team",
+      );
     });
   });
 });

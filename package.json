@@ -24,6 +24,7 @@
     "dedupe:aliases": "node scripts/dedupeAliases.js --dry-run",
     "backfill:phone": "node scripts/backfillPhoneNormalization.js --dry-run",
     "backfill:twitter": "node scripts/backfillTwitterNormalization.js --dry-run",
+    "backfill:html-sanitize": "node scripts/backfillHtmlSanitization.js --dry-run",
     "backfill:seniority": "node scripts/backfillSeniority.js",
     "cleanup:roles": "node scripts/cleanupRoles.js --dry-run",
     "import:csv": "node scripts/import-csv-visits.js",

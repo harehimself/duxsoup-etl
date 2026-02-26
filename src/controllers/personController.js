@@ -16,6 +16,7 @@ const { normalizePhone } = require("../utils/phoneNormalizer");
 const { normalizeTwitter } = require("../utils/twitterNormalizer");
 const { normalizeCompanyName } = require("../utils/companyNormalizer");
 const { validateAndEnsureHttps } = require("../utils/urlValidator");
+const { stripHtmlTags } = require("../utils/htmlSanitizer");
 const { shouldOverwrite } = require("../utils/precedence");
 
 /**
@@ -236,7 +237,7 @@ const FIELD_MAPPINGS = [
   { field: "location", source: "Location" },
   { field: "industry", source: "Industry" },
   { field: "connections", source: "Connections", transform: parseConnections },
-  { field: "summary", source: "Summary" },
+  { field: "summary", source: "Summary", transform: stripHtmlTags },
   {
     field: "degree",
     source: ["Degree", "Connection Degree"],
@@ -559,7 +560,7 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
         endDate,
         isCurrent,
         location: cleanString(pos.Location),
-        description: cleanString(pos.Description),
+        description: cleanString(stripHtmlTags(pos.Description)),
       };
 
       const existingRole = findMatchingRole(person.snapshot.roles, incoming);
@@ -598,7 +599,7 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
           companyName:
             normalizeCompanyName(pos.Company) || cleanString(pos.Company),
           location: cleanString(pos.Location),
-          description: cleanString(pos.Description),
+          description: cleanString(stripHtmlTags(pos.Description)),
           startDate,
           endDate,
           isCurrent,
@@ -1060,6 +1061,7 @@ module.exports = {
   normalizePhone, // Re-export for testing
   normalizeTwitter, // Re-export for testing
   normalizeCompanyName, // Re-export for testing
+  stripHtmlTags, // Re-export for testing
   normalizeRoleText, // Export for testing
   findMatchingRole, // Export for testing
   isLikelyCorruptedDate, // Export for testing
