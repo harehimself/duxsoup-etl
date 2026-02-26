@@ -34,7 +34,7 @@
     "ops:migrate-ids": "node scripts/cli.js migrate-url-ids",
     "ops:rollback-merge": "node scripts/rollback-merge.js",
     "resurrect:dead-letters": "node scripts/resurrectDeadLetters.js",
-    "build:client": "cd client && npm install && npm run build",
+    "build:client": "cd client && npm install --include=dev && npm run build",
     "dev:client": "cd client && npm run dev",
     "lint": "eslint src/ __tests__/",
     "prepare": "husky || true"
