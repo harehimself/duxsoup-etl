@@ -55,7 +55,7 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-mongo-sanitize": "^2.2.0",
-    "express-rate-limit": "^8.2.1",
+    "express-rate-limit": "^8.2.2",
     "helmet": "^8.1.0",
     "libphonenumber-js": "^1.12.37",
     "mongoose": "^9.2.1",
