@@ -60,7 +60,7 @@
     "libphonenumber-js": "^1.12.37",
     "mongoose": "^9.2.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.1",
+    "nodemailer": "^8.0.4",
     "swagger-ui-express": "^5.0.1",
     "twilio": "^5.12.2",
     "winston": "^3.19.0"
