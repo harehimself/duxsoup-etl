@@ -16,6 +16,7 @@ const DeadLetter = require("../models/deadLetter");
 const { resolvePersonIdentity } = require("../utils/identityMatcher");
 const { shouldSkip } = require("../utils/upsertDebounce");
 const throughputTracker = require("../utils/throughputTracker");
+const { createCollector } = require("../utils/warningCollector");
 
 /**
  * Core observation processing logic, independent of Express req/res.
@@ -35,9 +36,27 @@ async function processObservationPayload(config, payload) {
   };
 
   const envConfig = getConfig();
+  const collector = createCollector();
 
   // Schema drift detection (warn-only, never blocks processing)
-  validateAndLogSchema(payload);
+  const schemaResult = validateAndLogSchema(payload);
+  if (schemaResult.typeErrors.length > 0) {
+    schemaResult.typeErrors.forEach((err) => {
+      collector.add("SCHEMA_TYPE_VIOLATION", err, { field: "schema" });
+    });
+  }
+  if (schemaResult.unknownFields.length > 0) {
+    schemaResult.unknownFields.forEach((uf) => {
+      collector.add(
+        "SCHEMA_UNKNOWN_FIELD",
+        `Unknown field: ${uf.path}.${uf.key}`,
+        {
+          field: "schema",
+          details: { path: uf.path, key: uf.key },
+        },
+      );
+    });
+  }
 
   try {
     // Validate webhook payload structure
@@ -187,11 +206,18 @@ async function processObservationPayload(config, payload) {
           event_key: eventKey,
           type: config.type,
         });
+        collector.add("DEBOUNCED", "Entity upserts skipped (debounced)", {
+          details: { duxsoupId: debounceKey },
+        });
         peopleUpsertSuccess = true;
       } else {
         try {
-          await upsertFromObservation(observation, config.type);
-          peopleUpsertSuccess = true;
+          const personResult = await upsertFromObservation(
+            observation,
+            config.type,
+            collector,
+          );
+          peopleUpsertSuccess = personResult !== null;
 
           logger.info(`Person upserted from ${config.type}`, {
             observation_id: observation._id,
@@ -208,6 +234,13 @@ async function processObservationPayload(config, payload) {
               event_key: eventKey,
               error: companyError.message,
             });
+            collector.add(
+              "COMPANY_UPSERT_FAILED",
+              `Company upsert failed: ${companyError.message}`,
+              {
+                details: { error: companyError.message },
+              },
+            );
           }
 
           // Upsert location
@@ -220,6 +253,13 @@ async function processObservationPayload(config, payload) {
               event_key: eventKey,
               error: locationError.message,
             });
+            collector.add(
+              "LOCATION_UPSERT_FAILED",
+              `Location upsert failed: ${locationError.message}`,
+              {
+                details: { error: locationError.message },
+              },
+            );
           }
         } catch (peopleError) {
           // Log failure but DON'T fail the webhook
@@ -229,6 +269,13 @@ async function processObservationPayload(config, payload) {
             error: peopleError.message,
             stack: peopleError.stack,
           });
+          collector.add(
+            "PERSON_UPSERT_FAILED",
+            `Person upsert failed: ${peopleError.message}`,
+            {
+              details: { error: peopleError.message },
+            },
+          );
 
           // Write to dead_letters for replay
           try {
@@ -268,12 +315,24 @@ async function processObservationPayload(config, payload) {
     response.location_upsert = locationUpsertSuccess;
     response.duplicate = isDuplicate;
     response.debounced = debounced;
+    response.warnings = collector.getAll();
 
     // Track throughput
     trackingEvent.success = true;
     trackingEvent.duplicate = isDuplicate;
     trackingEvent.debounced = debounced;
     trackingEvent.phase2Failure = !peopleUpsertSuccess;
+
+    // Feed warning metrics to throughput tracker
+    const allWarnings = collector.getAll();
+    if (allWarnings.length > 0) {
+      trackingEvent.warningCount = allWarnings.length;
+      trackingEvent.warningsByCode = {};
+      for (const w of allWarnings) {
+        trackingEvent.warningsByCode[w.code] =
+          (trackingEvent.warningsByCode[w.code] || 0) + 1;
+      }
+    }
 
     return { success: true, status: 200, data: response };
   } catch (error) {

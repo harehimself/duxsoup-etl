@@ -96,6 +96,7 @@ async function handleBatchWebhook(req, res) {
           success: true,
           type: payload.type,
           id: result.data?.visitId || result.data?.scanId || undefined,
+          warnings: result.data?.warnings || [],
         });
         succeeded++;
       } else {

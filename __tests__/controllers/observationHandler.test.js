@@ -179,6 +179,7 @@ describe("ObservationHandler", () => {
       expect(upsertFromObservation).toHaveBeenCalledWith(
         fakeObservation,
         "visit",
+        expect.any(Object),
       );
       expect(upsertCompanyFromObservation).toHaveBeenCalledWith(
         fakeObservation,
@@ -757,6 +758,7 @@ describe("ObservationHandler", () => {
       expect(upsertFromObservation).toHaveBeenCalledWith(
         fakeObservation,
         "visit",
+        expect.any(Object),
       );
       expect(upsertCompanyFromObservation).toHaveBeenCalled();
       expect(upsertLocationFromObservation).toHaveBeenCalled();

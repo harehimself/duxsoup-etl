@@ -163,18 +163,21 @@ describe("BatchWebhookHandler", () => {
         success: true,
         type: "visit",
         id: "v-1",
+        warnings: [],
       });
       expect(body.results[1]).toEqual({
         index: 1,
         success: true,
         type: "scan",
         id: "s-2",
+        warnings: [],
       });
       expect(body.results[2]).toEqual({
         index: 2,
         success: true,
         type: "visit",
         id: "v-3",
+        warnings: [],
       });
 
       // processObservationPayload called 3 times
