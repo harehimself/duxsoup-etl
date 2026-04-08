@@ -21,6 +21,8 @@ function emptyBucket() {
     byType: {},
     latencySum: 0,
     latencyCount: 0,
+    warnings: 0,
+    warningsByCode: {},
   };
 }
 
@@ -89,6 +91,16 @@ function record(event) {
     bucket.latencySum += event.latencyMs;
     bucket.latencyCount++;
   }
+
+  if (typeof event.warningCount === "number" && event.warningCount > 0) {
+    bucket.warnings += event.warningCount;
+    if (event.warningsByCode && typeof event.warningsByCode === "object") {
+      for (const [code, count] of Object.entries(event.warningsByCode)) {
+        bucket.warningsByCode[code] =
+          (bucket.warningsByCode[code] || 0) + count;
+      }
+    }
+  }
 }
 
 /**
@@ -112,6 +124,8 @@ function aggregateWindow(windowSeconds) {
     byType: {},
     latencySum: 0,
     latencyCount: 0,
+    warnings: 0,
+    warningsByCode: {},
   };
 
   for (let s = cutoff + 1; s <= currentSecond; s++) {
@@ -127,9 +141,14 @@ function aggregateWindow(windowSeconds) {
     agg.phase2Failure += b.phase2Failure;
     agg.latencySum += b.latencySum;
     agg.latencyCount += b.latencyCount;
+    agg.warnings += b.warnings;
 
     for (const [type, count] of Object.entries(b.byType)) {
       agg.byType[type] = (agg.byType[type] || 0) + count;
+    }
+
+    for (const [code, count] of Object.entries(b.warningsByCode)) {
+      agg.warningsByCode[code] = (agg.warningsByCode[code] || 0) + count;
     }
   }
 
@@ -176,6 +195,14 @@ function getStats() {
         agg.latencyCount > 0
           ? Math.round(agg.latencySum / agg.latencyCount)
           : 0,
+      warnings: {
+        total: agg.warnings,
+        byCode: agg.warningsByCode,
+        rate:
+          seconds > 0
+            ? Math.round((agg.warnings / (seconds / 60)) * 100) / 100
+            : 0,
+      },
     };
   }
 

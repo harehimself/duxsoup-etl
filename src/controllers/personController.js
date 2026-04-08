@@ -521,7 +521,12 @@ function mergeRoleFields(existingRole, incoming) {
  * @param {Object} observationMeta - { observed_at, source, observation_id }
  * @returns {boolean} True if roles were updated
  */
-function updateRolesTimeline(person, observationData, _observationMeta) {
+function updateRolesTimeline(
+  person,
+  observationData,
+  _observationMeta,
+  collector,
+) {
   let updated = false;
 
   // Extract positions from extended data (visits) or current position (scans)
@@ -547,6 +552,14 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
           startDate,
           endDate,
         });
+        collector?.add(
+          "INVERTED_DATE_RANGE",
+          "Role endDate before startDate, endDate nullified",
+          {
+            field: "roles",
+            details: { title: pos.Title, company: pos.Company },
+          },
+        );
         endDate = null;
       }
 
@@ -590,6 +603,14 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
               from: pos.From,
             },
           });
+          collector?.add(
+            "ROLES_AT_CAPACITY",
+            "Role dropped: roles array at capacity",
+            {
+              field: "roles",
+              details: { max: MAX_ROLES },
+            },
+          );
           return;
         }
         // Add new role with seniority classification
@@ -634,6 +655,14 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
           maxRoles: MAX_ROLES,
           droppedRole: { title: currentRole, company: currentCompany },
         });
+        collector?.add(
+          "ROLES_AT_CAPACITY",
+          "Role dropped: roles array at capacity",
+          {
+            field: "roles",
+            details: { max: MAX_ROLES },
+          },
+        );
       } else {
         // Add current role with seniority classification
         const newRole = enrichRoleWithSeniority({
@@ -669,7 +698,7 @@ function updateRolesTimeline(person, observationData, _observationMeta) {
  * @param {Array} schools - Array of school objects from webhook
  * @returns {boolean} True if education was updated
  */
-function updateEducation(person, schools) {
+function updateEducation(person, schools, collector) {
   if (!schools || schools.length === 0) return false;
 
   if (!person.snapshot.education) {
@@ -703,6 +732,14 @@ function updateEducation(person, schools) {
           maxEducation: MAX_EDUCATION,
           droppedEntry: { school: name, degree, field },
         });
+        collector?.add(
+          "EDUCATION_AT_CAPACITY",
+          "Education entry dropped: education array at capacity",
+          {
+            field: "education",
+            details: { max: MAX_EDUCATION },
+          },
+        );
         return;
       }
       person.snapshot.education.push({
@@ -726,7 +763,7 @@ function updateEducation(person, schools) {
  * @param {Array} skills - Array of skill strings from webhook
  * @returns {boolean} True if skills were updated
  */
-function updateSkills(person, skills) {
+function updateSkills(person, skills, collector) {
   if (!skills || skills.length === 0) return false;
 
   if (!person.snapshot.skills) {
@@ -752,6 +789,14 @@ function updateSkills(person, skills) {
           currentCount: person.snapshot.skills.length,
           maxSkills: MAX_SKILLS,
         });
+        collector?.add(
+          "SKILLS_AT_CAPACITY",
+          "Skills dropped: skills array at capacity",
+          {
+            field: "skills",
+            details: { max: MAX_SKILLS },
+          },
+        );
         capWarningLogged = true;
       }
       return;
@@ -771,7 +816,7 @@ function updateSkills(person, skills) {
  * @param {string} sourceType - 'visit' or 'scan'
  * @returns {Promise<Object>} Updated person document
  */
-async function upsertFromObservation(observationDoc, sourceType) {
+async function upsertFromObservation(observationDoc, sourceType, collector) {
   try {
     // Step 1: Resolve identity
     // Extract data from nested rawData.data structure if present, otherwise use top-level fields
@@ -784,6 +829,13 @@ async function upsertFromObservation(observationDoc, sourceType) {
         observation_id: observationDoc._id,
         sourceType,
       });
+      collector?.add(
+        "NO_STABLE_ID",
+        "No stable ID found, person upsert skipped",
+        {
+          details: { observation_id: observationDoc._id, sourceType },
+        },
+      );
       return null;
     }
 
@@ -875,6 +927,7 @@ async function upsertFromObservation(observationDoc, sourceType) {
       } else {
         value = webhookData[source];
       }
+      const rawValue = value;
       if (transform) {
         value = transform(value);
       }
@@ -882,6 +935,34 @@ async function upsertFromObservation(observationDoc, sourceType) {
         value = cleanString(value);
       }
       normalizeField(person.snapshot, field, value, observationMeta);
+
+      // Emit collector warnings for field validation issues
+      if (collector && rawValue != null && rawValue !== "") {
+        if (field === "connections" && value === null) {
+          collector.add("INVALID_CONNECTIONS", "Invalid connections value", {
+            field: "connections",
+            details: { raw: rawValue },
+          });
+        } else if (field === "degree" && value === null) {
+          collector.add("INVALID_DEGREE", "Invalid degree value", {
+            field: "degree",
+            details: { raw: rawValue },
+          });
+        } else if (
+          field === "email" &&
+          value != null &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+        ) {
+          collector.add(
+            "INVALID_EMAIL_FORMAT",
+            "Email fails basic format validation",
+            {
+              field: "email",
+              details: { email: value },
+            },
+          );
+        }
+      }
     }
 
     // Birthday: reject year-less strings to avoid fabricated 2001 dates
@@ -986,13 +1067,13 @@ async function upsertFromObservation(observationDoc, sourceType) {
     if (!person.snapshot.roles) {
       person.snapshot.roles = [];
     }
-    updateRolesTimeline(person, webhookData, observationMeta);
+    updateRolesTimeline(person, webhookData, observationMeta, collector);
 
     // Step 8: Update education if present
-    updateEducation(person, webhookData.extended?.schools);
+    updateEducation(person, webhookData.extended?.schools, collector);
 
     // Step 9: Update skills if present
-    updateSkills(person, webhookData.extended?.skills);
+    updateSkills(person, webhookData.extended?.skills, collector);
 
     // Step 10: Compute derived metrics
     person.derived = computeDerivedMetrics(person.snapshot.roles);
