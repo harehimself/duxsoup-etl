@@ -190,23 +190,25 @@ export interface TimelineEvent {
 
 // ----- Health -----
 export interface DashboardHealth {
-  status: string;
-  database: { readyState: number; readyStateText: string };
-  counts: {
-    people: number;
-    companies: number;
-    locations: number;
-    visits: number;
-    scans: number;
-    deadLetters: number;
+  summary: {
+    totalPeople: number;
+    totalCompanies: number;
+    totalObservations: number;
+    observations24h: number;
   };
   ingestion: {
-    last24h: {
-      visits: number;
-      scans: number;
-    };
-    successRate: number;
+    successRate24h: number;
+    visits24h: number;
+    scans24h: number;
+    deadLettersPending: number;
+    deadLettersFailed: number;
+    status: string;
   };
+  changes: {
+    last7Days: number;
+    recent: unknown[];
+  };
+  timestamp: string;
 }
 
 export interface ThroughputData {

@@ -113,31 +113,26 @@ function DashboardPage() {
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Total People"
-              value={formatCompactNumber(dashboard.data.counts.people)}
-              description={`${formatNumber(dashboard.data.counts.people)} profiles`}
+              value={formatCompactNumber(dashboard.data.summary.totalPeople)}
+              description={`${formatNumber(dashboard.data.summary.totalPeople)} profiles`}
               icon={Users}
             />
             <StatCard
               title="Companies"
-              value={formatCompactNumber(dashboard.data.counts.companies)}
-              description={`${formatNumber(dashboard.data.counts.companies)} tracked`}
+              value={formatCompactNumber(dashboard.data.summary.totalCompanies)}
+              description={`${formatNumber(dashboard.data.summary.totalCompanies)} tracked`}
               icon={Building2}
             />
             <StatCard
               title="Total Observations"
-              value={formatCompactNumber(
-                dashboard.data.counts.visits + dashboard.data.counts.scans,
-              )}
-              description={`${formatNumber(dashboard.data.counts.visits)} visits, ${formatNumber(dashboard.data.counts.scans)} scans`}
+              value={formatCompactNumber(dashboard.data.summary.totalObservations)}
+              description={`${formatNumber(dashboard.data.summary.totalObservations)} observations`}
               icon={Eye}
             />
             <StatCard
               title="24h Activity"
-              value={formatCompactNumber(
-                dashboard.data.ingestion.last24h.visits +
-                  dashboard.data.ingestion.last24h.scans,
-              )}
-              description={`${formatNumber(dashboard.data.ingestion.last24h.visits)} visits, ${formatNumber(dashboard.data.ingestion.last24h.scans)} scans`}
+              value={formatCompactNumber(dashboard.data.summary.observations24h)}
+              description={`${formatNumber(dashboard.data.ingestion.visits24h)} visits, ${formatNumber(dashboard.data.ingestion.scans24h)} scans`}
               icon={Activity}
             />
           </div>
@@ -157,25 +152,25 @@ function DashboardPage() {
                     Success Rate
                   </span>
                   <span className="text-2xl font-bold">
-                    {formatPercent(dashboard.data.ingestion.successRate)}
+                    {formatPercent(dashboard.data.ingestion.successRate24h)}
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-secondary">
                   <div
                     className="h-2 rounded-full bg-green-500 transition-all"
                     style={{
-                      width: `${Math.min(100, dashboard.data.ingestion.successRate)}%`,
+                      width: `${Math.min(100, dashboard.data.ingestion.successRate24h)}%`,
                     }}
                   />
                 </div>
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <span>
-                    Database:{" "}
-                    {dashboard.data.database.readyStateText ?? "Unknown"}
+                    Status:{" "}
+                    {dashboard.data.ingestion.status ?? "Unknown"}
                   </span>
                   <span>
                     Dead letters:{" "}
-                    {formatNumber(dashboard.data.counts.deadLetters)}
+                    {formatNumber(dashboard.data.ingestion.deadLettersPending)}
                   </span>
                 </div>
               </CardContent>

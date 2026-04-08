@@ -52,8 +52,9 @@ function OverviewTab() {
 
   if (dashLoading) return <LoadingGrid count={5} />;
 
-  const counts = dashboard?.counts;
-  const isHealthy = dashboard?.status === "healthy";
+  const summary = dashboard?.summary;
+  const ingestion = dashboard?.ingestion;
+  const isHealthy = ingestion?.status === "healthy";
 
   return (
     <div className="space-y-6">
@@ -64,47 +65,42 @@ function OverviewTab() {
         <span className="text-sm font-medium">
           {isHealthy ? "Healthy" : "Unhealthy"}
         </span>
-        {dashboard?.database && (
+        {ingestion && (
           <Badge variant="outline" className="ml-2">
-            DB: {dashboard.database.readyStateText}
+            Status: {ingestion.status}
           </Badge>
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total People"
-          value={formatNumber(counts?.people)}
+          value={formatNumber(summary?.totalPeople)}
           icon={Users}
         />
         <StatCard
           title="Companies"
-          value={formatNumber(counts?.companies)}
+          value={formatNumber(summary?.totalCompanies)}
           icon={Building2}
         />
         <StatCard
-          title="Visits"
-          value={formatNumber(counts?.visits)}
+          title="Observations"
+          value={formatNumber(summary?.totalObservations)}
           icon={Activity}
         />
         <StatCard
-          title="Scans"
-          value={formatNumber(counts?.scans)}
-          icon={Database}
-        />
-        <StatCard
           title="Dead Letters"
-          value={formatNumber(counts?.deadLetters)}
+          value={formatNumber(ingestion?.deadLettersPending)}
           icon={Trash2}
           className={
-            counts?.deadLetters && counts.deadLetters > 0
+            ingestion?.deadLettersPending && ingestion.deadLettersPending > 0
               ? "border-destructive/50"
               : undefined
           }
         />
       </div>
 
-      {dashboard?.ingestion && (
+      {ingestion && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Ingestion (Last 24h)</CardTitle>
@@ -114,19 +110,19 @@ function OverviewTab() {
               <div>
                 Visits:{" "}
                 <span className="font-semibold">
-                  {formatNumber(dashboard.ingestion.last24h.visits)}
+                  {formatNumber(ingestion.visits24h)}
                 </span>
               </div>
               <div>
                 Scans:{" "}
                 <span className="font-semibold">
-                  {formatNumber(dashboard.ingestion.last24h.scans)}
+                  {formatNumber(ingestion.scans24h)}
                 </span>
               </div>
               <div>
                 Success Rate:{" "}
                 <span className="font-semibold">
-                  {formatPercent(dashboard.ingestion.successRate)}
+                  {formatPercent(ingestion.successRate24h)}
                 </span>
               </div>
             </div>
@@ -327,7 +323,7 @@ function PipelineTab() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Dead Letters"
-          value={formatNumber(dashboard?.counts?.deadLetters)}
+          value={formatNumber(dashboard?.ingestion?.deadLettersPending)}
           description="Failed person upserts queued for retry"
           icon={Trash2}
         />
